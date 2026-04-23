@@ -1,0 +1,26 @@
+# 本地开发覆盖配置
+# 用法：docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# 仅启动 parser sidecar，Java 和 Vue 在宿主机本地运行（热重载）
+#   Java：cd backend && mvn spring-boot:run
+#   Vue：cd frontend && npm run dev
+
+services:
+  # 开发模式下只需要 parser 服务
+  media-marshal:
+    build:
+      context: ./backend
+    volumes:
+      - ./dev-data:/data            # 使用本地 dev-data 目录存放 SQLite
+      - ./dev-media:/media
+    environment:
+      - MEDIA_MARSHAL_PARSER_URL=http://localhost:8000
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop  # 开发时每次重建表
+
+  parser:
+    ports:
+      - "8000:8000"                 # 开发时对外暴露，方便直接调试
+
+  frontend:
+    profiles:
+      - donotstart                  # 开发时不启动，使用 npm run dev

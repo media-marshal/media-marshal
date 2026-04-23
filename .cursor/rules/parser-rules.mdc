@@ -1,0 +1,28 @@
+---
+description: Python parser sidecar 编程规范
+globs: parser/**/*.py
+alwaysApply: false
+---
+
+# Parser Sidecar 规范
+
+## 职责边界
+- 仅负责文件名解析（guessit 封装），**不做任何其他事情**
+- 无状态、无数据库、无持久化
+- 接受文件名字符串，返回结构化 JSON
+
+## 接口约定
+- `GET /parse?filename={filename}` — 解析文件名
+- `GET /health` — 健康检查（Docker healthcheck 使用）
+- 响应直接返回 guessit 的 dict，字段名与 guessit 保持一致
+
+## Java 端对应
+Java 的 `ParseResult.java` 字段通过 `@JsonProperty` 与 guessit 输出的 JSON key 映射，
+修改 parser 响应字段时必须同步更新 `ParseResult.java`。
+
+## 错误处理
+- 解析失败返回 HTTP 500 + `{"detail": "..."}`
+- Java 端 `GuessitParserClient` 捕获异常后将任务标记为 FAILED
+
+## 依赖管理
+固定 `requirements.txt` 中的版本号，不使用 `>=` 浮动版本，保证构建可重现。

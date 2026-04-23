@@ -1,0 +1,30 @@
+{
+  "name": "media-marshal-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0",
+    "pinia": "^2.1.7",
+    "element-plus": "^2.7.0",
+    "@element-plus/icons-vue": "^2.3.1",
+    "vue-i18n": "^9.13.0",
+    "axios": "^1.7.0",
+    "@stomp/stompjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.2.0",
+    "typescript": "^5.4.0",
+    "vue-tsc": "^2.0.0",
+    "@vue/tsconfig": "^0.5.0",
+    "unplugin-auto-import": "^0.17.0",
+    "unplugin-vue-components": "^0.27.0"
+  }
+}

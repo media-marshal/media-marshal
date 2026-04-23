@@ -1,0 +1,15 @@
+# 测试环境配置
+# 使用内存 SQLite 避免污染开发数据
+spring:
+  datasource:
+    url: jdbc:sqlite::memory:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+media-marshal:
+  parser:
+    url: http://localhost:8000
+  watcher:
+    watch-dirs: ""

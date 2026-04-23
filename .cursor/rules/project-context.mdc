@@ -1,0 +1,43 @@
+---
+description: Media Marshal 项目全局上下文和架构概要
+alwaysApply: true
+---
+
+# Media Marshal 项目上下文
+
+## 项目定位
+为 Emby / Jellyfin / Plex 用户提供媒体文件自动整理工具：识别、重命名、生成 NFO 元数据。Docker 原生部署，Web UI 操作。
+
+## 技术栈
+- **Backend**: Java 21 + Spring Boot 3.3.x + Maven，包名 `com.mediamarshal`
+- **Frontend**: Vue 3 + TypeScript + Vite + Element Plus + Pinia + vue-i18n
+- **Parser Sidecar**: Python 3 + FastAPI + guessit（HTTP 微服务）
+- **数据库**: SQLite（JPA + Hibernate Community Dialects），文件路径 `/data/media-marshal.db`
+- **部署**: Docker + Docker Compose（三服务：media-marshal、frontend、parser）
+
+## 服务端口
+- `media-marshal` (Java): 8080
+- `frontend` (Nginx): 3000（生产）/ 3000（开发）
+- `parser` (Python): 8000（仅内部网络，不对外暴露）
+
+## 核心处理流程
+文件发现 → guessit 解析 → TMDB 匹配 → 置信度判断（低则进队列）→ 重命名 → 生成 NFO → WebSocket 推送完成
+
+## 配置优先级（从高到低）
+环境变量 `MEDIA_MARSHAL_*` > `application.yml` > 数据库 `app_setting` 表
+
+## 关键设计模式
+- **策略模式**: `FileOperationStrategy` — 支持 MOVE/COPY/HARD_LINK/SYMBOLIC_LINK，MVP 实现 MOVE
+- **适配器模式**: `MetadataMatcher` — 当前实现 TMDB，预留豆瓣等扩展
+
+## 通知方式
+- WebSocket (STOMP): 实时推送任务状态到前端，订阅 `/topic/tasks`
+- 邮件: 低频告警（低置信度 / 失败），默认关闭
+
+## 国际化
+- 前端从第一行代码开始支持中英文（vue-i18n），语言文件在 `frontend/src/i18n/`
+- i18n key 命名：`模块.子键`，如 `nav.dashboard`、`task.status.DONE`
+
+## 不做的事
+- 不做内容下载、PT 站集成、播放器
+- 不做用户认证（v1，后续用 Spring Security 扩展）

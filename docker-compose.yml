@@ -1,0 +1,69 @@
+services:
+
+  # ── Java 主服务 ─────────────────────────────────────────
+  media-marshal:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: media-marshal
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - mm_data:/data               # SQLite 数据库文件
+      - ${MEDIA_DIRS:-/media}:/media # 媒体库目录（宿主机挂载）
+    environment:
+      - MEDIA_MARSHAL_PARSER_URL=http://parser:8000
+      - MEDIA_MARSHAL_TMDB_API_KEY=${MEDIA_MARSHAL_TMDB_API_KEY:-}
+      - MEDIA_MARSHAL_WATCH_DIRS=${MEDIA_MARSHAL_WATCH_DIRS:-/media/incoming}
+      - MEDIA_MARSHAL_CONFIDENCE_THRESHOLD=${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:-0.8}
+      - MEDIA_MARSHAL_OPERATION_STRATEGY=${MEDIA_MARSHAL_OPERATION_STRATEGY:-MOVE}
+      - MEDIA_MARSHAL_EMAIL_ENABLED=${MEDIA_MARSHAL_EMAIL_ENABLED:-false}
+      - MEDIA_MARSHAL_EMAIL_RECIPIENT=${MEDIA_MARSHAL_EMAIL_RECIPIENT:-}
+      - MEDIA_MARSHAL_MAIL_HOST=${MEDIA_MARSHAL_MAIL_HOST:-}
+      - MEDIA_MARSHAL_MAIL_PORT=${MEDIA_MARSHAL_MAIL_PORT:-587}
+      - MEDIA_MARSHAL_MAIL_USERNAME=${MEDIA_MARSHAL_MAIL_USERNAME:-}
+      - MEDIA_MARSHAL_MAIL_PASSWORD=${MEDIA_MARSHAL_MAIL_PASSWORD:-}
+    depends_on:
+      parser:
+        condition: service_healthy
+    networks:
+      - mm_net
+
+  # ── 前端（Nginx）─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: media-marshal-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - media-marshal
+    networks:
+      - mm_net
+
+  # ── guessit Python Sidecar ────────────────────────────────
+  parser:
+    build:
+      context: ./parser
+      dockerfile: Dockerfile
+    container_name: media-marshal-parser
+    restart: unless-stopped
+    # 不对外暴露端口，仅内部网络访问
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mm_net
+
+volumes:
+  mm_data:
+
+networks:
+  mm_net:
+    driver: bridge

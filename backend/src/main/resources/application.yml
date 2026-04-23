@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: media-marshal
+
+  datasource:
+    url: jdbc:sqlite:/data/media-marshal.db
+    driver-class-name: org.sqlite.JDBC
+
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+  mail:
+    host: ${MEDIA_MARSHAL_MAIL_HOST:}
+    port: ${MEDIA_MARSHAL_MAIL_PORT:587}
+    username: ${MEDIA_MARSHAL_MAIL_USERNAME:}
+    password: ${MEDIA_MARSHAL_MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+server:
+  port: 8080
+
+# ─────────────────────────────────────────────
+# MediaMarshal 应用配置
+# 所有配置均可被同名环境变量覆盖（优先级最高）
+# 环境变量命名规则：MEDIA_MARSHAL_{KEY_UPPER_SNAKE}
+# 示例：media-marshal.tmdb.api-key -> MEDIA_MARSHAL_TMDB_API_KEY
+# ─────────────────────────────────────────────
+media-marshal:
+  tmdb:
+    api-key: ${MEDIA_MARSHAL_TMDB_API_KEY:}
+    base-url: https://api.themoviedb.org/3
+    # 返回语言，zh-CN 优先，fallback 到 en-US
+    language: zh-CN
+
+  parser:
+    url: ${MEDIA_MARSHAL_PARSER_URL:http://parser:8000}
+    timeout-seconds: 5
+
+  watcher:
+    # 逗号分隔的监控目录列表
+    watch-dirs: ${MEDIA_MARSHAL_WATCH_DIRS:}
+    # 低于此置信度进入待确认队列（0.0-1.0）
+    confidence-threshold: ${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:0.8}
+
+  operation:
+    # 文件操作策略：MOVE | COPY | HARD_LINK | SYMBOLIC_LINK
+    strategy: ${MEDIA_MARSHAL_OPERATION_STRATEGY:MOVE}
+
+  notification:
+    email:
+      enabled: ${MEDIA_MARSHAL_EMAIL_ENABLED:false}
+      recipient: ${MEDIA_MARSHAL_EMAIL_RECIPIENT:}
