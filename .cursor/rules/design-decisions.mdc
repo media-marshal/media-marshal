@@ -1,0 +1,140 @@
+---
+description: 架构决策记录（ADR）— 由 PM 维护，开发 Agent 必读
+alwaysApply: true
+---
+
+# Media Marshal 架构决策记录
+
+> 本文件由 PM 角色维护，记录每次讨论形成的设计结论。
+> 开发 Agent 在实现功能前必须先读本文件，确保实现与决策一致。
+> 每条决策标注状态：✅ 已落地 | 🔄 讨论中 | ⏳ 待讨论
+
+---
+
+## ADR-001 命名模板设计（2026-04-25）✅
+
+### 结论
+采用**变量袋 + 模板渲染**架构：
+
+1. **解析阶段**填充标准变量袋（`TemplateVariables`），所有可用变量在此阶段一次性收集完毕
+2. **渲染阶段**纯函数 `render(template, variables)` 生成最终路径，与变量来源无关
+3. **v1 内置 1 个默认模板**，让流程跑通；后续扩展多模板选择 + 用户自定义模板时，渲染层不需要改动
+4. **路径模板即此变量系统的应用场所**：`watch_rule.path_template` 使用本套变量，定义目标目录下的完整目录/文件层级结构
+
+### 渲染引擎实现方式
+使用**注解驱动的反射方案**，`TemplateVariables` 字段上加注解标记变量名，渲染器自动构建替换 Map。
+- 扩展新变量 = 只加一个字段 + 一个注解，渲染器零改动
+- v1 未使用的字段值为 `null`，渲染时对应占位符保持原样或替换为空字符串（可配置）
+
+### 标准变量袋（TemplateVariables）
+**命名约定由此处统一定义，任何 Agent 新增变量必须先在此处登记，不得自行发明变量名。**
+
+#### 基础信息（来自 TMDB）
+| 变量 | 类型 | 来源 | 示例值 |
+|---|---|---|---|
+| `{title}` | String | TMDB 本地化标题（随 `tmdb.language` 变化） | `蝙蝠侠：黑暗骑士` |
+| `{original_title}` | String | TMDB 原语言标题 | `The Dark Knight` |
+| `{year}` | Integer | TMDB 发布年份 | `2008` |
+| `{tmdb_id}` | Long | TMDB 数字 ID | `155` |
+| `{media_type}` | String | 媒体类型（MOVIE / TV_SHOW / 未来可扩展） | `MOVIE` |
+
+#### 剧集专用（来自 guessit + TMDB）
+| 变量 | 类型 | 来源 | 示例值 |
+|---|---|---|---|
+| `{season}` | Integer | guessit 解析季号 | `3` |
+| `{season:02d}` | String | 格式化季号，2 位补零 | `03` |
+| `{season:04d}` | String | 格式化季号，4 位补零（预留，超长剧集） | `0003` |
+| `{episode}` | Integer | guessit 解析集号 | `7` |
+| `{episode:02d}` | String | 格式化集号，2 位补零 | `07` |
+| `{episode:04d}` | String | 格式化集号，4 位补零（预留，超长集数） | `0007` |
+| `{episode_title}` | String | TMDB 分集标题（预留） | `Sunset` |
+
+#### 归类辅助（来自 TMDB）
+| 变量 | 类型 | 来源 | 示例值 |
+|---|---|---|---|
+| `{title_initial}` | String | title 首字母大写（预留） | `B` |
+| `{genre_1}` | String | 第 1 个分类标签（预留，最多支持 4 个） | `Action` |
+| `{genre_2}` | String | 第 2 个分类标签（预留） | `Crime` |
+| `{genre_3}` | String | 第 3 个分类标签（预留） | — |
+| `{genre_4}` | String | 第 4 个分类标签（预留） | — |
+| `{country}` | String | 出品国（预留） | `US` |
+
+#### 技术参数（来自 guessit）
+| 变量 | 类型 | 来源 | 示例值 |
+|---|---|---|---|
+| `{resolution}` | String | guessit screen_size（预留） | `1080p` |
+| `{codec}` | String | guessit video_codec（预留） | `H.264` |
+| `{release_group}` | String | guessit release_group（预留） | `YIFY` |
+| `{ext}` | String | 原始文件扩展名（含点） | `.mkv` |
+
+### v1 默认模板
+- **电影**：`{title} ({year})/{title} ({year}){ext}`
+  - 示例：`The Dark Knight (2008)/The Dark Knight (2008).mkv`
+- **剧集**：`{title}/Season {season:02d}/{title} - S{season:02d}E{episode:02d}{ext}`
+  - 示例：`Breaking Bad/Season 03/Breaking Bad - S03E07.mkv`
+
+### 国际化
+- TMDB 查询语言由配置项 `tmdb.language` 控制（默认 `zh-CN`）
+- `{title}` 跟随语言设置返回本地化标题，`{original_title}` 始终为原语言
+- 用户可在模板中自由组合，如 `{title} ({original_title}) ({year})/...`
+
+### 模板配置 Key（AppSetting）
+| Key | 说明 |
+|---|---|
+| `tmdb.language` | TMDB 查询语言，如 `zh-CN`、`en-US` |
+| `rename.template.movie` | 全局默认电影模板（watch_rule 未配置时 fallback） |
+| `rename.template.tv` | 全局默认剧集模板（watch_rule 未配置时 fallback） |
+
+---
+
+## ADR-002 监控规则（Watch Rule）数据模型（2026-04-25）✅
+
+### 结论
+将原来的简单配置字符串（`watcher.watch-dirs`、`output.movie-dir` 等）升级为独立的**规则实体表 `watch_rule`**，每条规则代表一个"源目录 → 目标目录"的完整整理策略。
+
+### 数据库表结构
+
+```sql
+CREATE TABLE watch_rule (
+  id               BIGINT PRIMARY KEY AUTOINCREMENT,
+  name             VARCHAR(100) NOT NULL,          -- 用户起的友好名称，如"电影库"
+  source_dir       VARCHAR(500) NOT NULL,          -- 监控的源目录绝对路径
+  target_dir       VARCHAR(500) NOT NULL,          -- 整理后输出的目标根目录
+  media_type       VARCHAR(20)  NOT NULL           -- MOVIE / TV_SHOW / AUTO（AUTO=系统自动识别）
+                   DEFAULT 'AUTO',
+  path_template    VARCHAR(500),                   -- 目标目录内的路径模板（NULL=使用全局默认模板）
+  operation        VARCHAR(20)  NOT NULL           -- MOVE / COPY / HARD_LINK / SYMBOLIC_LINK
+                   DEFAULT 'MOVE',
+  enabled          BOOLEAN      NOT NULL DEFAULT 1,
+  -- 多用户预留：v1 不使用，v2 实现多用户时直接启用，无需改表结构
+  user_id          BIGINT,
+  created_at       DATETIME     NOT NULL,
+  updated_at       DATETIME     NOT NULL
+);
+```
+
+### 规则属性说明
+- **media_type = AUTO**：系统用 guessit 解析结果判断类型，若无法判断则进入人工确认队列
+- **path_template**：使用 ADR-001 定义的变量系统，为 NULL 时 fallback 到全局 `rename.template.movie` / `rename.template.tv`
+- **operation**：v1 只实现 MOVE，其余策略接口已预留
+- **user_id**：v1 为 NULL，多用户版本启用后按此字段隔离规则
+
+### 对现有代码的影响（开发 Agent 须知）
+| 模块 | 变化 |
+|---|---|
+| `FileWatcherService` | 改为读 `watch_rule` 表，启动时动态注册所有 enabled=true 的规则目录 |
+| `MediaTask` | 新增 `rule_id BIGINT` 字段（FK → watch_rule.id），任务入库时记录触发规则 |
+| `RenameService.buildTargetPath()` | 通过 `task.ruleId` 查规则，取 `target_dir` + `path_template` 渲染路径 |
+| `app_setting` 废弃 key | `watcher.watch-dirs`、`output.movie-dir`、`output.tv-dir` 不再使用 |
+| Settings 页面 | 新增 WatchRule 管理 UI：规则列表 + 新增/编辑/删除/启用开关 |
+
+### 特殊场景（延后处理）
+- **原地重命名**（target_dir = source_dir）：作为特殊场景保留设计空间，v1 不实现
+
+---
+
+## 待讨论事项
+
+- **ADR-003**：低置信度候选列表存储方案
+- **ADR-004**：FileWatcher 重复处理防护策略
+- **ADR-005**：人工确认流程 API 设计

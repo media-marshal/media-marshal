@@ -1,0 +1,96 @@
+---
+description: 开发进度日志 — 开发 Agent 完成模块后追加，PM 和其他 Agent 读取了解当前进度
+alwaysApply: false
+---
+
+# Media Marshal 实现日志
+
+> **使用规则（开发 Agent 必读）**
+> 1. 每完成一个功能模块，必须在本文件末尾追加一条记录
+> 2. 如有新增或变更的接口，同步更新 `api-contracts.mdc`
+> 3. 发现设计问题或需要 PM 决策的事项，写入"遗留问题"区，**不得直接修改 `design-decisions.mdc`**
+> 4. 记录格式固定，按下方模板填写
+
+---
+
+## 记录模板
+
+```markdown
+## [模块名] YYYY-MM-DD
+
+### 已完成
+- （bullet 列表，描述实际落地的内容）
+
+### 关键文件
+- （新增或大幅修改的文件路径列表）
+
+### 接口变更
+- （若有接口新增/变更，写明；同时更新 api-contracts.mdc）
+
+### 偏离设计的地方
+- （与 design-decisions.mdc 不一致的地方，说明原因）
+
+### 遗留问题 / 需 PM 决策
+- （实现中发现的设计盲点、待确认事项）
+```
+
+---
+
+## [模板渲染 + WatchRule 模块] 2026-04-25
+
+### 已完成
+- 新增 `TemplateVar` 注解和 `TemplateVariables` DTO，字段覆盖 ADR-001 全部预留变量
+- 新增 `TemplateRenderer` 服务，基于反射自动构建替换 Map，支持 `{key:02d}` / `{key:04d}` 格式化语法
+- 新增 `WatchRule` 实体（字段与 ADR-002 一致），`watch_rule` 表由 Hibernate 自动建表
+- 新增 `WatchRuleRepository`、`WatchRuleController`（含 CRUD + toggle 接口）
+- `FileWatcherService` 重构：改为读 `watch_rule` 表，支持 `reload()` 热加载，每条规则独立线程监控
+- `MediaTask` 新增 `ruleId` 字段（关联触发规则）
+- `RenameService` 实现 `buildTargetPath()`，通过规则取 `targetDir` + `pathTemplate` 渲染路径
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVar.java`（新增）
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariables.java`（新增）
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateRenderer.java`（新增）
+- `backend/src/main/java/com/mediamarshal/model/entity/WatchRule.java`（新增）
+- `backend/src/main/java/com/mediamarshal/repository/WatchRuleRepository.java`（新增）
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`（新增）
+- `backend/src/main/java/com/mediamarshal/service/watcher/FileWatcherService.java`（重构）
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`（新增 ruleId 字段）
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`（实现 buildTargetPath）
+
+### 接口变更
+- 新增 `WatchRule` 全套 CRUD 接口，已更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- `MediaProcessPipeline` 核心处理流程（Step 2-8）尚未实现，是下一个最高优先级任务
+- `TmdbMetadataMatcher` 尚未实现，pipeline 无法跑通
+- `NfoGeneratorService` 尚未实现
+- `candidatesJson` 字段已加入 `MediaTask`，存储格式待 ADR-003 决策后由下一个 Agent 实现
+
+---
+
+## [环境确认 + 全量编译验证] 2026-04-25
+
+### 已完成
+- 确认本地开发环境升级至 JDK 21.0.10（Oracle HotSpot）+ Maven 3.9.2
+- `mvn clean compile` 全量编译通过，零错误零警告
+- 服务器已通过 `mvn spring-boot:run -Dspring-boot.run.profiles=dev` 正常启动（端口 8080）
+- WebSocket 连接正常（日志可见 STOMP CONNECT/CONNECTED 记录）
+- Hibernate 自动建表正常（SQLite dev 库已创建 `app_setting` 和 `media_task` 表）
+
+### 关键文件
+- 无新增文件，仅环境和编译状态确认
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 当前运行的服务是 ADR-001/002 改动前的旧代码（Hibernate 查询中 `media_task` 缺少 `rule_id` 字段）
+- 需重启服务（`mvn spring-boot:run -Dspring-boot.run.profiles=dev`）使新实体结构生效
+- 重启后 Hibernate DDL-auto=update 会自动为 `media_task` 表新增 `rule_id` 列，并创建 `watch_rule` 新表

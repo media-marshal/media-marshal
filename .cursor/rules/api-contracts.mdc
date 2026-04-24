@@ -1,0 +1,158 @@
+---
+description: 实际生效的 REST API 契约 — 后端 Agent 实现接口后更新，前端 Agent 开发前必读
+alwaysApply: false
+---
+
+# Media Marshal API 契约
+
+> **维护规则**
+> - 后端 Agent 每新增或变更接口，必须同步更新本文件
+> - 前端 Agent 开发前必须先读本文件，以此为准，不以代码注释为准
+> - 所有接口统一前缀 `/api`，由 Nginx 代理到后端 `:8080`
+> - 所有响应格式：`{ "success": boolean, "data": T, "message": string }`
+
+---
+
+## 媒体任务 `/api/tasks`
+
+| 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
+|---|---|---|---|---|
+| GET | `/api/tasks` | 查询所有任务，可按状态过滤 | — | `MediaTask[]` |
+| GET | `/api/tasks?status={status}` | 过滤状态（PENDING/PROCESSING/AWAITING_CONFIRMATION/DONE/FAILED） | — | `MediaTask[]` |
+| GET | `/api/tasks/{id}` | 查询单个任务详情 | — | `MediaTask` |
+| DELETE | `/api/tasks/{id}` | 删除任务记录（不影响文件） | — | — |
+
+### MediaTask 字段
+```typescript
+interface MediaTask {
+  id: number
+  sourcePath: string
+  targetPath: string | null
+  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED'
+  mediaType: 'MOVIE' | 'TV_SHOW' | null
+  parsedTitle: string | null
+  parsedYear: number | null
+  parsedSeason: number | null
+  parsedEpisode: number | null
+  tmdbId: number | null
+  confirmedTitle: string | null
+  confirmedYear: number | null
+  matchConfidence: number | null   // 0.0 ~ 1.0
+  operationType: string | null
+  errorMessage: string | null
+  ruleId: number | null            // 触发此任务的 WatchRule ID
+  candidatesJson: string | null    // JSON 序列化候选列表（AWAITING_CONFIRMATION 时有值）
+  createdAt: string                // ISO 8601
+  updatedAt: string
+}
+```
+
+---
+
+## 待确认队列 `/api/queue`
+
+| 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
+|---|---|---|---|---|
+| GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务 | — | `MediaTask[]` |
+| POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理 | `ConfirmRequest` | — |
+| POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 FAILED） | — | — |
+
+### ConfirmRequest
+```typescript
+interface ConfirmRequest {
+  tmdbId: number
+  mediaType: 'MOVIE' | 'TV_SHOW'
+}
+```
+
+---
+
+## 系统配置 `/api/settings`
+
+| 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
+|---|---|---|---|---|
+| GET | `/api/settings` | 查询所有配置（敏感项脱敏显示） | — | `AppSetting[]` |
+| PUT | `/api/settings/{key}` | 更新单项配置（写入数据库） | `UpdateRequest` | — |
+
+### AppSetting 字段
+```typescript
+interface AppSetting {
+  key: string
+  value: string
+  description: string | null
+  sensitive: boolean
+}
+```
+
+### UpdateRequest
+```typescript
+interface UpdateRequest {
+  value: string
+  description?: string
+  sensitive?: boolean
+}
+```
+
+---
+
+## 监控规则 `/api/watch-rules`
+
+| 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
+|---|---|---|---|---|
+| GET | `/api/watch-rules` | 查询所有规则 | — | `WatchRule[]` |
+| POST | `/api/watch-rules` | 新建规则 | `RuleRequest` | `WatchRule` |
+| PUT | `/api/watch-rules/{id}` | 更新规则 | `RuleRequest` | `WatchRule` |
+| DELETE | `/api/watch-rules/{id}` | 删除规则 | — | — |
+| PATCH | `/api/watch-rules/{id}/toggle` | 启用/禁用规则 | — | `WatchRule` |
+
+> 规则变更后后端自动触发 `FileWatcherService.reload()`，无需前端额外操作。
+
+### WatchRule 字段
+```typescript
+interface WatchRule {
+  id: number
+  name: string
+  sourceDir: string
+  targetDir: string
+  mediaType: 'MOVIE' | 'TV_SHOW' | 'AUTO'
+  pathTemplate: string | null      // null = 使用全局默认模板
+  operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'
+  enabled: boolean
+  userId: number | null            // v1 始终为 null，多用户版本启用
+  createdAt: string
+  updatedAt: string
+}
+```
+
+### RuleRequest
+```typescript
+interface RuleRequest {
+  name: string                     // required
+  sourceDir: string                // required
+  targetDir: string                // required
+  mediaType: 'MOVIE' | 'TV_SHOW' | 'AUTO'   // required
+  pathTemplate?: string            // 不填 = 使用全局默认模板
+  operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'  // required
+  enabled?: boolean                // 不填默认 true
+}
+```
+
+---
+
+## WebSocket（STOMP）
+
+| 订阅地址 | 事件触发时机 | payload |
+|---|---|---|
+| `/topic/tasks` | 任务状态变更时 | `TaskEvent` |
+
+### TaskEvent
+```typescript
+interface TaskEvent {
+  taskId: number
+  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED'
+  sourcePath: string
+  errorMessage?: string
+}
+```
+
+连接地址：`ws://{host}/ws`（SockJS endpoint）

@@ -58,6 +58,12 @@ public class MediaTask {
     /** 匹配置信度 0.0-1.0，低于阈值进入 AWAITING_CONFIRMATION */
     private Double matchConfidence;
 
+    /**
+     * 触发此任务的监控规则 ID（FK → watch_rule.id，ADR-002）
+     * 用于 RenameService 查询目标目录和路径模板
+     */
+    private Long ruleId;
+
     /** 执行的文件操作类型（MOVE / COPY / HARD_LINK / SYMBOLIC_LINK） */
     private String operationType;
 

@@ -45,6 +45,17 @@ String apiKey = settingsService.get("tmdb.api-key", "");
 1. 新建类实现 `MetadataMatcher`，标注 `@Component`
 2. 实现 `search()`、`getById()`、`getSourceName()`
 
+## 任务完成后的文档同步（必须执行）
+
+每完成一个功能模块，必须做以下两件事，否则视为任务未完成：
+
+1. **追加实现记录到 `implementation-log.mdc`**，按文件内的模板格式填写
+2. **如有新增或变更接口，同步更新 `api-contracts.mdc`**
+
+> 发现设计问题时，在 `implementation-log.mdc` 的"遗留问题"区说明，**不得直接修改 `design-decisions.mdc`**。
+
+---
+
 ## 日志规范
 
 使用 `@Slf4j`（Lombok），禁止 `System.out.println`。

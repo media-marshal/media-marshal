@@ -62,6 +62,17 @@ const unsubscribe = onTaskEvent((event) => {
 onUnmounted(unsubscribe)
 ```
 
+## 任务完成后的文档同步（必须执行）
+
+每完成一个功能模块，必须做以下两件事，否则视为任务未完成：
+
+1. **追加实现记录到 `implementation-log.mdc`**，按文件内的模板格式填写
+2. **开发前必须先读 `api-contracts.mdc`**，以此为准对齐后端接口，不以后端代码注释为准
+
+> 发现接口与 `api-contracts.mdc` 不一致时，在 `implementation-log.mdc` 的"遗留问题"区说明，由 PM 协调后端修正。
+
+---
+
 ## Element Plus 使用
 - 优先使用 `el-message`、`el-message-box` 做反馈，不自定义弹窗
 - 表格数据量大时使用虚拟滚动（`el-table-v2`）
