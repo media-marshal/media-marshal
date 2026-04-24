@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "MediaMarshal (Dev - Local)",
+            "request": "launch",
+            "mainClass": "com.mediamarshal.MediaMarshalApplication",
+            "projectName": "media-marshal",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env.local",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "dev"
+            },
+            "vmArgs": "-Xmx512m"
+        },
+        {
+            "type": "java",
+            "name": "MediaMarshal (Debug - Attach)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5005
+        }
+    ]
+}

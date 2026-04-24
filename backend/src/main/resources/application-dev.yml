@@ -2,7 +2,7 @@
 # 启动方式：mvn spring-boot:run -Dspring.profiles.active=dev
 spring:
   datasource:
-    url: jdbc:sqlite:./dev-data/media-marshal-dev.db
+    url: jdbc:sqlite:./media-marshal-dev.db
   jpa:
     show-sql: true
     hibernate:

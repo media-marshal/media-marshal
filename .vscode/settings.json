@@ -1,0 +1,4 @@
+{
+    "java.compile.nullAnalysis.mode": "automatic",
+    "typescript.tsdk": "frontend/node_modules/typescript/lib"
+}

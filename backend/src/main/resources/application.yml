@@ -52,6 +52,9 @@ media-marshal:
     # 文件操作策略：MOVE | COPY | HARD_LINK | SYMBOLIC_LINK
     strategy: ${MEDIA_MARSHAL_OPERATION_STRATEGY:MOVE}
 
+  # Debug 模式：开启后打印详细中间过程日志（guessit 原始结果、TMDB 响应、置信度计算等）
+  debug: ${MEDIA_MARSHAL_DEBUG:false}
+
   notification:
     email:
       enabled: ${MEDIA_MARSHAL_EMAIL_ENABLED:false}

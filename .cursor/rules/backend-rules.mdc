@@ -46,11 +46,52 @@ String apiKey = settingsService.get("tmdb.api-key", "");
 2. 实现 `search()`、`getById()`、`getSourceName()`
 
 ## 日志规范
+
+使用 `@Slf4j`（Lombok），禁止 `System.out.println`。
+
+### 日志级别约定
 ```java
-// 使用 @Slf4j (Lombok)，禁止 System.out.println
-log.info("Processing file: {}", file);
-log.error("Failed to process: {}", file, e);  // 异常作为最后参数
+log.info("Processing file: {}", file);          // 关键业务节点
+log.warn("Low confidence: {}", confidence);     // 非致命异常情况
+log.error("Failed to process: {}", file, e);   // 异常必须作为最后参数，完整堆栈
+log.debug("TMDB raw response: {}", json);       // 仅 debug 模式下有意义的细节
 ```
+
+### Debug 模式开关
+
+通过配置项 `media-marshal.debug` 控制 debug 日志的打印，
+避免生产环境输出大量无用日志影响性能和可读性。
+
+**配置**（`application.yml`）：
+```yaml
+media-marshal:
+  debug: ${MEDIA_MARSHAL_DEBUG:false}
+```
+
+**注入方式**（优先使用 `SettingsService`，与三源优先级保持一致）：
+```java
+// ✅ 推荐：运行时可通过 Web UI 或环境变量动态切换
+boolean isDebug = Boolean.parseBoolean(settingsService.get("debug", "false"));
+if (isDebug) {
+    log.debug("guessit raw response: filename={}, result={}", filename, result);
+}
+
+// ✅ 也可使用 Spring 配置属性注入（服务启动时固定）
+@Value("${media-marshal.debug:false}")
+private boolean debugMode;
+```
+
+**Debug 日志应包含的内容**：
+- guessit 原始解析结果（完整 JSON）
+- TMDB 请求参数和原始响应
+- 置信度计算过程（各字段得分明细）
+- 文件操作前的 source/target 完整路径
+- WebSocket 推送的事件内容
+
+### 注释规范
+- 类级注释：说明职责、关键设计决策、扩展方式
+- 方法级注释：说明参数语义、返回值含义、异常场景
+- 禁止写"做了什么"的注释（代码本身已表达），只写"为什么这样做"
 
 ## WebSocket 推送
 所有需要通知前端的事件通过 `EventPublisher` 发布，不直接调用 `SimpMessagingTemplate`：

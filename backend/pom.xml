@@ -13,7 +13,7 @@
 
     <groupId>com.mediamarshal</groupId>
     <artifactId>media-marshal</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>v0.1.0-SNAPSHOT</version>
     <name>media-marshal</name>
     <description>Automatically organize your media library — identify, rename, and generate NFO metadata</description>
 
@@ -85,6 +85,24 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                    <!-- 显式声明 Lombok 作为注解处理器，消除 Java 21 的批注处理警告（乱码根源） -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>-Xlint:-options</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

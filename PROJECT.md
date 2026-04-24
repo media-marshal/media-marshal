@@ -60,7 +60,6 @@ services:
 |------|------------|
 | GitHub Organization | github.com/media-marshal |
 | GitHub Repository | github.com/media-marshal/media-marshal |
-| Docker Hub Namespace | mediamarshal（Organization） |
 | 域名 | media-marshal.com（已注册） |
 | Repo Description | "Automatically organize your media library — identify, rename, and generate NFO metadata for movies and TV shows. Docker-native, Web UI, TMDB-powered." |
 

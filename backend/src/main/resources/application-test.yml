@@ -2,11 +2,15 @@
 # 使用内存 SQLite 避免污染开发数据
 spring:
   datasource:
-    url: jdbc:sqlite::memory:
+    # 双冒号在 YAML 中需要加引号
+    url: "jdbc:sqlite::memory:"
   jpa:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+    properties:
+      # 关闭 Hibernate JDBC 元数据探测，避免 Windows 上 /data/... 路径不存在的 ERROR 日志
+      hibernate.boot.allow_jdbc_metadata_access: false
 
 media-marshal:
   parser:

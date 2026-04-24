@@ -2,13 +2,15 @@
 *.class
 *.jar
 *.war
+!.mvn/wrapper/maven-wrapper.jar   # Maven wrapper jar 需要提交
 target/
-.mvn/
-!.mvn/wrapper/maven-wrapper.jar
+.mvn/repository/                  # mvnw 本地缓存，不提交
+HELP.md                           # Spring Initializr 自动生成，无实际价值
 
 # ── Node / Frontend ───────────────────────────────────────────
 node_modules/
 frontend/dist/
+frontend/.vite/                   # Vite 构建缓存
 frontend/.env.local
 frontend/src/auto-imports.d.ts
 frontend/src/components.d.ts
@@ -17,11 +19,16 @@ frontend/src/components.d.ts
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
 parser/.venv/
+parser/dist/
+.pytest_cache/
 
 # ── IDE ──────────────────────────────────────────────────────
 .idea/
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
 *.iml
 
 # Cursor IDE（只提交 rules/，忽略缓存和用户偏好）
@@ -31,11 +38,19 @@ parser/.venv/
 # ── Docker / Dev ─────────────────────────────────────────────
 dev-data/
 dev-media/
-.env                   # 本地环境变量，不提交
+docker-compose.override.yml       # 本地 Docker Compose 覆盖，不提交
+.env                              # 本地环境变量，不提交
+.env.local                        # 本地个人变量，不提交
+
+# ── SQLite ───────────────────────────────────────────────────
+*.db-shm                          # SQLite WAL 模式共享内存文件
+*.db-wal                          # SQLite WAL 模式日志文件
 
 # ── OS ───────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
+ehthumbs.db
 
 # ── Logs ─────────────────────────────────────────────────────
 *.log
