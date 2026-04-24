@@ -46,6 +46,7 @@ public class EventPublisher {
         publish("task.confirm", task);
     }
 
+    @SuppressWarnings("null")
     private void publish(String eventType, MediaTask task) {
         Map<String, Object> event = Map.of(
                 "type", eventType,

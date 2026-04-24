@@ -18,7 +18,10 @@ public class MoveRenameStrategy implements FileOperationStrategy {
 
     @Override
     public void execute(Path source, Path target) throws IOException {
-        Files.createDirectories(target.getParent());
+        Path parent = target.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException e) {

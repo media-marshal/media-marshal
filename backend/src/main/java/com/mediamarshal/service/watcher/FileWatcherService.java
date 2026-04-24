@@ -79,14 +79,14 @@ public class FileWatcherService {
 
     private void startWatching() {
         running = true;
-        Thread watchThread = Thread.ofVirtual().name("file-watcher").start(() -> {
+        Thread.ofVirtual().name("file-watcher").start(() -> {
             while (running) {
                 // TODO: implement WatchKey polling and event dispatching
             }
         });
     }
 
-    private boolean isVideoFile(Path path) {
+    boolean isVideoFile(Path path) {
         String name = path.getFileName().toString().toLowerCase();
         return VIDEO_EXTENSIONS.stream().anyMatch(name::endsWith);
     }

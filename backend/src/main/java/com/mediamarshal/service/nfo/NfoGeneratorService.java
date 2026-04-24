@@ -36,7 +36,7 @@ public class NfoGeneratorService {
      * @param mediaFile   重命名后的媒体文件路径
      */
     public void generate(MediaTask task, MatchResult matchResult, Path mediaFile) throws IOException {
-        if (task.getMediaType() == MediaTask.MediaType.MOVIE) {
+        if (MediaTask.MediaType.MOVIE.equals(task.getMediaType())) {
             generateMovieNfo(matchResult, mediaFile);
         } else {
             generateEpisodeNfo(task, matchResult, mediaFile);
