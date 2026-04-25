@@ -34,6 +34,10 @@ public class EventPublisher {
         publish("task.created", task);
     }
 
+    public void publishTaskProcessing(MediaTask task) {
+        publish("task.processing", task);
+    }
+
     public void publishTaskDone(MediaTask task) {
         publish("task.done", task);
     }

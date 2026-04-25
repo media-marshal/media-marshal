@@ -170,3 +170,100 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - `DirBrowserDialog` 当前只显示目录，不显示文件；Windows 路径分隔符已统一转换为正斜杠
 - `FilesystemController` 未做权限校验，多用户版本需加 `user_id` 过滤（与 ADR-002 user_id 预留字段对应）
+
+---
+
+## [FileWatcher 递归监听与防护] 2026-04-25
+
+### 已完成
+- 按 ADR-005 改造 `FileWatcherService`
+  - 启动 / reload 时递归遍历 `watch_rule.sourceDir`，注册所有已存在子目录
+  - 运行期间收到新目录创建事件时，立即递归注册新目录
+  - `dirRuleMap` 维护"每个被注册目录 → WatchRule"映射，而不是只维护 sourceDir
+  - `reload()` 重建 `WatchService`，避免禁用/删除规则后旧 `WatchKey` 继续触发
+- 新增防抖与稳定性检测
+  - 使用 `ConcurrentHashMap<String, ScheduledFuture<?>>` 保存同路径防抖任务
+  - 防抖窗口通过 `SettingsService.get("watcher.debounce-seconds", "3")` 读取
+  - 防抖结束后读取文件大小，等待 1 秒再次读取，大小一致才进入 pipeline
+  - 文件消失、读取失败或大小仍变化时跳过并记录日志
+- 新增数据库查重
+  - `MediaTaskRepository` 新增 `existsBySourcePathAndStatusNot(sourcePath, FAILED)`
+  - 同一路径存在非 FAILED 任务时跳过，并打印 WARN 日志
+- 增强健壮性
+  - pipeline 异常不会杀死 WatchService 事件线程或防抖线程
+  - 仅视频扩展名进入防抖流程，目录事件只用于递归注册
+- `application.yml` 新增 `media-marshal.watcher.debounce-seconds`
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/watcher/FileWatcherService.java`（重构）
+- `backend/src/main/java/com/mediamarshal/repository/MediaTaskRepository.java`（新增查重方法）
+- `backend/src/main/resources/application.yml`（新增防抖配置）
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- v1 不做历史文件全量扫描，严格遵循 ADR-005；如果用户希望处理已有目录中的历史文件，需要后续新增"手动扫描"能力
+- 当前稳定性检测在文件大小变化时等待下一次文件事件；某些 NAS / Docker volume 若漏发后续事件，可能需要后续增强为"自动重试 N 次"
+
+---
+
+## [MediaProcessPipeline 主流程] 2026-04-25
+
+### 已完成
+- 新增 `TaskCandidate` 实体和 `TaskCandidateRepository`，按 ADR-004 落地 `task_candidate` 表
+  - `TaskCandidate.task` 使用 `@JsonIgnore`，API 响应通过 `getTaskId()` 暴露任务 ID，避免递归序列化
+- 实现 `GuessitParserClient.parse()`
+  - 调用 parser sidecar `GET /parse?filename=...`
+  - 支持 `parser.timeout-seconds` 超时配置
+  - Debug 模式打印 guessit 原始解析结果
+- 实现 `TmdbMetadataMatcher`
+  - `search()` 调用 TMDB `/search/movie`、`/search/tv`
+  - `getById()` 调用 TMDB `/movie/{id}`、`/tv/{id}`
+  - 使用标题相似度 + 年份匹配计算 v1 置信度
+  - 支持 `tmdb.language`、`tmdb.base-url`、`tmdb.api-key` 配置
+- 实现 `NfoGeneratorService`
+  - 生成基础 movie / episode NFO XML
+  - NFO 与媒体文件同目录、同名 `.nfo`
+- 实现 `MediaProcessPipeline.process()`
+  - Step 1 创建任务并记录 `ruleId`、`operationType`
+  - Step 2 guessit 解析并写入 `parsedTitle/year/season/episode`
+  - Step 3 根据 WatchRule 或 guessit 结果确定媒体类型
+  - Step 4 TMDB 搜索并保存候选列表到 `task_candidate`
+  - Step 5 根据 `watcher.confidence-threshold` 分流：高置信度自动继续，低置信度进入 `AWAITING_CONFIRMATION`
+  - Step 6 重命名，Step 7 生成 NFO，Step 8 标记 `DONE` 并推送 WebSocket
+  - 失败时标记 `FAILED`，推送 WebSocket 并发送邮件通知（如启用）
+- 实现 `MediaProcessPipeline.confirm()`
+  - 校验任务必须为 `AWAITING_CONFIRMATION`
+  - 已存在候选则标记 selected；重新搜索结果则新建候选并 selected
+  - 拉取 TMDB 详情后继续 Step 6-8
+- 扩展 `QueueController`
+  - 新增 `GET /api/queue/{id}/candidates`
+  - 新增 `GET /api/queue/{id}/search?q=xxx`
+- `EventPublisher` 新增 `task.processing` 推送方法
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/TaskCandidate.java`（新增）
+- `backend/src/main/java/com/mediamarshal/repository/TaskCandidateRepository.java`（新增）
+- `backend/src/main/java/com/mediamarshal/service/parser/GuessitParserClient.java`（实现）
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`（实现）
+- `backend/src/main/java/com/mediamarshal/service/nfo/NfoGeneratorService.java`（实现）
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`（实现）
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`（新增候选/搜索接口）
+- `backend/src/main/java/com/mediamarshal/websocket/EventPublisher.java`（新增 processing 事件）
+
+### 接口变更
+- 新增 `GET /api/queue/{id}/candidates`，返回 `TaskCandidate[]`
+- 新增 `GET /api/queue/{id}/search?q={keyword}`，返回 `MatchResult[]`
+- 已更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- TMDB 置信度算法为 v1 简化实现（标题 LCS 相似度 80% + 年份 20%），后续可单独优化
+- NFO 目前只生成核心字段（标题、年份、简介、TMDB ID、海报 URL），演员、分类、海报下载后续扩展
+- `operationType` 当前在任务创建时记录 WatchRule.operation；实际非 MOVE 策略尚未实现

@@ -161,11 +161,202 @@ Queue（带徽标）    → /queue
 
 ---
 
+## ADR-004 低置信度候选列表存储（2026-04-25）✅
+
+### 结论
+采用**独立 `task_candidate` 表**（方案 A），候选数据长期保留，不随任务完成而删除，供未来看板和报表功能使用。
+
+### 数据库表结构
+
+```sql
+CREATE TABLE task_candidate (
+  id             BIGINT PRIMARY KEY AUTOINCREMENT,
+  task_id        BIGINT  NOT NULL,     -- FK → media_task.id
+  tmdb_id        BIGINT  NOT NULL,     -- TMDB 条目 ID
+  title          VARCHAR(500),         -- 本地化标题（随 tmdb.language）
+  original_title VARCHAR(500),         -- 原语言标题
+  year           INTEGER,              -- 发布年份
+  media_type     VARCHAR(20),          -- MOVIE / TV_SHOW
+  confidence     DOUBLE,               -- 匹配置信度 0.0~1.0
+  poster_url     VARCHAR(500),         -- 海报图 URL
+  overview       TEXT,                 -- 简介
+  rank           INTEGER,              -- 候选排序（1=最高分）
+  selected       BOOLEAN NOT NULL DEFAULT 0,  -- 是否被用户最终选中
+  created_at     DATETIME NOT NULL
+);
+```
+
+### 关键设计决策
+- **数据永久保留**：任务 DONE / FAILED / SKIPPED 后候选记录不删除，供看板和报表使用
+- **`selected` 字段**：用户确认时将选中的候选标记为 `selected=true`，其余保持 `false`，便于统计"采纳率"、"平均候选数"等指标
+- **`rank` 字段**：TMDB 搜索结果按置信度降序排列，rank=1 为系统最优推荐
+- 未来报表可查询的典型指标示例：
+  - 低置信度任务占比
+  - 用户采纳系统首推候选（rank=1）的比率
+  - 平均每个待确认任务的候选数量
+  - 各媒体类型的匹配成功率
+
+### 对现有代码的影响（开发 Agent 须知）
+| 模块 | 变化 |
+|---|---|
+| 新增 `TaskCandidate` 实体 | 字段对应上表，`@ManyToOne` 关联 `MediaTask` |
+| 新增 `TaskCandidateRepository` | 至少需要 `findByTaskId(Long taskId)` 方法 |
+| `MediaProcessPipeline` | TMDB 搜索完成后，将候选列表批量保存到 `task_candidate` 表 |
+| `QueueController.confirm()` | 确认时将对应 `task_candidate.selected` 置为 `true` |
+| `api-contracts.mdc` | Queue 相关接口的响应需包含候选列表，待 ADR-006 设计后更新 |
+
+---
+
+## ADR-005 FileWatcher 重复处理防护（2026-04-25）✅
+
+### 结论
+采用**递归监听 + 防抖去重 + 数据库查重**：
+
+- 监听每条 `watch_rule.source_dir` 及其所有子目录中的文件变化
+- 使用防抖和文件大小稳定检测，避免处理尚未拷贝完成的大文件
+- 使用数据库查重，避免同一路径重复生成任务
+
+### 监听范围
+
+**递归监听**：系统应监听规则路径下所有层级的子目录。
+
+示例：规则 `source_dir=/downloads` 时，以下文件都应被检测：
+
+```text
+/downloads/a.mkv
+/downloads/movie/b.mkv
+/downloads/tv/Breaking Bad/S03E07.mkv
+```
+
+实现要求：
+- 启动或 reload 时，递归遍历 `source_dir` 下所有已存在目录，并逐个注册到 `WatchService`
+- 运行期间若收到新目录创建事件，也要立即递归注册该新目录，确保后续子文件可被检测
+- `dirRuleMap` 必须维护"每个被注册目录 → 对应 WatchRule"的映射，而不是只维护 sourceDir
+- `WatchService` 原生不支持递归监听，必须由业务代码递归注册多个目录
+
+### 防护机制
+
+**第一层：防抖（Debounce）+ 文件大小稳定检测**
+
+防止处理拷贝中的不完整文件：
+
+```
+文件事件触发
+  → 将文件路径放入防抖 Map（key: 绝对路径, value: ScheduledFuture）
+  → 若同路径在防抖窗口内再次触发，取消旧任务、重新计时（防抖）
+  → 防抖窗口结束（默认 3 秒）后执行稳定性检查：
+      记录文件大小 size1
+      等待 1 秒
+      再次读取文件大小 size2
+      若 size1 == size2，文件稳定，进入第二层检查
+      若 size1 != size2，文件仍在写入，放弃本次（等下次事件重新触发）
+```
+
+防抖窗口时长由配置项控制：`media-marshal.watcher.debounce-seconds`（默认 3）
+
+**第二层：数据库查重**
+
+防止同一文件被重复入库（程序重启、规则重载等边界场景）：
+
+```
+查询 media_task 表：
+  SELECT * FROM media_task
+  WHERE source_path = ? AND status != 'FAILED'
+  LIMIT 1
+
+若查到记录 → 跳过，打印 WARN 日志
+若无记录   → 创建 MediaTask，进入 pipeline
+```
+
+### 实现要点（开发 Agent 须知）
+- 防抖 Map 类型：`ConcurrentHashMap<String, ScheduledFuture<?>>`，key 为文件绝对路径字符串
+- 使用 `ScheduledExecutorService` 执行延迟任务
+- `FileWatcherService.reload()` 被调用时，应清空防抖 Map，避免旧任务在新规则下误触发
+- `reload()` 应重建 `WatchService` 或取消旧 `WatchKey`，避免已删除/禁用规则的旧目录继续触发事件
+- 文件大小读取用 `Files.size(path)`，若文件已被删除（拷贝完成后源文件移走）则直接跳过
+- 配置项 `watcher.debounce-seconds` 通过 `SettingsService.get()` 读取
+- 仅处理视频文件扩展名，目录事件只用于递归注册，不进入 pipeline
+
+### 递归监听的不良影响与约束
+
+- **资源占用增加**：每个子目录都要注册一个 `WatchKey`，目录数量很多时会占用更多内存和系统监听资源
+- **启动 / reload 变慢**：递归遍历大目录树需要时间，尤其是 NAS 或机械硬盘路径
+- **事件风暴风险**：批量下载、解压、迁移目录时可能产生大量 CREATE/MODIFY 事件，必须依赖防抖和视频扩展名过滤削峰
+- **跨平台差异**：Windows、Linux、Docker volume、NAS 挂载对文件事件支持程度不同，可能存在事件延迟或漏报
+
+v1 约束：
+- 递归监听默认开启，不提供 UI 开关
+- 不做历史文件全量扫描，只监听服务启动后产生的新事件
+- 后续如用户遇到超大目录树性能问题，再增加 `watch_rule.recursive` 开关或"手动扫描"功能
+
+---
+
+## ADR-006 人工确认流程设计（2026-04-25）✅
+
+### 场景描述
+任务进入 `AWAITING_CONFIRMATION` 后，Queue 页面展示该任务，用户有两种操作路径：
+1. **从系统候选中选择**：TMDB 搜索已保存在 `task_candidate` 表，直接展示供用户选择
+2. **手动重新搜索**：用户认为候选不对，输入新关键词实时查 TMDB，从结果中选择
+
+两种路径最终都指向同一个确认接口。
+
+### API 接口设计
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务（已有） |
+| GET | `/api/queue/{id}/candidates` | 返回该任务已保存的候选列表（来自 task_candidate 表） |
+| GET | `/api/queue/{id}/search?q=xxx` | 用关键词实时查 TMDB（结果**不**写入 task_candidate） |
+| POST | `/api/queue/{id}/confirm` | 用户确认选中的候选，继续 pipeline |
+| POST | `/api/queue/{id}/skip` | 跳过，标记为 FAILED（已有） |
+
+### 确认接口（POST /api/queue/{id}/confirm）
+
+请求体：
+```json
+{
+  "tmdbId": 1396,
+  "mediaType": "TV_SHOW"
+}
+```
+
+后端执行逻辑：
+1. 若 `tmdbId` 在该任务的 `task_candidate` 中存在 → 将该候选的 `selected=true`
+2. 若 `tmdbId` 来自用户重新搜索（不在 task_candidate 中）→ 新建一条 `task_candidate` 记录并标记 `selected=true`
+3. 调用 TMDB `getById()` 获取完整元数据，填充 `confirmedTitle`、`confirmedYear` 等字段
+4. 继续执行 pipeline Step 6（重命名）→ Step 7（生成 NFO）→ Step 8（状态改 DONE，推送 WebSocket）
+
+### 候选响应结构（GET /api/queue/{id}/candidates）
+
+```typescript
+interface TaskCandidate {
+  id: number
+  taskId: number
+  tmdbId: number
+  title: string
+  originalTitle: string
+  year: number
+  mediaType: 'MOVIE' | 'TV_SHOW'
+  confidence: number       // 0.0 ~ 1.0
+  posterUrl: string
+  overview: string
+  rank: number             // 1 = 系统最高推荐
+  selected: boolean        // 是否已被用户选中
+}
+```
+
+### 前端 Queue 页面交互设计
+每个待确认任务卡片展示：
+- 文件路径、guessit 解析结果（标题、年份、类型）
+- 系统候选列表（`task_candidate` 数据，带海报、置信度、排序）
+- 「重新搜索」输入框：输入后调用 search 接口，结果与候选列表合并展示
+- 选中某候选后显示「确认」按钮，点击调用 confirm 接口
+- 「跳过」按钮调用 skip 接口
+
+---
+
 ## 待讨论事项
 
-- **ADR-004**：低置信度候选列表存储方案
-- **ADR-005**：FileWatcher 重复处理防护策略
-- **ADR-006**：人工确认流程 API 设计
 - **ADR-007**：模板变量帮助页设计
   - 背景：`PathsView.vue` 路径模板输入框下方当前为硬编码变量提示字符串
   - 方向：未来新增独立帮助页，展示所有可用变量的名称、类型、来源、示例值

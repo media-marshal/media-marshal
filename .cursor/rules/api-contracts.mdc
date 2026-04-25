@@ -41,7 +41,6 @@ interface MediaTask {
   operationType: string | null
   errorMessage: string | null
   ruleId: number | null            // 触发此任务的 WatchRule ID
-  candidatesJson: string | null    // JSON 序列化候选列表（AWAITING_CONFIRMATION 时有值）
   createdAt: string                // ISO 8601
   updatedAt: string
 }
@@ -54,6 +53,8 @@ interface MediaTask {
 | 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
 |---|---|---|---|---|
 | GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务 | — | `MediaTask[]` |
+| GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
+| GET | `/api/queue/{id}/search?q={keyword}` | 用户手动重新搜索 TMDB（不写入候选表） | — | `MatchResult[]` |
 | POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理 | `ConfirmRequest` | — |
 | POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 FAILED） | — | — |
 
@@ -62,6 +63,40 @@ interface MediaTask {
 interface ConfirmRequest {
   tmdbId: number
   mediaType: 'MOVIE' | 'TV_SHOW'
+}
+```
+
+### TaskCandidate
+```typescript
+interface TaskCandidate {
+  id: number
+  taskId: number
+  tmdbId: number
+  title: string | null
+  originalTitle: string | null
+  year: number | null
+  mediaType: 'MOVIE' | 'TV_SHOW'
+  confidence: number | null        // 0.0 ~ 1.0
+  posterUrl: string | null
+  overview: string | null
+  rank: number                     // 1 = 系统最高推荐
+  selected: boolean
+  createdAt: string
+}
+```
+
+### MatchResult
+```typescript
+interface MatchResult {
+  source: 'tmdb'
+  sourceId: string
+  title: string | null
+  originalTitle: string | null
+  year: number | null
+  mediaType: 'MOVIE' | 'TV_SHOW'
+  overview: string | null
+  posterUrl: string | null
+  confidence: number | null
 }
 ```
 

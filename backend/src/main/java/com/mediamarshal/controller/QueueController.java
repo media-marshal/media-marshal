@@ -1,8 +1,13 @@
 package com.mediamarshal.controller;
 
 import com.mediamarshal.model.dto.ApiResponse;
+import com.mediamarshal.model.dto.MatchResult;
+import com.mediamarshal.model.dto.ParseResult;
 import com.mediamarshal.model.entity.MediaTask;
+import com.mediamarshal.model.entity.TaskCandidate;
 import com.mediamarshal.repository.MediaTaskRepository;
+import com.mediamarshal.repository.TaskCandidateRepository;
+import com.mediamarshal.service.matcher.MetadataMatcher;
 import com.mediamarshal.service.pipeline.MediaProcessPipeline;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -24,6 +29,8 @@ import java.util.List;
 public class QueueController {
 
     private final MediaTaskRepository taskRepository;
+    private final TaskCandidateRepository candidateRepository;
+    private final MetadataMatcher metadataMatcher;
     private final MediaProcessPipeline pipeline;
 
     @GetMapping
@@ -39,6 +46,32 @@ public class QueueController {
         return ApiResponse.ok();
     }
 
+    @GetMapping("/{id}/candidates")
+    public ApiResponse<List<TaskCandidate>> getCandidates(@PathVariable Long id) {
+        return ApiResponse.ok(candidateRepository.findByTaskIdOrderByRankAsc(id));
+    }
+
+    @SuppressWarnings("null")
+    @GetMapping("/{id}/search")
+    public ApiResponse<List<MatchResult>> search(@PathVariable Long id, @RequestParam String q) {
+        MediaTask task = taskRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
+
+        ParseResult parseResult = new ParseResult();
+        parseResult.setTitle(q);
+        parseResult.setYear(task.getParsedYear());
+        parseResult.setSeason(task.getParsedSeason());
+        parseResult.setEpisode(task.getParsedEpisode());
+        if (MediaTask.MediaType.TV_SHOW.equals(task.getMediaType())) {
+            parseResult.setType("episode");
+        } else if (MediaTask.MediaType.MOVIE.equals(task.getMediaType())) {
+            parseResult.setType("movie");
+        }
+
+        return ApiResponse.ok(metadataMatcher.search(parseResult));
+    }
+
+    @SuppressWarnings("null")
     @PostMapping("/{id}/skip")
     public ApiResponse<Void> skip(@PathVariable Long id) {
         taskRepository.findById(id).ifPresent(task -> {
