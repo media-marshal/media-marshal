@@ -163,7 +163,7 @@ public class MediaProcessPipeline {
 
         MediaTask.MediaType confirmedType = MediaTask.MediaType.valueOf(mediaType);
         TaskCandidate selectedCandidate = candidateRepository
-                .findByTaskIdAndTmdbIdAndMediaType(taskId, tmdbId, confirmedType)
+                .findByTask_IdAndTmdbIdAndMediaType(taskId, tmdbId, confirmedType)
                 .orElseGet(() -> createManualCandidate(task, tmdbId, confirmedType));
 
         markCandidateSelected(taskId, selectedCandidate);
@@ -229,7 +229,7 @@ public class MediaProcessPipeline {
             candidateRepository.save(candidate);
         }
 
-        return candidateRepository.findByTaskIdOrderByRankAsc(task.getId());
+        return candidateRepository.findByTask_IdOrderByRankAsc(task.getId());
     }
 
     private void moveToAwaitingConfirmation(MediaTask task, String reason) {
@@ -289,7 +289,7 @@ public class MediaProcessPipeline {
 
     private TaskCandidate createManualCandidate(MediaTask task, Long tmdbId, MediaTask.MediaType mediaType) {
         MatchResult match = metadataMatcher.getById(String.valueOf(tmdbId), mediaType.name());
-        int nextRank = candidateRepository.findByTaskIdOrderByRankAsc(task.getId()).size() + 1;
+        int nextRank = candidateRepository.findByTask_IdOrderByRankAsc(task.getId()).size() + 1;
 
         TaskCandidate candidate = new TaskCandidate();
         candidate.setTask(task);
@@ -308,7 +308,7 @@ public class MediaProcessPipeline {
 
     @SuppressWarnings("null")
     private void markCandidateSelected(Long taskId, TaskCandidate selectedCandidate) {
-        List<TaskCandidate> candidates = candidateRepository.findByTaskIdOrderByRankAsc(taskId);
+        List<TaskCandidate> candidates = candidateRepository.findByTask_IdOrderByRankAsc(taskId);
         for (TaskCandidate candidate : candidates) {
             candidate.setSelected(candidate.getId().equals(selectedCandidate.getId()));
         }

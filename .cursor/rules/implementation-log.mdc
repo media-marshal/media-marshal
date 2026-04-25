@@ -267,3 +267,29 @@ alwaysApply: false
 - TMDB 置信度算法为 v1 简化实现（标题 LCS 相似度 80% + 年份 20%），后续可单独优化
 - NFO 目前只生成核心字段（标题、年份、简介、TMDB ID、海报 URL），演员、分类、海报下载后续扩展
 - `operationType` 当前在任务创建时记录 WatchRule.operation；实际非 MOVE 策略尚未实现
+
+---
+
+## [TaskCandidate Repository 启动修复] 2026-04-25
+
+### 已完成
+- 修复 Spring Data JPA Repository 方法命名错误
+  - 原方法：`findByTaskIdOrderByRankAsc`、`findByTaskIdAndTmdbIdAndMediaType`
+  - 修复为：`findByTask_IdOrderByRankAsc`、`findByTask_IdAndTmdbIdAndMediaType`
+- 原因：`TaskCandidate` 实体字段是 `task`（`@ManyToOne`），不是直接的 `taskId` 字段；Spring Data JPA 查询关联属性需使用下划线路径 `task.id → Task_Id`
+- 同步修复 `QueueController` 和 `MediaProcessPipeline` 调用点
+- 运行 `mvn test` 验证 Spring 上下文启动成功
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/repository/TaskCandidateRepository.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无

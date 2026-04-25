@@ -48,7 +48,7 @@ public class QueueController {
 
     @GetMapping("/{id}/candidates")
     public ApiResponse<List<TaskCandidate>> getCandidates(@PathVariable Long id) {
-        return ApiResponse.ok(candidateRepository.findByTaskIdOrderByRankAsc(id));
+        return ApiResponse.ok(candidateRepository.findByTask_IdOrderByRankAsc(id));
     }
 
     @SuppressWarnings("null")
