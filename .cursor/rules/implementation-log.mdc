@@ -94,3 +94,79 @@ alwaysApply: false
 - 当前运行的服务是 ADR-001/002 改动前的旧代码（Hibernate 查询中 `media_task` 缺少 `rule_id` 字段）
 - 需重启服务（`mvn spring-boot:run -Dspring-boot.run.profiles=dev`）使新实体结构生效
 - 重启后 Hibernate DDL-auto=update 会自动为 `media_task` 表新增 `rule_id` 列，并创建 `watch_rule` 新表
+
+---
+
+## [前端导航重构] 2026-04-25
+
+### 已完成
+- `AppLayout.vue`：将原单一 `/settings` 菜单项改为 `el-sub-menu`，包含「路径设置」和「系统设置」两个子项
+  - 使用 `computed` 动态控制 `:default-openeds`，在 `/settings/**` 路由下自动展开设置子菜单
+  - 「高级设置」路由预留但不渲染菜单项（ADR-003 要求）
+  - 子菜单样式适配暗色侧边栏背景
+- `router/index.ts`：路由结构更新
+  - `/settings` 重定向到 `/settings/paths`
+  - 新增 `/settings/paths` → `PathsView.vue`
+  - 新增 `/settings/system` → `SystemSettingsView.vue`
+  - 新增 `/settings/advanced`（占位，暂用 SystemSettingsView，v2 替换）
+- `i18n/zh.ts` + `en.ts`：新增 `nav.settingsPaths`、`nav.settingsSystem`，扩充 `watchRule.*`、`settings.*`、`common.*` i18n key
+- 新增 `src/api/watchRule.ts`：封装 WatchRule CRUD + toggle 接口
+- 新增 `src/views/PathsView.vue`：Watch Rule 管理页（表格 + 新增/编辑对话框 + 删除/启用切换）
+- 新增 `src/views/SystemSettingsView.vue`：系统配置页（原 SettingsView 内容，移除路径相关配置）
+
+### 关键文件
+- `frontend/src/components/AppLayout.vue`（重构菜单）
+- `frontend/src/router/index.ts`（路由拆分）
+- `frontend/src/i18n/zh.ts`、`en.ts`（新增 i18n key）
+- `frontend/src/api/watchRule.ts`（新增）
+- `frontend/src/views/PathsView.vue`（新增）
+- `frontend/src/views/SystemSettingsView.vue`（新增，替代旧 SettingsView）
+
+### 接口变更
+- 无新增后端接口（使用已有的 `/api/watch-rules` 和 `/api/settings` 接口）
+
+### 偏离设计的地方
+- 旧 `SettingsView.vue` 保留未删除（router 已不再指向，可在后续清理时删除）
+
+### 遗留问题 / 需 PM 决策
+- ~~旧 `SettingsView.vue` 文件是否需要删除~~ → 已删除 ✅
+- `PathsView.vue` 中路径模板变量提示目前为硬编码字符串（已确认 v1 保持现状）
+  - 未来版本规划：新增独立「模板变量帮助页」，内容通过后端接口动态获取，已登记至 design-decisions.mdc 待讨论区
+
+---
+
+## [PathsView 交互升级] 2026-04-25
+
+### 已完成
+- **卡片网格布局**：规则列表由 `el-table` 改为响应式卡片网格（`auto-fill minmax(380px, 1fr)`）
+  - 每张卡片展示：规则名、源→目标路径、媒体类型/操作方式标签、路径模板、启用开关、编辑/删除按钮
+  - 禁用状态卡片降低透明度以区分
+- **目录浏览器**：
+  - 后端新增 `FilesystemController`，`GET /api/filesystem/browse?path=` 返回子目录列表
+  - 前端新增 `DirBrowserDialog.vue`：支持面包屑导航、逐级浏览、确认选择
+  - 新增 `api/filesystem.ts` 封装接口调用
+  - 表单中源目录/目标目录输入框右侧新增「浏览」按钮，点击打开目录浏览弹窗
+- **表单 enabled 字段移除**：新规则创建时默认 `enabled=false`，在卡片上通过 switch 手动开启
+- **路径模板下拉**：
+  - 默认展示预设模板下拉（当前硬编码 2 个预设：电影默认、剧集默认）
+  - 下拉框右侧「✏️ 自定义」按钮切换为输入框模式，用户可自由输入模板
+  - 「↩ 返回预设」按钮切换回下拉模式
+  - 编辑已有规则时自动识别是预设模板还是自定义模板并进入对应模式
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/controller/FilesystemController.java`（新增）
+- `frontend/src/api/filesystem.ts`（新增）
+- `frontend/src/components/DirBrowserDialog.vue`（新增）
+- `frontend/src/views/PathsView.vue`（重构）
+
+### 接口变更
+- 新增 `GET /api/filesystem/browse?path={path}` — 返回指定目录的子目录列表
+  - 响应：`{ currentPath, parentPath, dirs: [{ name, path }] }`
+  - 已更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- `DirBrowserDialog` 当前只显示目录，不显示文件；Windows 路径分隔符已统一转换为正斜杠
+- `FilesystemController` 未做权限校验，多用户版本需加 `user_id` 过滤（与 ADR-002 user_id 预留字段对应）

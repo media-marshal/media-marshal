@@ -18,10 +18,26 @@ const router = createRouter({
       name: 'queue',
       component: () => import('@/views/QueueView.vue'),
     },
+    // /settings 重定向到路径设置（ADR-003）
     {
       path: '/settings',
-      name: 'settings',
-      component: () => import('@/views/SettingsView.vue'),
+      redirect: '/settings/paths',
+    },
+    {
+      path: '/settings/paths',
+      name: 'settings-paths',
+      component: () => import('@/views/PathsView.vue'),
+    },
+    {
+      path: '/settings/system',
+      name: 'settings-system',
+      component: () => import('@/views/SystemSettingsView.vue'),
+    },
+    // 高级设置：路由预留，v1 菜单中不显示
+    {
+      path: '/settings/advanced',
+      name: 'settings-advanced',
+      component: () => import('@/views/SystemSettingsView.vue'), // placeholder，v2 替换
     },
   ],
 })

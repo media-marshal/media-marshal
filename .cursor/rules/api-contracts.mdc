@@ -139,6 +139,30 @@ interface RuleRequest {
 
 ---
 
+## 文件系统
+
+### GET /api/filesystem/browse
+列出指定路径下的子目录，供前端目录浏览器使用。
+
+**Query Parameters**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `path` | string | `/` | 要浏览的绝对路径 |
+
+**Response**
+```typescript
+interface BrowseResult {
+  currentPath: string         // 当前路径（已规范化，斜杠统一）
+  parentPath: string | null   // 父目录路径，根目录时为 null
+  dirs: Array<{
+    name: string              // 目录名
+    path: string              // 完整绝对路径
+  }>
+}
+```
+
+---
+
 ## WebSocket（STOMP）
 
 | 订阅地址 | 事件触发时机 | payload |

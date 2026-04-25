@@ -133,8 +133,41 @@ CREATE TABLE watch_rule (
 
 ---
 
+## ADR-003 前端导航结构（2026-04-25）✅
+
+### 结论
+侧边栏采用**父菜单 + 子菜单分级**方案，不使用页面内 Tabs。
+
+### 菜单结构
+```
+Dashboard          → /dashboard
+Queue（带徽标）    → /queue
+▼ 设置
+    路径设置       → /settings/paths       （Watch Rule CRUD）
+    系统设置       → /settings/system      （TMDB Key、置信度、邮件通知等全局配置）
+    高级设置       → /settings/advanced    （预留，v1 不显示）
+```
+
+### 实现要点（开发 Agent 须知）
+- 使用 Element Plus `el-sub-menu` 包裹三个 `el-menu-item`
+- **高级设置**：路由 `/settings/advanced` 在 `router/index.ts` 中预留占位，但 `AppLayout.vue` 的菜单中**不渲染该项**，等 v2 有实际内容时再露出
+- 路由结构调整：`/settings` 重定向到 `/settings/paths`，原 `SettingsView.vue` 拆分为 `PathsView.vue` 和 `SystemSettingsView.vue`
+- i18n key 新增：`nav.settings`（父菜单）、`nav.settingsPaths`、`nav.settingsSystem`
+
+### 选型理由
+- Watch Rules 是独立 CRUD 功能，与系统配置表单性质不同，不适合同 Tab
+- 各子页面有独立 URL，支持深度链接和浏览器前进/后退
+- 侧边栏空间充足，分级后不拥挤
+
+---
+
 ## 待讨论事项
 
-- **ADR-003**：低置信度候选列表存储方案
-- **ADR-004**：FileWatcher 重复处理防护策略
-- **ADR-005**：人工确认流程 API 设计
+- **ADR-004**：低置信度候选列表存储方案
+- **ADR-005**：FileWatcher 重复处理防护策略
+- **ADR-006**：人工确认流程 API 设计
+- **ADR-007**：模板变量帮助页设计
+  - 背景：`PathsView.vue` 路径模板输入框下方当前为硬编码变量提示字符串
+  - 方向：未来新增独立帮助页，展示所有可用变量的名称、类型、来源、示例值
+  - 内容来源：后端提供接口（如 `GET /api/template-variables`）返回变量元数据，与 `TemplateVariables.java` 的 `@TemplateVar` 注解保持同步
+  - 前端实现：可在 PathsView 模板输入框旁放「查看可用变量」链接，跳转或弹出帮助内容

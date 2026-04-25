@@ -1,50 +1,45 @@
 <template>
-  <div class="settings-view">
+  <div class="system-settings-view">
     <h2>{{ t('settings.title') }}</h2>
 
     <el-form v-loading="loading" label-position="top" class="settings-form">
-      <!-- TMDB -->
+
+      <!-- TMDB 配置 -->
       <el-card shadow="never" class="settings-section">
-        <template #header>TMDB 配置</template>
+        <template #header>{{ t('settings.tmdbSection') }}</template>
         <el-form-item :label="t('settings.tmdbApiKey')">
           <el-input
             v-model="form.tmdbApiKey"
             type="password"
             show-password
-            placeholder="从 themoviedb.org 申请"
+            :placeholder="t('settings.tmdbApiKeyHelp')"
           />
+        </el-form-item>
+        <el-form-item :label="t('settings.tmdbLanguage')">
+          <el-input v-model="form.tmdbLanguage" placeholder="zh-CN" />
+          <div class="form-hint">{{ t('settings.tmdbLanguageHelp') }}</div>
         </el-form-item>
       </el-card>
 
-      <!-- 文件监控 -->
+      <!-- 识别配置 -->
       <el-card shadow="never" class="settings-section">
-        <template #header>文件监控</template>
-        <el-form-item :label="t('settings.watchDirs')">
-          <el-input
-            v-model="form.watchDirs"
-            type="textarea"
-            :rows="3"
-            placeholder="/media/downloads,/nas/inbox"
-          />
-          <div class="form-hint">多个目录用英文逗号分隔</div>
-        </el-form-item>
+        <template #header>{{ t('settings.matchingSection') }}</template>
         <el-form-item :label="t('settings.confidenceThreshold')">
-          <el-slider v-model="form.confidenceThreshold" :min="0" :max="100" :step="5" show-input />
-          <div class="form-hint">低于此阈值的匹配将进入待确认队列</div>
-        </el-form-item>
-        <el-form-item :label="t('settings.operationStrategy')">
-          <el-select v-model="form.operationStrategy">
-            <el-option label="移动（推荐）" value="MOVE" />
-            <el-option label="复制" value="COPY" />
-            <el-option label="硬链接" value="HARD_LINK" />
-            <el-option label="软链接" value="SYMBOLIC_LINK" />
-          </el-select>
+          <el-slider
+            v-model="form.confidenceThreshold"
+            :min="0"
+            :max="100"
+            :step="5"
+            show-input
+            style="max-width: 480px"
+          />
+          <div class="form-hint">{{ t('settings.confidenceThresholdHelp') }}</div>
         </el-form-item>
       </el-card>
 
       <!-- 邮件通知 -->
       <el-card shadow="never" class="settings-section">
-        <template #header>邮件通知</template>
+        <template #header>{{ t('settings.emailSection') }}</template>
         <el-form-item :label="t('settings.emailEnabled')">
           <el-switch v-model="form.emailEnabled" />
         </el-form-item>
@@ -71,9 +66,8 @@ const { loading } = storeToRefs(settingsStore)
 
 const form = reactive({
   tmdbApiKey: '',
-  watchDirs: '',
+  tmdbLanguage: 'zh-CN',
   confidenceThreshold: 80,
-  operationStrategy: 'MOVE',
   emailEnabled: false,
   emailRecipient: '',
 })
@@ -81,9 +75,10 @@ const form = reactive({
 onMounted(async () => {
   await settingsStore.fetchSettings()
   form.tmdbApiKey = settingsStore.getSetting('tmdb.api-key')
-  form.watchDirs = settingsStore.getSetting('watcher.watch-dirs')
-  form.confidenceThreshold = Number(settingsStore.getSetting('watcher.confidence-threshold') || 80) * 100
-  form.operationStrategy = settingsStore.getSetting('operation.strategy') || 'MOVE'
+  form.tmdbLanguage = settingsStore.getSetting('tmdb.language') || 'zh-CN'
+  form.confidenceThreshold = Math.round(
+    Number(settingsStore.getSetting('watcher.confidence-threshold') || 0.8) * 100,
+  )
   form.emailEnabled = settingsStore.getSetting('notification.email.enabled') === 'true'
   form.emailRecipient = settingsStore.getSetting('notification.email.recipient')
 })
@@ -91,9 +86,12 @@ onMounted(async () => {
 async function handleSave() {
   await Promise.all([
     settingsStore.updateSetting('tmdb.api-key', form.tmdbApiKey, 'TMDB API Key', true),
-    settingsStore.updateSetting('watcher.watch-dirs', form.watchDirs, '监控目录列表'),
-    settingsStore.updateSetting('watcher.confidence-threshold', String(form.confidenceThreshold / 100), '匹配置信度阈值'),
-    settingsStore.updateSetting('operation.strategy', form.operationStrategy, '文件操作策略'),
+    settingsStore.updateSetting('tmdb.language', form.tmdbLanguage, 'TMDB 查询语言'),
+    settingsStore.updateSetting(
+      'watcher.confidence-threshold',
+      String(form.confidenceThreshold / 100),
+      '匹配置信度阈值',
+    ),
     settingsStore.updateSetting('notification.email.enabled', String(form.emailEnabled), '邮件通知开关'),
     settingsStore.updateSetting('notification.email.recipient', form.emailRecipient, '通知邮箱'),
   ])
@@ -102,14 +100,15 @@ async function handleSave() {
 </script>
 
 <style scoped>
-.settings-view {
+.system-settings-view {
   padding: 24px;
-  max-width: 800px;
+  max-width: 760px;
 }
 
 h2 {
   margin: 0 0 24px;
   font-size: 22px;
+  color: #303133;
 }
 
 .settings-section {
