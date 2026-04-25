@@ -1,5 +1,5 @@
 import http from './http'
-import type { ApiResponse, MediaTask, TaskStatus } from '@/types'
+import type { ApiResponse, MatchResult, MediaTask, MediaType, TaskCandidate, TaskStatus } from '@/types'
 
 export const mediaApi = {
   listTasks(status?: TaskStatus) {
@@ -21,7 +21,17 @@ export const mediaApi = {
     return http.get<ApiResponse<MediaTask[]>>('/api/queue')
   },
 
-  confirmTask(id: number, tmdbId: number, mediaType: string) {
+  getTaskCandidates(id: number) {
+    return http.get<ApiResponse<TaskCandidate[]>>(`/api/queue/${id}/candidates`)
+  },
+
+  searchQueue(id: number, keyword: string) {
+    return http.get<ApiResponse<MatchResult[]>>(`/api/queue/${id}/search`, {
+      params: { q: keyword },
+    })
+  },
+
+  confirmTask(id: number, tmdbId: number, mediaType: MediaType) {
     return http.post<ApiResponse<void>>(`/api/queue/${id}/confirm`, {
       tmdbId,
       mediaType,

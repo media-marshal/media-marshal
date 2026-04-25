@@ -18,19 +18,20 @@ export type MediaType = 'MOVIE' | 'TV_SHOW'
 export interface MediaTask {
   id: number
   sourcePath: string
-  targetPath?: string
+  targetPath: string | null
   status: TaskStatus
-  mediaType?: MediaType
-  parsedTitle?: string
-  parsedYear?: number
-  parsedSeason?: number
-  parsedEpisode?: number
-  tmdbId?: number
-  confirmedTitle?: string
-  confirmedYear?: number
-  matchConfidence?: number
-  operationType?: string
-  errorMessage?: string
+  mediaType: MediaType | null
+  parsedTitle: string | null
+  parsedYear: number | null
+  parsedSeason: number | null
+  parsedEpisode: number | null
+  tmdbId: number | null
+  confirmedTitle: string | null
+  confirmedYear: number | null
+  matchConfidence: number | null
+  operationType: string | null
+  errorMessage: string | null
+  ruleId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -43,17 +44,33 @@ export interface AppSetting {
   sensitive: boolean
 }
 
-// ─── TMDB 搜索候选项 ─────────────────────────────────────────────
-export interface MatchCandidate {
-  source: string
+// ─── 待确认队列候选项 ─────────────────────────────────────────────
+export interface TaskCandidate {
+  id: number
+  taskId: number
+  tmdbId: number
+  title: string | null
+  originalTitle: string | null
+  year: number | null
+  mediaType: MediaType
+  confidence: number | null
+  posterUrl: string | null
+  overview: string | null
+  rank: number
+  selected: boolean
+  createdAt: string
+}
+
+export interface MatchResult {
+  source: 'tmdb'
   sourceId: string
-  title: string
-  originalTitle?: string
-  year?: number
-  mediaType: string
-  overview?: string
-  posterUrl?: string
-  confidence: number
+  title: string | null
+  originalTitle: string | null
+  year: number | null
+  mediaType: MediaType
+  overview: string | null
+  posterUrl: string | null
+  confidence: number | null
 }
 
 // ─── WebSocket 事件 ──────────────────────────────────────────────

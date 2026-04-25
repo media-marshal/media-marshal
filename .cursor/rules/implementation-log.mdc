@@ -293,3 +293,38 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+
+---
+
+## [QueueView 人工确认页面] 2026-04-25
+
+### 已完成
+- 按 ADR-006 补齐 `/queue` 页面人工确认流程
+  - 页面加载 `GET /api/queue` 的 AWAITING_CONFIRMATION 任务
+  - 每个任务卡片展示源文件路径、解析标题、年份、媒体类型、季集信息、置信度
+  - 调用 `GET /api/queue/{id}/candidates` 展示系统候选列表，包含海报、标题、年份、类型、置信度、排序和简介
+  - 新增重新搜索输入框，调用 `GET /api/queue/{id}/search?q={keyword}`，搜索结果与系统候选合并展示
+  - 用户选中候选后调用 `POST /api/queue/{id}/confirm`，请求体为 `{ tmdbId, mediaType }`
+  - 跳过按钮调用 `POST /api/queue/{id}/skip`，并增加确认弹窗
+- 补齐前端 Queue 相关类型定义：`TaskCandidate`、`MatchResult`，并按 API 契约修正 `MediaTask` 可空字段
+- 扩展 `mediaApi` 队列接口封装，避免组件直接调用 axios
+- Queue 页面所有新增用户可见文案已加入 `zh.ts` / `en.ts`
+- `mediaStore.fetchQueue()` 增加 loading 状态，`confirmTask()` 使用强类型 `MediaType`
+- 已运行 `npm run type-check` 与 `npm run build`，均通过
+
+### 关键文件
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/api/media.ts`
+- `frontend/src/stores/mediaStore.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无新增或变更后端接口（使用 `api-contracts.mdc` 已定义的 `/api/queue` 系列接口）
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- `npm run build` 仍有 Vite 默认 chunk size warning（Element Plus / 依赖打包体积较大），不影响构建产物；如后续关注首屏体积，可单独规划 manualChunks 拆包优化

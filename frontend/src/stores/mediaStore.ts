@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { mediaApi } from '@/api/media'
-import type { MediaTask, TaskStatus } from '@/types'
+import type { MediaTask, MediaType, TaskStatus } from '@/types'
 
 export const useMediaStore = defineStore('media', () => {
   const tasks = ref<MediaTask[]>([])
@@ -26,8 +26,13 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   async function fetchQueue() {
-    const res = await mediaApi.getPendingQueue()
-    tasks.value = res.data.data
+    loading.value = true
+    try {
+      const res = await mediaApi.getPendingQueue()
+      tasks.value = res.data.data
+    } finally {
+      loading.value = false
+    }
   }
 
   /** WebSocket 推送时更新本地任务状态 */
@@ -36,7 +41,7 @@ export const useMediaStore = defineStore('media', () => {
     if (task) task.status = status
   }
 
-  async function confirmTask(id: number, tmdbId: number, mediaType: string) {
+  async function confirmTask(id: number, tmdbId: number, mediaType: MediaType) {
     await mediaApi.confirmTask(id, tmdbId, mediaType)
     updateTaskStatus(id, 'PROCESSING')
   }
