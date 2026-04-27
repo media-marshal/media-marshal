@@ -3,10 +3,13 @@ package com.mediamarshal.controller;
 import com.mediamarshal.model.dto.ApiResponse;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.repository.MediaTaskRepository;
+import com.mediamarshal.repository.TaskCandidateRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 媒体任务 REST API
@@ -21,6 +24,7 @@ import java.util.List;
 public class MediaController {
 
     private final MediaTaskRepository taskRepository;
+    private final TaskCandidateRepository candidateRepository;
 
     @GetMapping
     public ApiResponse<List<MediaTask>> listTasks(
@@ -33,14 +37,17 @@ public class MediaController {
 
     @GetMapping("/{id}")
     public ApiResponse<MediaTask> getTask(@PathVariable Long id) {
-        return taskRepository.findById(id)
+        return taskRepository.findById(Objects.requireNonNull(id))
                 .map(ApiResponse::ok)
                 .orElse(ApiResponse.fail("Task not found: " + id));
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     public ApiResponse<Void> deleteTask(@PathVariable Long id) {
-        taskRepository.deleteById(id);
+        Long taskId = Objects.requireNonNull(id);
+        candidateRepository.deleteAll(Objects.requireNonNull(candidateRepository.findByTask_IdOrderByRankAsc(taskId)));
+        taskRepository.deleteById(taskId);
         return ApiResponse.ok();
     }
 }

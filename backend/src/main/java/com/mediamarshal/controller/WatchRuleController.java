@@ -23,6 +23,7 @@ import java.util.Objects;
  * PUT    /api/watch-rules/{id}         更新规则
  * DELETE /api/watch-rules/{id}         删除规则
  * PATCH  /api/watch-rules/{id}/toggle  启用/禁用规则
+ * POST   /api/watch-rules/{id}/scan    触发规则源目录全量扫描
  *
  * 规则变更后自动触发 FileWatcherService 重新加载监控目录。
  */
@@ -82,6 +83,23 @@ public class WatchRuleController {
         log.info("WatchRule toggled: id={}, enabled={}", id, saved.getEnabled());
         fileWatcherService.reload();
         return ApiResponse.ok(saved);
+    }
+
+    @PostMapping("/{id}/scan")
+    public ApiResponse<Void> scanRule(@PathVariable Long id) {
+        WatchRule rule = watchRuleRepository.findById(Objects.requireNonNull(id)).orElse(null);
+        if (rule == null) {
+            return ApiResponse.fail("Rule not found: " + id);
+        }
+
+        try {
+            fileWatcherService.triggerFullScan(rule);
+            log.info("WatchRule full scan requested: id={}, sourceDir={}", id, rule.getSourceDir());
+            return ApiResponse.ok();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            log.warn("WatchRule full scan rejected: id={}, error={}", id, e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
     }
 
     private WatchRule buildRule(WatchRule rule, RuleRequest req) {

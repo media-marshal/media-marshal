@@ -108,6 +108,9 @@ export default {
     deleteConfirm: 'Delete rule "{name}"? This cannot be undone.',
     deleteSuccess: 'Rule deleted',
     toggleSuccess: 'Rule status updated',
+    fullScan: 'Full Scan',
+    fullScanConfirm: 'Run a full scan for rule "{name}"? This recursively processes existing video files under the source directory.',
+    fullScanStarted: 'Full scan started',
   },
   dirBrowser: {
     title: 'Select Directory',

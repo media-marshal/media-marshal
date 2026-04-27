@@ -38,4 +38,8 @@ export const watchRuleApi = {
   toggleRule(id: number) {
     return http.patch<ApiResponse<WatchRule>>(`/api/watch-rules/${id}/toggle`)
   },
+
+  scanRule(id: number) {
+    return http.post<ApiResponse<void>>(`/api/watch-rules/${id}/scan`)
+  },
 }

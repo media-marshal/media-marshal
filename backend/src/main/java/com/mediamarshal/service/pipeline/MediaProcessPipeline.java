@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -205,6 +206,9 @@ public class MediaProcessPipeline {
     }
 
     private List<TaskCandidate> saveCandidates(MediaTask task, List<MatchResult> matches) {
+        // Re-running a task should replace its candidate snapshot rather than append duplicates.
+        candidateRepository.deleteAll(Objects.requireNonNull(candidateRepository.findByTask_IdOrderByRankAsc(task.getId())));
+
         List<MatchResult> sorted = matches.stream()
                 .sorted(Comparator.comparing(
                         MatchResult::getConfidence,

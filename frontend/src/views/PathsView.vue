@@ -81,12 +81,23 @@
 
         <!-- 操作按钮 -->
         <div class="card-actions">
-          <el-button link type="primary" :icon="Edit" @click="openDialog(rule)">
-            编辑
+          <el-button
+            link
+            type="success"
+            :icon="Search"
+            :loading="scanningId === rule.id"
+            @click="handleScan(rule)"
+          >
+            {{ t('watchRule.fullScan') }}
           </el-button>
-          <el-button link type="danger" :icon="Delete" @click="handleDelete(rule)">
-            删除
-          </el-button>
+          <div class="card-actions-right">
+            <el-button link type="primary" :icon="Edit" @click="openDialog(rule)">
+              编辑
+            </el-button>
+            <el-button link type="danger" :icon="Delete" @click="handleDelete(rule)">
+              删除
+            </el-button>
+          </div>
         </div>
       </el-card>
     </div>
@@ -268,7 +279,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { watchRuleApi, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
 import DirBrowserDialog from '@/components/DirBrowserDialog.vue'
@@ -279,6 +290,7 @@ const { t } = useI18n()
 const rules = ref<WatchRule[]>([])
 const loading = ref(false)
 const togglingId = ref<number | null>(null)
+const scanningId = ref<number | null>(null)
 
 // ─── 对话框 ──────────────────────────────────────────────────────
 const dialogVisible = ref(false)
@@ -479,6 +491,22 @@ async function handleToggle(rule: WatchRule) {
   }
 }
 
+async function handleScan(rule: WatchRule) {
+  await ElMessageBox.confirm(
+    t('watchRule.fullScanConfirm', { name: rule.name }),
+    t('watchRule.fullScan'),
+    { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' },
+  )
+
+  scanningId.value = rule.id!
+  try {
+    await watchRuleApi.scanRule(rule.id!)
+    ElMessage.success(t('watchRule.fullScanStarted'))
+  } finally {
+    scanningId.value = null
+  }
+}
+
 function openDirBrowser(target: 'source' | 'target') {
   dirBrowserTarget.value = target
   dirBrowserVisible.value = true
@@ -669,11 +697,18 @@ h2 {
 /* ─── 卡片操作 ─────────────────────── */
 .card-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 4px;
   border-top: 1px solid #f0f2f5;
   padding-top: 12px;
   margin-top: 4px;
+}
+
+.card-actions-right {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 /* ─── 表单内的模板选择 ──────────────── */

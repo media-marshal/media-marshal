@@ -93,6 +93,8 @@
                 <div class="candidate-info">
                   <div class="candidate-title-row">
                     <span class="candidate-title">{{ displayTitle(option) }}</span>
+                  </div>
+                  <div class="candidate-tag-row">
                     <el-tag v-if="option.rank != null" size="small" type="warning">
                       {{ t('queue.rank', { rank: option.rank }) }}
                     </el-tag>
@@ -465,24 +467,33 @@ h2 {
 .candidate-info {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .candidate-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  min-width: 0;
 }
 
 .candidate-title {
-  min-width: 0;
-  flex: 1;
+  display: block;
+  width: 100%;
   overflow: hidden;
   color: #303133;
   font-size: 15px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.candidate-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  min-width: 0;
 }
 
 .candidate-meta {
@@ -501,6 +512,9 @@ h2 {
   color: #606266;
   font-size: 13px;
   line-height: 1.55;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }

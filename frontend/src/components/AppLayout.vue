@@ -19,10 +19,10 @@
           <span>{{ t('nav.dashboard') }}</span>
         </el-menu-item>
 
-        <el-menu-item index="/queue">
+        <el-menu-item index="/queue" class="queue-menu-item">
           <el-icon><Bell /></el-icon>
-          <span>{{ t('nav.queue') }}</span>
-          <el-badge v-if="queueCount > 0" :value="queueCount" class="queue-badge" />
+          <span class="menu-label">{{ t('nav.queue') }}</span>
+          <span v-if="queueCount > 0" class="queue-count">{{ queueCount }}</span>
         </el-menu-item>
 
         <!-- 设置：父菜单 + 子菜单（ADR-003） -->
@@ -144,8 +144,32 @@ function switchLocale(lang: 'zh' | 'en') {
   color: #fff !important;
 }
 
-.queue-badge {
+.queue-menu-item {
+  display: flex;
+  align-items: center;
+}
+
+.menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #f56c6c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
 }
 
 .locale-switcher {

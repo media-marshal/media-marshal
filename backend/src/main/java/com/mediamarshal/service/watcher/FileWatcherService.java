@@ -24,6 +24,7 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -69,6 +70,9 @@ public class FileWatcherService {
     /** 文件绝对路径 → 防抖任务；同路径新事件会取消旧任务并重新计时。 */
     private final Map<String, ScheduledFuture<?>> debounceMap = new ConcurrentHashMap<>();
 
+    /** 正在执行全量扫描的源目录集合，用于防止同一路径重复扫描。 */
+    private final Set<String> activeFullScanSources = ConcurrentHashMap.newKeySet();
+
     /** 执行防抖延迟任务和文件大小稳定检测。 */
     private final ScheduledExecutorService debounceExecutor = Executors.newScheduledThreadPool(2);
 
@@ -112,6 +116,60 @@ public class FileWatcherService {
                 rules.size(), dirRuleMap.size());
 
         startWatchLoop();
+    }
+
+    /**
+     * 手动触发某条规则的历史文件全量扫描。
+     *
+     * 扫描与 WatchService 事件处理共用视频扩展名过滤和数据库查重逻辑，
+     * 但不做防抖等待，因为历史文件通常已经稳定存在于磁盘上。
+     */
+    public void triggerFullScan(WatchRule rule) {
+        Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
+        if (!Files.isDirectory(root)) {
+            throw new IllegalArgumentException("WatchRule sourceDir is not a directory: " + rule.getSourceDir());
+        }
+
+        String scanKey = root.toString();
+        if (!activeFullScanSources.add(scanKey)) {
+            throw new IllegalStateException("Full scan is already running for this path. Please try again later.");
+        }
+
+        Thread.ofVirtual()
+                .name("watch-rule-full-scan-" + rule.getId())
+                .start(() -> runFullScan(root, rule, scanKey));
+    }
+
+    private void runFullScan(Path root, WatchRule rule, String scanKey) {
+        log.info("Full scan started: ruleId={}, rule='{}', sourceDir={}",
+                rule.getId(), rule.getName(), root);
+
+        ScanCounter counter = new ScanCounter();
+        try (Stream<Path> stream = Files.walk(root)) {
+            stream.filter(Files::isRegularFile)
+                    .forEach(file -> scanFile(file.toAbsolutePath().normalize(), rule, counter));
+            log.info("Full scan completed: ruleId={}, scanned={}, queued={}, skipped={}",
+                    rule.getId(), counter.scanned, counter.queued, counter.skipped);
+        } catch (IOException e) {
+            log.error("Full scan failed: ruleId={}, sourceDir={}", rule.getId(), root, e);
+        } finally {
+            activeFullScanSources.remove(scanKey);
+        }
+    }
+
+    private void scanFile(Path file, WatchRule rule, ScanCounter counter) {
+        counter.scanned++;
+        if (!isVideoFile(file)) {
+            counter.skipped++;
+            return;
+        }
+
+        boolean queued = processIfNotDuplicated(file, rule);
+        if (queued) {
+            counter.queued++;
+        } else {
+            counter.skipped++;
+        }
     }
 
     /**
@@ -319,7 +377,7 @@ public class FileWatcherService {
      * ADR-005 第二层防护：数据库查重。
      * 同一路径存在非 FAILED 任务时跳过，避免重复入库。
      */
-    private void processIfNotDuplicated(Path file, WatchRule rule) {
+    private boolean processIfNotDuplicated(Path file, WatchRule rule) {
         String sourcePath = file.toString();
         boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
                 sourcePath,
@@ -328,15 +386,17 @@ public class FileWatcherService {
 
         if (exists) {
             log.warn("Duplicate media task skipped: sourcePath={}", sourcePath);
-            return;
+            return false;
         }
 
         try {
             log.info("Stable video file detected: {} (rule='{}')", file, rule.getName());
             pipeline.process(file, rule);
+            return true;
         } catch (Exception e) {
             // Pipeline 仍有未实现步骤，不能让异常杀死防抖线程或 WatchService。
             log.error("Pipeline execution failed for file: {}", file, e);
+            return false;
         }
     }
 
@@ -354,5 +414,11 @@ public class FileWatcherService {
     private boolean isVideoFile(Path path) {
         String name = path.getFileName().toString().toLowerCase();
         return VIDEO_EXTENSIONS.stream().anyMatch(name::endsWith);
+    }
+
+    private static class ScanCounter {
+        private int scanned;
+        private int queued;
+        private int skipped;
     }
 }

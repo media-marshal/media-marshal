@@ -20,7 +20,7 @@ alwaysApply: false
 | GET | `/api/tasks` | 查询所有任务，可按状态过滤 | — | `MediaTask[]` |
 | GET | `/api/tasks?status={status}` | 过滤状态（PENDING/PROCESSING/AWAITING_CONFIRMATION/DONE/FAILED） | — | `MediaTask[]` |
 | GET | `/api/tasks/{id}` | 查询单个任务详情 | — | `MediaTask` |
-| DELETE | `/api/tasks/{id}` | 删除任务记录（不影响文件） | — | — |
+| DELETE | `/api/tasks/{id}` | 删除任务记录及其候选记录（不影响文件） | — | — |
 
 ### MediaTask 字段
 ```typescript
@@ -139,8 +139,10 @@ interface UpdateRequest {
 | PUT | `/api/watch-rules/{id}` | 更新规则 | `RuleRequest` | `WatchRule` |
 | DELETE | `/api/watch-rules/{id}` | 删除规则 | — | — |
 | PATCH | `/api/watch-rules/{id}/toggle` | 启用/禁用规则 | — | `WatchRule` |
+| POST | `/api/watch-rules/{id}/scan` | 异步触发该规则源目录全量扫描 | — | — |
 
 > 规则变更后后端自动触发 `FileWatcherService.reload()`，无需前端额外操作。
+> 全量扫描会递归遍历 `sourceDir` 下已有视频文件，并复用数据库查重；接口返回时仅表示扫描任务已开始。同一路径已有扫描未结束时，接口返回 `success=false`，提示稍后再试。
 
 ### WatchRule 字段
 ```typescript

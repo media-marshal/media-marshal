@@ -108,6 +108,9 @@ export default {
     deleteConfirm: '确认删除规则「{name}」？此操作不可恢复。',
     deleteSuccess: '规则已删除',
     toggleSuccess: '规则状态已更新',
+    fullScan: '全量扫描',
+    fullScanConfirm: '确认对规则「{name}」的源目录执行全量扫描？扫描会递归处理目录下已有视频文件。',
+    fullScanStarted: '全量扫描已开始',
   },
   dirBrowser: {
     title: '选择目录',
