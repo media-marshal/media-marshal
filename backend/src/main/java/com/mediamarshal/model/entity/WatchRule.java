@@ -1,10 +1,13 @@
 package com.mediamarshal.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.mediamarshal.service.rename.FileOperationStrategy;
 import jakarta.persistence.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 监控规则实体（ADR-002）
@@ -64,6 +67,22 @@ public class WatchRule {
     @Column(nullable = false)
     private Boolean enabled = true;
 
+    /** 是否自动移动同名字幕、用户 NFO、封面等附属文件 */
+    @Column(nullable = false)
+    private Boolean moveAssociatedFiles = true;
+
+    /** MOVE 成功后是否清理源目录中产生的空文件夹 */
+    @Column(nullable = false)
+    private Boolean cleanupEmptyDirs = false;
+
+    /** 没有用户自带 NFO 时是否自动生成 NFO */
+    @Column(nullable = false)
+    private Boolean generateNfo = false;
+
+    /** v1 保留字段；NULL 表示使用系统默认忽略规则 */
+    @Column(columnDefinition = "TEXT")
+    private String ignoredFilePatterns;
+
     /** 多用户预留字段，v1 始终为 null */
     private Long userId;
 
@@ -91,5 +110,22 @@ public class WatchRule {
         MOVIE,
         TV_SHOW,
         AUTO
+    }
+
+    public List<String> getIgnoredFilePatterns() {
+        return ignoredFilePatterns == null || ignoredFilePatterns.isBlank()
+                ? null
+                : Arrays.stream(ignoredFilePatterns.split("\n")).filter(s -> !s.isBlank()).toList();
+    }
+
+    public void setIgnoredFilePatterns(List<String> ignoredFilePatterns) {
+        this.ignoredFilePatterns = ignoredFilePatterns == null || ignoredFilePatterns.isEmpty()
+                ? null
+                : String.join("\n", ignoredFilePatterns);
+    }
+
+    @JsonIgnore
+    public String getIgnoredFilePatternsText() {
+        return ignoredFilePatterns;
     }
 }

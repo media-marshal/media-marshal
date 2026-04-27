@@ -8,6 +8,7 @@ import com.mediamarshal.model.entity.WatchRule;
 import com.mediamarshal.notification.EmailNotificationService;
 import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.TaskCandidateRepository;
+import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.matcher.MetadataMatcher;
 import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
@@ -18,7 +19,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -57,6 +61,7 @@ public class MediaProcessPipeline {
     private final NfoGeneratorService nfoGeneratorService;
     private final MediaTaskRepository taskRepository;
     private final TaskCandidateRepository candidateRepository;
+    private final WatchRuleRepository watchRuleRepository;
     private final SettingsService settingsService;
     private final EventPublisher eventPublisher;
     private final EmailNotificationService emailNotificationService;
@@ -270,16 +275,26 @@ public class MediaProcessPipeline {
             taskRepository.save(task);
             eventPublisher.publishTaskProcessing(task);
 
+            WatchRule rule = loadRule(task);
+            Path sourceFile = Paths.get(task.getSourcePath()).toAbsolutePath().normalize();
+            Path sourceParent = sourceFile.getParent();
             Path target = renameService.rename(task);
             task.setTargetPath(target.toString());
             taskRepository.save(task);
 
-            nfoGeneratorService.generate(task, match, target);
+            boolean hasUserNfo = moveAssociatedFiles(task, rule, target);
+            if (Boolean.TRUE.equals(rule.getGenerateNfo()) && !hasUserNfo) {
+                nfoGeneratorService.generate(task, match, target);
+            } else {
+                log.debug("NFO generation skipped: taskId={}, generateNfo={}, hasUserNfo={}",
+                        task.getId(), rule.getGenerateNfo(), hasUserNfo);
+            }
 
             task.setStatus(MediaTask.TaskStatus.DONE);
             task.setErrorMessage(null);
             taskRepository.save(task);
             eventPublisher.publishTaskDone(task);
+            cleanupEmptySourceDirs(rule, sourceParent);
             log.info("Pipeline completed: taskId={}, target={}", task.getId(), target);
         } catch (Exception e) {
             log.error("Pipeline finalization failed: taskId={}", task.getId(), e);
@@ -289,6 +304,130 @@ public class MediaProcessPipeline {
             eventPublisher.publishTaskFailed(task);
             emailNotificationService.notifyTaskFailed(task);
         }
+    }
+
+    private WatchRule loadRule(MediaTask task) {
+        Long ruleId = Objects.requireNonNull(task.getRuleId(), "MediaTask.ruleId is required");
+        return watchRuleRepository.findById(ruleId)
+                .orElseThrow(() -> new IllegalArgumentException("WatchRule not found: " + ruleId));
+    }
+
+    private boolean moveAssociatedFiles(MediaTask task, WatchRule rule, Path targetFile) {
+        if (!Boolean.TRUE.equals(rule.getMoveAssociatedFiles())) {
+            return false;
+        }
+
+        Path sourceFile = Paths.get(task.getSourcePath()).toAbsolutePath().normalize();
+        Path sourceDir = sourceFile.getParent();
+        Path targetDir = targetFile.getParent();
+        if (sourceDir == null || targetDir == null || !Files.isDirectory(sourceDir)) {
+            return false;
+        }
+
+        String sourceBase = basename(sourceFile.getFileName().toString());
+        String targetBase = basename(targetFile.getFileName().toString());
+        boolean userNfoFound = false;
+
+        try (var stream = Files.list(sourceDir)) {
+            for (Path associated : stream.filter(Files::isRegularFile).toList()) {
+                String filename = associated.getFileName().toString();
+                String lower = filename.toLowerCase();
+                Path destination = null;
+
+                if (isSameBaseAssociated(filename, sourceBase)) {
+                    String suffix = filename.substring(sourceBase.length());
+                    destination = targetDir.resolve(targetBase + suffix);
+                    if (lower.endsWith(".nfo")) {
+                        userNfoFound = true;
+                    }
+                } else if (isGenericCover(lower)) {
+                    destination = targetDir.resolve(filename);
+                }
+
+                if (destination != null) {
+                    moveAssociatedFile(associated, destination);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to inspect associated files: taskId={}, sourceDir={}, error={}",
+                    task.getId(), sourceDir, e.getMessage());
+        }
+
+        return userNfoFound;
+    }
+
+    private void moveAssociatedFile(Path source, Path destination) {
+        try {
+            if (Files.exists(destination)) {
+                log.warn("Associated file target already exists, skipping: source={}, target={}", source, destination);
+                return;
+            }
+            Files.createDirectories(destination.getParent());
+            Files.move(source, destination);
+            log.info("Associated file moved: {} -> {}", source, destination);
+        } catch (IOException e) {
+            log.warn("Failed to move associated file: source={}, target={}, error={}",
+                    source, destination, e.getMessage());
+        }
+    }
+
+    private void cleanupEmptySourceDirs(WatchRule rule, Path startDir) {
+        if (!Boolean.TRUE.equals(rule.getCleanupEmptyDirs())
+                || !com.mediamarshal.service.rename.FileOperationStrategy.OperationType.MOVE.equals(rule.getOperation())
+                || startDir == null) {
+            return;
+        }
+
+        Path sourceRoot = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
+        Path current = startDir.toAbsolutePath().normalize();
+        while (current.startsWith(sourceRoot) && !current.equals(sourceRoot)) {
+            try (var stream = Files.list(current)) {
+                if (stream.findAny().isPresent()) {
+                    return;
+                }
+            } catch (IOException e) {
+                log.warn("Failed to inspect empty source directory: dir={}, error={}", current, e.getMessage());
+                return;
+            }
+
+            try {
+                Files.delete(current);
+                log.info("Empty source directory deleted: {}", current);
+            } catch (IOException e) {
+                log.warn("Failed to delete empty source directory: dir={}, error={}", current, e.getMessage());
+                return;
+            }
+            current = current.getParent();
+            if (current == null) {
+                return;
+            }
+        }
+    }
+
+    private boolean isSameBaseAssociated(String filename, String sourceBase) {
+        String lower = filename.toLowerCase();
+        return filename.startsWith(sourceBase + ".")
+                && (lower.endsWith(".srt")
+                || lower.endsWith(".ass")
+                || lower.endsWith(".ssa")
+                || lower.endsWith(".sub")
+                || lower.endsWith(".idx")
+                || lower.endsWith(".nfo")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".png")
+                || lower.endsWith(".webp"));
+    }
+
+    private boolean isGenericCover(String lowerFilename) {
+        return lowerFilename.equals("poster.jpg")
+                || lowerFilename.equals("folder.jpg")
+                || lowerFilename.equals("cover.jpg");
+    }
+
+    private String basename(String filename) {
+        int dot = filename.lastIndexOf('.');
+        return dot > 0 ? filename.substring(0, dot) : filename;
     }
 
     private TaskCandidate createManualCandidate(MediaTask task, Long tmdbId, MediaTask.MediaType mediaType) {

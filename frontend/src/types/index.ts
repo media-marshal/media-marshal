@@ -12,6 +12,7 @@ export type TaskStatus =
   | 'AWAITING_CONFIRMATION'
   | 'DONE'
   | 'FAILED'
+  | 'SKIPPED'
 
 export type MediaType = 'MOVIE' | 'TV_SHOW'
 
@@ -31,6 +32,7 @@ export interface MediaTask {
   matchConfidence: number | null
   operationType: string | null
   errorMessage: string | null
+  skipReason: string | null
   ruleId: number | null
   createdAt: string
   updatedAt: string

@@ -106,7 +106,8 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingRule ? t('watchRule.editRule') : t('watchRule.addRule')"
-      width="580px"
+      width="960px"
+      align-center
       :close-on-click-modal="false"
     >
       <el-form
@@ -116,32 +117,30 @@
         label-position="top"
         @submit.prevent
       >
-        <!-- 规则名称 -->
-        <el-form-item :label="t('watchRule.name')" prop="name">
-          <el-input v-model="form.name" placeholder="如：电影库、剧集收录" />
-        </el-form-item>
+        <div class="rule-form-grid">
+          <section class="form-panel">
+            <div class="form-panel-title">{{ t('watchRule.basicSettings') }}</div>
 
-        <!-- 源目录（带浏览按钮） -->
-        <el-form-item :label="t('watchRule.sourceDir')" prop="sourceDir">
-          <el-input v-model="form.sourceDir" :placeholder="t('watchRule.sourceDirPlaceholder')">
-            <template #append>
-              <el-button :icon="FolderOpened" @click="openDirBrowser('source')" :title="t('dirBrowser.title')" />
-            </template>
-          </el-input>
-        </el-form-item>
+            <el-form-item :label="t('watchRule.name')" prop="name">
+              <el-input v-model="form.name" placeholder="如：电影库、剧集收录" />
+            </el-form-item>
 
-        <!-- 目标目录（带浏览按钮） -->
-        <el-form-item :label="t('watchRule.targetDir')" prop="targetDir">
-          <el-input v-model="form.targetDir" :placeholder="t('watchRule.targetDirPlaceholder')">
-            <template #append>
-              <el-button :icon="FolderOpened" @click="openDirBrowser('target')" :title="t('dirBrowser.title')" />
-            </template>
-          </el-input>
-        </el-form-item>
+            <el-form-item :label="t('watchRule.sourceDir')" prop="sourceDir">
+              <el-input v-model="form.sourceDir" :placeholder="t('watchRule.sourceDirPlaceholder')">
+                <template #append>
+                  <el-button :icon="FolderOpened" @click="openDirBrowser('source')" :title="t('dirBrowser.title')" />
+                </template>
+              </el-input>
+            </el-form-item>
 
-        <!-- 媒体类型 + 文件操作（同行） -->
-        <el-row :gutter="16">
-          <el-col :span="12">
+            <el-form-item :label="t('watchRule.targetDir')" prop="targetDir">
+              <el-input v-model="form.targetDir" :placeholder="t('watchRule.targetDirPlaceholder')">
+                <template #append>
+                  <el-button :icon="FolderOpened" @click="openDirBrowser('target')" :title="t('dirBrowser.title')" />
+                </template>
+              </el-input>
+            </el-form-item>
+
             <el-form-item :label="t('watchRule.mediaType')" prop="mediaType">
               <el-select v-model="form.mediaType" style="width: 100%">
                 <el-option
@@ -152,8 +151,7 @@
                 />
               </el-select>
             </el-form-item>
-          </el-col>
-          <el-col :span="12">
+
             <el-form-item :label="t('watchRule.operation')" prop="operation">
               <el-select v-model="form.operation" style="width: 100%">
                 <el-option
@@ -164,97 +162,144 @@
                 />
               </el-select>
             </el-form-item>
-          </el-col>
-        </el-row>
 
-        <!-- 路径模板：按媒体类型拆分 -->
-        <el-form-item
-          v-if="showMovieTemplate"
-          :label="t('watchRule.moviePathTemplate')"
-        >
-          <div v-if="!templateStates.movie.customMode" class="template-input-row">
-            <el-select
-              v-model="templateStates.movie.selected"
-              style="flex: 1"
-              :placeholder="t('watchRule.pathTemplatePlaceholder')"
-              clearable
+            <el-form-item
+              v-if="showMovieTemplate"
             >
-              <el-option
-                v-for="tpl in templateOptions('movie')"
-                :key="tpl.value"
-                :label="t(tpl.labelKey)"
-                :value="tpl.value"
-              >
-                <div class="template-option">
-                  <div class="template-option-title">
-                    <el-tag size="small" type="primary">{{ t('watchRule.templateType.movie') }}</el-tag>
-                    <span class="template-option-label">{{ t(tpl.labelKey) }}</span>
-                  </div>
-                  <span class="template-option-hint">{{ tpl.hint }}</span>
-                </div>
-              </el-option>
-            </el-select>
-            <el-tooltip :content="t('watchRule.customTemplate')" placement="top">
-              <el-button :icon="EditPen" @click="switchToCustom('movie')" />
-            </el-tooltip>
-          </div>
+              <template #label>
+                <span class="template-label">
+                  <span>{{ t('watchRule.moviePathTemplate') }}</span>
+                  <a href="https://www.media-marshal.com" target="_blank" rel="noopener noreferrer">
+                    {{ t('watchRule.templateVariablesLink') }}
+                  </a>
+                </span>
+              </template>
 
-          <div v-else class="template-input-row">
-            <el-input
-              v-model="templateStates.movie.custom"
-              style="flex: 1"
-              :placeholder="t('watchRule.customTemplatePlaceholder')"
-            />
-            <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
-              <el-button :icon="ArrowLeft" @click="switchToPreset('movie')" />
-            </el-tooltip>
-          </div>
-          <div class="form-hint">{{ t('watchRule.templateVariablesHint') }}</div>
-        </el-form-item>
+              <div v-if="!templateStates.movie.customMode" class="template-input-row">
+                <el-select
+                  v-model="templateStates.movie.selected"
+                  style="flex: 1"
+                  :placeholder="t('watchRule.pathTemplatePlaceholder')"
+                  clearable
+                >
+                  <el-option
+                    v-for="tpl in templateOptions('movie')"
+                    :key="tpl.value"
+                    :label="t(tpl.labelKey)"
+                    :value="tpl.value"
+                  >
+                    <div class="template-option">
+                      <span class="template-option-label">{{ t(tpl.labelKey) }}</span>
+                      <el-tooltip :content="tpl.hint" placement="top">
+                        <el-tag size="small" class="template-example-tag">{{ t('watchRule.templateExample') }}</el-tag>
+                      </el-tooltip>
+                    </div>
+                  </el-option>
+                </el-select>
+                <el-tooltip :content="t('watchRule.customTemplate')" placement="top">
+                  <el-button :icon="EditPen" @click="switchToCustom('movie')" />
+                </el-tooltip>
+              </div>
 
-        <el-form-item
-          v-if="showTvTemplate"
-          :label="t('watchRule.tvPathTemplate')"
-        >
-          <div v-if="!templateStates.tv.customMode" class="template-input-row">
-            <el-select
-              v-model="templateStates.tv.selected"
-              style="flex: 1"
-              :placeholder="t('watchRule.pathTemplatePlaceholder')"
-              clearable
+              <div v-else class="template-input-row">
+                <el-input
+                  v-model="templateStates.movie.custom"
+                  style="flex: 1"
+                  :placeholder="t('watchRule.customTemplatePlaceholder')"
+                />
+                <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
+                  <el-button :icon="ArrowLeft" @click="switchToPreset('movie')" />
+                </el-tooltip>
+              </div>
+            </el-form-item>
+
+            <el-form-item
+              v-if="showTvTemplate"
+              :label="t('watchRule.tvPathTemplate')"
             >
-              <el-option
-                v-for="tpl in templateOptions('tv')"
-                :key="tpl.value"
-                :label="t(tpl.labelKey)"
-                :value="tpl.value"
-              >
-                <div class="template-option">
-                  <div class="template-option-title">
-                    <el-tag size="small" type="success">{{ t('watchRule.templateType.tv') }}</el-tag>
-                    <span class="template-option-label">{{ t(tpl.labelKey) }}</span>
-                  </div>
-                  <span class="template-option-hint">{{ tpl.hint }}</span>
-                </div>
-              </el-option>
-            </el-select>
-            <el-tooltip :content="t('watchRule.customTemplate')" placement="top">
-              <el-button :icon="EditPen" @click="switchToCustom('tv')" />
-            </el-tooltip>
-          </div>
+              <div v-if="!templateStates.tv.customMode" class="template-input-row">
+                <el-select
+                  v-model="templateStates.tv.selected"
+                  style="flex: 1"
+                  :placeholder="t('watchRule.pathTemplatePlaceholder')"
+                  clearable
+                >
+                  <el-option
+                    v-for="tpl in templateOptions('tv')"
+                    :key="tpl.value"
+                    :label="t(tpl.labelKey)"
+                    :value="tpl.value"
+                  >
+                    <div class="template-option">
+                      <span class="template-option-label">{{ t(tpl.labelKey) }}</span>
+                      <el-tooltip :content="tpl.hint" placement="top">
+                        <el-tag size="small" class="template-example-tag">{{ t('watchRule.templateExample') }}</el-tag>
+                      </el-tooltip>
+                    </div>
+                  </el-option>
+                </el-select>
+                <el-tooltip :content="t('watchRule.customTemplate')" placement="top">
+                  <el-button :icon="EditPen" @click="switchToCustom('tv')" />
+                </el-tooltip>
+              </div>
 
-          <div v-else class="template-input-row">
-            <el-input
-              v-model="templateStates.tv.custom"
-              style="flex: 1"
-              :placeholder="t('watchRule.customTemplatePlaceholder')"
-            />
-            <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
-              <el-button :icon="ArrowLeft" @click="switchToPreset('tv')" />
-            </el-tooltip>
-          </div>
-          <div class="form-hint">{{ t('watchRule.templateVariablesHint') }}</div>
-        </el-form-item>
+              <div v-else class="template-input-row">
+                <el-input
+                  v-model="templateStates.tv.custom"
+                  style="flex: 1"
+                  :placeholder="t('watchRule.customTemplatePlaceholder')"
+                />
+                <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
+                  <el-button :icon="ArrowLeft" @click="switchToPreset('tv')" />
+                </el-tooltip>
+              </div>
+            </el-form-item>
+          </section>
+
+          <section class="form-panel">
+            <div class="form-panel-title">{{ t('watchRule.advancedSettings') }}</div>
+
+            <el-form-item :label="t('watchRule.fileHandling')">
+              <div class="file-handling-options">
+                <div class="switch-row">
+                  <div>
+                    <div class="switch-title">{{ t('watchRule.moveAssociatedFiles') }}</div>
+                    <div class="switch-desc">{{ t('watchRule.moveAssociatedFilesHelp') }}</div>
+                  </div>
+                  <el-switch v-model="form.moveAssociatedFiles" />
+                </div>
+                <div class="switch-row">
+                  <div>
+                    <div class="switch-title">{{ t('watchRule.generateNfo') }}</div>
+                    <div class="switch-desc">{{ t('watchRule.generateNfoHelp') }}</div>
+                  </div>
+                  <el-switch v-model="form.generateNfo" />
+                </div>
+                <div class="switch-row">
+                  <div>
+                    <div class="switch-title">{{ t('watchRule.cleanupEmptyDirs') }}</div>
+                    <div class="switch-desc">{{ t('watchRule.cleanupEmptyDirsHelp') }}</div>
+                  </div>
+                  <el-switch v-model="form.cleanupEmptyDirs" />
+                </div>
+                <div class="ignored-patterns">
+                  <div class="switch-title">{{ t('watchRule.ignoredFilePatterns') }}</div>
+                  <div class="switch-desc">{{ t('watchRule.ignoredFilePatternsHelp') }}</div>
+                  <div class="ignored-tags">
+                    <el-tag
+                      v-for="pattern in defaultIgnoredPatterns"
+                      :key="pattern"
+                      size="small"
+                      type="info"
+                    >
+                      {{ pattern }}
+                    </el-tag>
+                  </div>
+                </div>
+              </div>
+            </el-form-item>
+          </section>
+        </div>
       </el-form>
 
       <template #footer>
@@ -401,6 +446,10 @@ const defaultForm = (): WatchRuleRequest => ({
   tvPathTemplate: undefined,
   operation: 'MOVE',
   enabled: false,   // 新规则默认不启用（在卡片上手动开启）
+  moveAssociatedFiles: true,
+  cleanupEmptyDirs: false,
+  generateNfo: false,
+  ignoredFilePatterns: null,
 })
 
 const form = reactive<WatchRuleRequest>(defaultForm())
@@ -415,6 +464,7 @@ const formRules: FormRules = {
 
 const mediaTypeOptions = [{ value: 'AUTO' }, { value: 'MOVIE' }, { value: 'TV_SHOW' }]
 const operationOptions = [{ value: 'MOVE' }]
+const defaultIgnoredPatterns = ['.*', 'Thumbs.db', 'desktop.ini', '*.part', '*.tmp', '*.crdownload', '*.lock', '~$*']
 
 // ─── 生命周期 ────────────────────────────────────────────────────
 onMounted(fetchRules)
@@ -712,39 +762,133 @@ h2 {
 }
 
 /* ─── 表单内的模板选择 ──────────────── */
+.rule-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.form-panel {
+  min-width: 0;
+  padding: 16px 18px 4px;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.form-panel-title {
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf0f5;
+  color: #303133;
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .template-input-row {
   display: flex;
   gap: 8px;
   width: 100%;
 }
 
-.template-option {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.template-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.template-option-title {
+.template-label a {
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.template-label a:hover {
+  text-decoration: underline;
+}
+
+.template-option {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
 
 .template-option-label {
+  min-width: 0;
+  overflow: hidden;
   font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.template-option-hint {
-  font-size: 11px;
-  color: #909399;
-  font-family: monospace;
+.template-example-tag {
+  flex-shrink: 0;
+  border-color: #d1edc4;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f0f9eb 0%, #f7fcf4 100%);
+  color: #529b2e;
+  font-weight: 500;
+  cursor: help;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
-.form-hint {
+.template-example-tag:hover {
+  border-color: #b3e19d;
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.18);
+  transform: translateY(-1px);
+}
+
+.file-handling-options {
+  width: 100%;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.switch-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.switch-desc {
+  margin-top: 3px;
   font-size: 12px;
   color: #909399;
-  margin-top: 6px;
-  line-height: 1.6;
-  font-family: monospace;
+  line-height: 1.5;
+}
+
+.ignored-patterns {
+  padding-top: 10px;
+}
+
+.ignored-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+@media (max-width: 980px) {
+  .rule-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -397,6 +397,178 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
+---
+
+## [候选列表与路径规则弹窗布局优化] 2026-04-27
+
+### 已完成
+- 优化 Queue 页面候选列表卡片网格
+  - 候选项改为默认每行 4 列展示
+  - 略微增加卡片内部间距与海报尺寸，让候选项视觉更舒展
+  - 窄屏下自动降为 2 列 / 1 列
+- 优化路径设置页新增 / 编辑规则弹窗
+  - 弹窗宽度从 `580px` 调整为 `960px`
+  - 表单拆为左右两栏：左侧“基本设置”，右侧“文件处理策略”
+  - 文件操作方式、附属文件处理、NFO、清理空目录、忽略规则和路径模板统一放在右侧策略栏
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [路径规则弹窗分栏内容调整] 2026-04-27
+
+### 已完成
+- 按反馈调整路径设置页新增 / 编辑规则弹窗分栏
+  - 左侧保持“基本设置”
+  - 右侧标题改为“高级设置”
+  - 文件操作方式移动到左侧
+  - 电影 / 剧集路径模板移动到左侧
+  - 右侧仅保留自动移动附属文件、自动生成 NFO、自动清理空文件夹、默认忽略文件类型
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [路径规则弹窗垂直居中优化] 2026-04-27
+
+### 已完成
+- 优化路径设置页新增 / 编辑规则弹窗位置
+  - 为 `el-dialog` 增加 `align-center`
+  - 弹窗保持页面垂直居中，减少默认顶部偏移带来的滚动感
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [路径模板选择体验优化] 2026-04-27
+
+### 已完成
+- 优化路径设置页新增 / 编辑规则弹窗中的路径模板区域
+  - 移除电影路径模板 / 剧集路径模板下方直接展示的可用变量列表
+  - 改为显示“点击查看可用变量”超链接，临时指向 `https://www.media-marshal.com`
+  - 路径模板下拉项显示改为用户友好的自然语言路径描述
+  - 下拉项右侧新增“样例”标签，鼠标悬停展示实际路径示例
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 可用变量链接暂时写死为 `https://www.media-marshal.com`，后续 ADR-007 落地时可替换为正式帮助页
+
+---
+
+## [路径模板可用变量链接位置调整] 2026-04-27
+
+### 已完成
+- 调整路径设置页模板帮助链接展示方式
+  - 移除电影路径模板和剧集路径模板下方重复的“点击查看可用变量”链接
+  - 仅在“电影路径模板”标题右侧显示一个帮助链接
+  - 电影和剧集路径模板共用该帮助入口
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 可用变量链接仍临时指向 `https://www.media-marshal.com`，后续 ADR-007 落地时可替换为正式帮助页
+
+---
+
+## [路径模板样例标签视觉优化] 2026-04-27
+
+### 已完成
+- 优化路径模板下拉项右侧“样例”标签
+  - 电影 / 剧集模板统一使用同一种蓝色胶囊样式
+  - 增加圆角、渐变背景、悬停阴影和轻微上浮效果
+  - 保留鼠标悬停查看路径示例的交互
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [路径模板样例标签颜色调整] 2026-04-27
+
+### 已完成
+- 将路径模板下拉项右侧“样例”标签从蓝色胶囊样式调整为绿色胶囊样式
+- 保留悬停阴影与轻微上浮效果
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
 ## [Windows 目录浏览兼容修复] 2026-04-27
 
 ### 已完成
@@ -583,3 +755,66 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - SQLite 适合当前单实例 v1 部署；如果后续需要多后端实例或高并发批量入库，应评估迁移到 PostgreSQL 等服务端数据库
+
+---
+
+## [ADR-009 文件分类与附属文件策略] 2026-04-27
+
+### 已完成
+- `MediaTask` 新增 `SKIPPED` 状态和 `skipReason` 字段
+- `WatchRule` 新增文件处理策略字段
+  - `moveAssociatedFiles` 默认 `true`
+  - `generateNfo` 默认 `false`
+  - `cleanupEmptyDirs` 默认 `false`
+  - `ignoredFilePatterns` v1 保留，接口返回 `string[] | null`
+- `FileWatcherService` 的实时监听和手动全量扫描共用文件分类规则
+  - 视频文件进入现有防抖 / 查重 / pipeline
+  - 系统噪音文件静默忽略
+  - 同目录附属文件不单独建任务，等待主视频成功后跟随移动
+  - 普通杂项文件生成 `SKIPPED` 任务并写入 `skipReason`
+  - 同一路径已有非 FAILED 任务时不会重复创建 `SKIPPED`
+- `MediaProcessPipeline` 增加附属文件处理
+  - 同名字幕、同名 NFO、同名封面按目标视频文件名移动
+  - `poster.jpg` / `folder.jpg` / `cover.jpg` 移动到目标目录并保留文件名
+  - 附属文件移动失败不回滚主视频任务，只记录 warn 日志
+- NFO 生成改为按 `WatchRule.generateNfo` 控制
+  - 默认不生成 NFO
+  - 源目录存在用户 NFO 且启用附属文件移动时，优先移动用户 NFO，不再自动生成
+  - 没有用户 NFO 且 `generateNfo=true` 时才生成新 NFO
+- `cleanupEmptyDirs=true` 且 MOVE 成功后，从源视频父目录向上清理空目录，遇到 `sourceDir` 根目录停止
+- 路径设置页新增文件处理策略配置
+  - 自动移动附属文件
+  - 自动生成 NFO
+  - 自动清理空文件夹
+  - 系统默认忽略文件类型只读展示
+- Dashboard 最近任务支持 `SKIPPED` 状态展示和跳过原因展示
+- Dashboard 最近任务新增状态筛选，包含 `SKIPPED`
+- Dashboard 最近任务支持多选批量删除，复用现有单条删除接口顺序删除
+- 已同步更新 `api-contracts.mdc`
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/WatchRule.java`
+- `backend/src/main/java/com/mediamarshal/service/watcher/FileWatcherService.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`
+- `frontend/src/api/watchRule.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `MediaTask.status` 增加 `SKIPPED`
+- `MediaTask` 增加 `skipReason: string | null`
+- `WatchRule` / `RuleRequest` 增加 `moveAssociatedFiles`、`cleanupEmptyDirs`、`generateNfo`、`ignoredFilePatterns`
+- 未新增批量删除接口；前端复用现有 `DELETE /api/tasks/{id}` 顺序删除所选任务记录
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 如需要完整任务管理页（区别于 Dashboard 最近任务），可后续单独设计
+- v1 附属文件移动失败仅记录日志，暂未在任务详情中展示提示

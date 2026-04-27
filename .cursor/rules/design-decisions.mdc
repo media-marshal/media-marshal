@@ -457,6 +457,224 @@ ALTER TABLE watch_rule ADD COLUMN tv_path_template VARCHAR(500);
 
 ---
 
+## ADR-009 源目录非视频文件处理、附属文件移动与清理策略（2026-04-27）✅
+
+### 背景
+当前 FileWatcher / 手动全量扫描会递归扫描 `watch_rule.source_dir`，但只有视频扩展名文件进入媒体处理 pipeline。实际使用中，一个下载目录通常还包含字幕、NFO、封面图片、发布说明、临时下载文件、系统缩略图等非视频文件。
+
+如果这些文件完全忽略，用户不知道系统是否扫描到了它们；如果全部记录或移动，又会造成任务列表噪音和误操作风险。因此需要明确源目录中非视频文件、附属文件、NFO 生成和空目录清理的边界。
+
+### 结论
+采用**视频主文件驱动 + 附属文件跟随 + 杂项文件提示 + 系统噪音静默忽略 + 可选清理空目录**的策略：
+
+1. 视频文件仍然是唯一触发媒体识别、重命名、TMDB 匹配和路径模板渲染的主文件
+2. 附属文件在主视频处理成功后跟随移动，不单独进入 TMDB pipeline
+3. 普通杂项文件不处理，但记录为 `SKIPPED` 任务，提示用户“已扫描但未操作”
+4. 系统噪音 / 临时文件按忽略黑名单静默跳过，不生成任务记录
+5. 空源目录清理是可选能力，默认关闭，且绝不能删除 `source_dir` 根目录
+
+### 数据模型调整
+
+#### `media_task`
+
+任务状态新增：
+
+```typescript
+type TaskStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'AWAITING_CONFIRMATION'
+  | 'DONE'
+  | 'FAILED'
+  | 'SKIPPED'
+```
+
+新增字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `skip_reason` | VARCHAR(500) / String | 仅 `status=SKIPPED` 时使用，说明跳过原因 |
+
+设计约束：
+- `SKIPPED` 表示系统扫描到了该文件，但根据规则不进行处理，不属于错误
+- `FAILED` 继续表示处理失败，失败详情写入 `error_message`
+- `SKIPPED` 的原因写入 `skip_reason`，不要复用 `error_message`
+
+#### `watch_rule`
+
+新增字段：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `move_associated_files` | BOOLEAN | `true` | 是否自动移动附属文件 |
+| `cleanup_empty_dirs` | BOOLEAN | `false` | 是否在 MOVE 成功后自动清理空源目录 |
+| `generate_nfo` | BOOLEAN | `false` | 是否在没有用户自带 NFO 时自动生成 NFO |
+| `ignored_file_patterns` | TEXT | `NULL` | 忽略黑名单，v1 保留字段；NULL 表示使用系统默认黑名单 |
+
+`ignored_file_patterns` 规划：
+- v1 只支持系统默认忽略规则，前端可只读展示，不开放编辑
+- 后续版本允许用户在路径设置中追加自定义黑名单
+- 存储格式建议为 JSON array，例如 `["*.tmp", "*.part", "Thumbs.db"]`
+
+### 文件分类规则
+
+#### 视频文件
+
+视频文件继续按现有视频扩展名白名单识别，进入 `MediaProcessPipeline`。
+
+#### 附属文件
+
+当 `watch_rule.move_associated_files=true` 时，视频处理成功后自动移动以下附属文件：
+
+| 类型 | 示例 | 处理方式 |
+|---|---|---|
+| 字幕 | `Movie.srt`、`Movie.zh.srt`、`Movie.en.ass`、`Movie.ssa`、`Movie.sub`、`Movie.idx` | 跟随视频移动，并按目标视频文件名重命名 |
+| 用户自带 NFO | `Movie.nfo` | 优先跟随视频移动，并按目标视频文件名重命名 |
+| 同名封面 | `Movie.jpg`、`Movie.png`、`Movie.webp` | 跟随视频移动，并按目标视频文件名重命名 |
+| 通用封面 | `poster.jpg`、`folder.jpg`、`cover.jpg` | 移动到目标目录，保留原文件名 |
+
+匹配约束：
+- v1 只处理与视频同目录的附属文件
+- 字幕 / 同名 NFO / 同名封面按“源视频 basename 前缀”匹配，例如 `Movie.zh.srt` 属于 `Movie.mkv`
+- 不递归查找附属文件子目录
+- 附属文件移动失败不应回滚已完成的视频移动，但需要记录日志，并可在任务详情中补充提示（后续可扩展）
+
+#### 系统默认忽略文件
+
+系统默认忽略文件静默跳过，不生成 `SKIPPED` 任务。默认规则至少包含：
+
+- 隐藏文件：以 `.` 开头的文件，如 `.DS_Store`
+- 系统缩略图：`Thumbs.db`、`desktop.ini`
+- 下载临时文件：`*.part`、`*.tmp`、`*.crdownload`
+- 临时/锁文件：`*.lock`、`~$*`
+
+#### 普通杂项文件
+
+不属于视频、附属文件、系统默认忽略文件的普通文件，记录为 `SKIPPED` 任务：
+
+- `status=SKIPPED`
+- `sourcePath` 记录该文件路径
+- `ruleId` 记录触发规则
+- `skipReason` 示例：`非视频文件，已跳过处理`
+- 不调用 guessit、TMDB、重命名、NFO 生成
+
+### NFO 策略
+
+`generate_nfo` 默认关闭。
+
+处理规则：
+
+1. 如果 `move_associated_files=true` 且源目录存在用户自带 NFO：
+   - 优先移动用户 NFO
+   - 不覆盖用户 NFO
+   - 即使 `generate_nfo=true`，也不再生成新的 NFO
+2. 如果源目录不存在用户自带 NFO：
+   - `generate_nfo=false`：不生成 NFO
+   - `generate_nfo=true`：在目标目录生成新的 NFO
+
+这意味着自动生成 NFO 是明确开启的增强能力，不再是 pipeline 的默认行为。
+
+### 空目录清理策略
+
+`cleanup_empty_dirs` 默认关闭。
+
+当开启后，仅在以下条件全部满足时执行：
+
+- 当前规则操作方式为 `MOVE`
+- 主视频文件已成功移动
+- 附属文件移动逻辑已执行完成
+- 当前任务最终状态为 `DONE`
+
+清理算法：
+
+1. 从源视频原父目录开始
+2. 如果目录为空，则删除
+3. 向上检查父目录
+4. 遇到非空目录立即停止
+5. 遇到 `watch_rule.source_dir` 立即停止，绝不能删除源根目录
+
+安全约束：
+- 所有路径必须 `toAbsolutePath().normalize()` 后比较
+- 待删除目录必须位于 `source_dir` 下方
+- 只删除空目录，不删除任何非空目录
+- 不因清理失败把已完成任务改为 `FAILED`，只记录 warn 日志
+
+### 前端路径设置页要求
+
+`PathsView.vue` 新增以下配置项：
+
+| 配置项 | 默认值 | 交互 |
+|---|---|---|
+| 自动移动附属文件 | 开启 | switch |
+| 自动生成 NFO | 关闭 | switch |
+| 自动清理空文件夹 | 关闭 | switch |
+| 系统默认忽略文件类型 | 系统默认 | v1 只读展示 |
+
+文案建议：
+- 自动移动附属文件：`自动移动同名字幕、NFO、封面图片`
+- 自动生成 NFO：`没有用户自带 NFO 时自动生成`
+- 自动清理空文件夹：`整理完成后删除源目录中的空文件夹，不会删除源根目录`
+- 系统默认忽略文件类型：`这些文件会被静默忽略，不出现在任务列表中`
+
+### 任务列表要求
+
+任务列表需要支持 `SKIPPED` 状态：
+
+- 状态筛选增加 `SKIPPED`
+- 最近任务中展示跳过原因
+- `SKIPPED` 不计入失败任务
+- Dashboard 统计如显示失败数量，不应把 `SKIPPED` 算作失败
+
+任务列表新增批量删除能力：
+
+- 支持多选任务记录
+- 支持批量删除所选记录
+- 删除前必须有确认提示
+- 批量删除只删除任务记录及其候选记录，不影响任何媒体文件
+- 删除接口可由开发 Agent 评估使用批量 API，或前端并发/顺序调用现有单条删除接口；若新增接口，必须同步更新 `api-contracts.mdc`
+
+### WatchService 与手动全量扫描要求
+
+实时监听和手动全量扫描应使用同一套文件分类规则：
+
+1. 视频文件进入现有防抖、稳定性检测、数据库查重和 pipeline
+2. 系统默认忽略文件静默跳过
+3. 普通杂项文件生成 `SKIPPED` 任务
+4. 附属文件不独立生成任务，由主视频任务处理完成后跟随移动
+
+数据库查重也应覆盖 `SKIPPED`：
+- 同一路径已有非 `FAILED` 任务时，不重复创建任务
+- 对普通杂项文件，避免每次全量扫描重复生成 `SKIPPED` 记录
+
+### API 契约变更要求
+
+开发实现该 ADR 时，后端 Agent 必须同步更新 `api-contracts.mdc`：
+
+- `MediaTask.status` 增加 `SKIPPED`
+- `MediaTask` 增加 `skipReason: string | null`
+- `WatchRule` / `RuleRequest` 增加：
+  - `moveAssociatedFiles: boolean`
+  - `cleanupEmptyDirs: boolean`
+  - `generateNfo: boolean`
+  - `ignoredFilePatterns: string[] | null`（v1 可只读 / 不开放编辑）
+- 如新增批量删除接口，记录接口路径、请求体和响应
+
+### 验收标准
+
+- 普通杂项文件被扫描到后生成 `SKIPPED` 任务，并在任务列表中可筛选、可查看跳过原因
+- 系统默认忽略文件不会生成任务记录
+- `moveAssociatedFiles=true` 时，同名字幕、用户 NFO、封面图片随主视频移动
+- `moveAssociatedFiles=false` 时，附属文件不自动移动
+- `generateNfo=false` 时，不自动生成 NFO
+- `generateNfo=true` 且源目录没有用户 NFO 时，生成新的 NFO
+- 源目录已有用户 NFO 时，优先移动用户 NFO，不生成新的 NFO
+- `cleanupEmptyDirs=true` 时，只删除 MOVE 后产生的空目录，绝不删除 `source_dir` 根目录
+- `cleanupEmptyDirs=false` 时，不自动删除源目录
+- Dashboard / 任务列表正确展示 `SKIPPED`，且不把跳过任务计入失败
+- 任务列表支持批量删除记录，删除不影响文件
+
+---
+
 ## 待讨论事项
 
 - **ADR-007**：模板变量帮助页设计

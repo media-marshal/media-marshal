@@ -71,6 +71,10 @@ public class MediaTask {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
+    /** 跳过原因，仅 status=SKIPPED 时使用 */
+    @Column(length = 500)
+    private String skipReason;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -97,7 +101,9 @@ public class MediaTask {
         /** 处理完成 */
         DONE,
         /** 处理失败 */
-        FAILED
+        FAILED,
+        /** 已扫描但根据规则跳过，不属于错误 */
+        SKIPPED
     }
 
     public enum MediaType {

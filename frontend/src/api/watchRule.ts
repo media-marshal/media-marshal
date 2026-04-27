@@ -11,6 +11,10 @@ export interface WatchRule {
   tvPathTemplate?: string | null
   operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'
   enabled: boolean
+  moveAssociatedFiles: boolean
+  cleanupEmptyDirs: boolean
+  generateNfo: boolean
+  ignoredFilePatterns: string[] | null
   userId?: number
   createdAt?: string
   updatedAt?: string

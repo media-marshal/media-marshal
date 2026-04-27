@@ -18,7 +18,7 @@ alwaysApply: false
 | 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
 |---|---|---|---|---|
 | GET | `/api/tasks` | 查询所有任务，可按状态过滤 | — | `MediaTask[]` |
-| GET | `/api/tasks?status={status}` | 过滤状态（PENDING/PROCESSING/AWAITING_CONFIRMATION/DONE/FAILED） | — | `MediaTask[]` |
+| GET | `/api/tasks?status={status}` | 过滤状态（PENDING/PROCESSING/AWAITING_CONFIRMATION/DONE/FAILED/SKIPPED） | — | `MediaTask[]` |
 | GET | `/api/tasks/{id}` | 查询单个任务详情 | — | `MediaTask` |
 | DELETE | `/api/tasks/{id}` | 删除任务记录及其候选记录（不影响文件） | — | — |
 
@@ -28,7 +28,7 @@ interface MediaTask {
   id: number
   sourcePath: string
   targetPath: string | null
-  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED'
+  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED'
   mediaType: 'MOVIE' | 'TV_SHOW' | null
   parsedTitle: string | null
   parsedYear: number | null
@@ -40,6 +40,7 @@ interface MediaTask {
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
   errorMessage: string | null
+  skipReason: string | null          // status=SKIPPED 时说明跳过原因
   ruleId: number | null            // 触发此任务的 WatchRule ID
   createdAt: string                // ISO 8601
   updatedAt: string
@@ -156,6 +157,10 @@ interface WatchRule {
   tvPathTemplate: string | null    // null = 使用全局剧集默认模板
   operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'
   enabled: boolean
+  moveAssociatedFiles: boolean
+  cleanupEmptyDirs: boolean
+  generateNfo: boolean
+  ignoredFilePatterns: string[] | null  // v1 为系统默认忽略规则，前端只读展示
   userId: number | null            // v1 始终为 null，多用户版本启用
   createdAt: string
   updatedAt: string
@@ -173,6 +178,10 @@ interface RuleRequest {
   tvPathTemplate?: string          // 剧集模板；不填 = 使用全局剧集默认模板
   operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'  // required
   enabled?: boolean                // 不填默认 true
+  moveAssociatedFiles?: boolean    // 不填默认 true
+  cleanupEmptyDirs?: boolean       // 不填默认 false
+  generateNfo?: boolean            // 不填默认 false
+  ignoredFilePatterns?: string[] | null // v1 可不传，使用系统默认忽略规则
 }
 ```
 
@@ -214,7 +223,7 @@ interface BrowseResult {
 ```typescript
 interface TaskEvent {
   taskId: number
-  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED'
+  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED'
   sourcePath: string
   errorMessage?: string
 }

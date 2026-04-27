@@ -56,6 +56,14 @@ public class FileWatcherService {
             ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".ts", ".m2ts", ".rmvb"
     );
 
+    private static final List<String> ASSOCIATED_EXTENSIONS = List.of(
+            ".srt", ".ass", ".ssa", ".sub", ".idx", ".nfo", ".jpg", ".jpeg", ".png", ".webp"
+    );
+
+    private static final List<String> GENERIC_COVER_NAMES = List.of(
+            "poster.jpg", "folder.jpg", "cover.jpg"
+    );
+
     private final WatchRuleRepository watchRuleRepository;
     private final MediaTaskRepository mediaTaskRepository;
     private final MediaProcessPipeline pipeline;
@@ -159,12 +167,15 @@ public class FileWatcherService {
 
     private void scanFile(Path file, WatchRule rule, ScanCounter counter) {
         counter.scanned++;
-        if (!isVideoFile(file)) {
+        FileCategory category = categorizeFile(file);
+        if (category == FileCategory.IGNORED || category == FileCategory.ASSOCIATED) {
             counter.skipped++;
             return;
         }
 
-        boolean queued = processIfNotDuplicated(file, rule);
+        boolean queued = category == FileCategory.VIDEO
+                ? processIfNotDuplicated(file, rule)
+                : recordSkippedIfNotDuplicated(file, rule, "非视频文件，已跳过处理");
         if (queued) {
             counter.queued++;
         } else {
@@ -305,8 +316,19 @@ public class FileWatcherService {
             return;
         }
 
-        if (!isVideoFile(fullPath)) {
-            log.debug("Ignoring non-video file: {}", fullPath);
+        FileCategory category = categorizeFile(fullPath);
+        if (category == FileCategory.IGNORED) {
+            log.debug("Ignoring system/noise file: {}", fullPath);
+            return;
+        }
+
+        if (category == FileCategory.ASSOCIATED) {
+            log.debug("Ignoring associated file until main video completes: {}", fullPath);
+            return;
+        }
+
+        if (category == FileCategory.MISC) {
+            recordSkippedIfNotDuplicated(fullPath, rule, "非视频文件，已跳过处理");
             return;
         }
 
@@ -400,6 +422,29 @@ public class FileWatcherService {
         }
     }
 
+    private boolean recordSkippedIfNotDuplicated(Path file, WatchRule rule, String skipReason) {
+        String sourcePath = file.toString();
+        boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
+                sourcePath,
+                MediaTask.TaskStatus.FAILED
+        );
+
+        if (exists) {
+            log.debug("Duplicate skipped task ignored: sourcePath={}", sourcePath);
+            return false;
+        }
+
+        MediaTask task = new MediaTask();
+        task.setSourcePath(sourcePath);
+        task.setRuleId(rule.getId());
+        task.setOperationType(rule.getOperation().name());
+        task.setStatus(MediaTask.TaskStatus.SKIPPED);
+        task.setSkipReason(skipReason);
+        mediaTaskRepository.save(task);
+        log.info("Non-video file skipped: path={}, rule='{}'", file, rule.getName());
+        return true;
+    }
+
     private long getDebounceSeconds() {
         String value = settingsService.get("watcher.debounce-seconds", "3");
         try {
@@ -416,9 +461,69 @@ public class FileWatcherService {
         return VIDEO_EXTENSIONS.stream().anyMatch(name::endsWith);
     }
 
+    private FileCategory categorizeFile(Path path) {
+        String name = path.getFileName().toString();
+        String lowerName = name.toLowerCase();
+
+        if (name.startsWith(".")
+                || lowerName.equals("thumbs.db")
+                || lowerName.equals("desktop.ini")
+                || lowerName.endsWith(".part")
+                || lowerName.endsWith(".tmp")
+                || lowerName.endsWith(".crdownload")
+                || lowerName.endsWith(".lock")
+                || name.startsWith("~$")) {
+            return FileCategory.IGNORED;
+        }
+
+        if (isVideoFile(path)) {
+            return FileCategory.VIDEO;
+        }
+
+        if (GENERIC_COVER_NAMES.contains(lowerName) || isAssociatedWithSiblingVideo(path, lowerName)) {
+            return FileCategory.ASSOCIATED;
+        }
+
+        return FileCategory.MISC;
+    }
+
+    private boolean isAssociatedWithSiblingVideo(Path path, String lowerName) {
+        if (ASSOCIATED_EXTENSIONS.stream().noneMatch(lowerName::endsWith)) {
+            return false;
+        }
+
+        Path parent = path.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            return false;
+        }
+
+        try (Stream<Path> siblings = Files.list(parent)) {
+            return siblings
+                    .filter(Files::isRegularFile)
+                    .filter(this::isVideoFile)
+                    .map(video -> basename(video.getFileName().toString()).toLowerCase())
+                    .anyMatch(videoBase -> lowerName.startsWith(videoBase + "."));
+        } catch (IOException e) {
+            log.debug("Failed to inspect sibling videos for associated file: {}", path, e);
+            return false;
+        }
+    }
+
+    private String basename(String filename) {
+        int dot = filename.lastIndexOf('.');
+        return dot > 0 ? filename.substring(0, dot) : filename;
+    }
+
     private static class ScanCounter {
         private int scanned;
         private int queued;
         private int skipped;
+    }
+
+    private enum FileCategory {
+        VIDEO,
+        ASSOCIATED,
+        IGNORED,
+        MISC
     }
 }

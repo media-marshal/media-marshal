@@ -111,6 +111,10 @@ public class WatchRuleController {
         rule.setTvPathTemplate(req.getTvPathTemplate());
         rule.setOperation(req.getOperation());
         rule.setEnabled(req.getEnabled() != null ? req.getEnabled() : true);
+        rule.setMoveAssociatedFiles(req.getMoveAssociatedFiles() != null ? req.getMoveAssociatedFiles() : true);
+        rule.setCleanupEmptyDirs(req.getCleanupEmptyDirs() != null ? req.getCleanupEmptyDirs() : false);
+        rule.setGenerateNfo(req.getGenerateNfo() != null ? req.getGenerateNfo() : false);
+        rule.setIgnoredFilePatterns(req.getIgnoredFilePatterns());
         return rule;
     }
 
@@ -138,5 +142,13 @@ public class WatchRuleController {
         private com.mediamarshal.service.rename.FileOperationStrategy.OperationType operation;
 
         private Boolean enabled;
+
+        private Boolean moveAssociatedFiles;
+
+        private Boolean cleanupEmptyDirs;
+
+        private Boolean generateNfo;
+
+        private List<String> ignoredFilePatterns;
     }
 }

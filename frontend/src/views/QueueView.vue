@@ -415,8 +415,8 @@ h2 {
 
 .candidate-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
   width: 100%;
 }
 
@@ -441,14 +441,14 @@ h2 {
 
 .candidate-content {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
-  padding: 12px;
+  padding: 14px;
 }
 
 .poster {
-  width: 72px;
-  height: 108px;
+  width: 78px;
+  height: 116px;
   flex-shrink: 0;
   border-radius: 8px;
   background: #eef0f4;
@@ -536,6 +536,18 @@ h2 {
 
   .header-tags {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 1100px) {
+  .candidate-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .candidate-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>

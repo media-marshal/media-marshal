@@ -37,10 +37,36 @@
       <template #header>
         <div class="card-header">
           <span>最近任务</span>
-          <el-button size="small" @click="fetchTasks()">刷新</el-button>
+          <div class="header-actions">
+            <el-select v-model="statusFilter" size="small" class="status-filter">
+              <el-option :label="t('dashboard.allStatuses')" value="ALL" />
+              <el-option
+                v-for="status in statusOptions"
+                :key="status"
+                :label="t(`task.status.${status}`)"
+                :value="status"
+              />
+            </el-select>
+            <el-button
+              size="small"
+              type="danger"
+              :disabled="selectedTasks.length === 0"
+              :loading="batchDeleting"
+              @click="handleBatchDelete"
+            >
+              {{ t('dashboard.batchDelete') }}
+            </el-button>
+            <el-button size="small" @click="fetchTasks()">刷新</el-button>
+          </div>
         </div>
       </template>
-      <el-table :data="tasks.slice(0, 20)" v-loading="loading" stripe>
+      <el-table
+        :data="displayedTasks"
+        v-loading="loading"
+        stripe
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="42" />
         <el-table-column prop="sourcePath" label="文件" min-width="300" show-overflow-tooltip />
         <el-table-column prop="mediaType" label="类型" width="80">
           <template #default="{ row }">
@@ -55,6 +81,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="confirmedTitle" label="匹配标题" width="200" show-overflow-tooltip />
+        <el-table-column prop="skipReason" :label="t('dashboard.skipReason')" width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.skipReason || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="matchConfidence" label="置信度" width="90">
           <template #default="{ row }">
             {{ row.matchConfidence != null ? (row.matchConfidence * 100).toFixed(0) + '%' : '-' }}
@@ -87,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
@@ -99,6 +130,17 @@ const mediaStore = useMediaStore()
 const { tasks, loading, queueTasks, doneTasks, failedTasks } = storeToRefs(mediaStore)
 const { fetchTasks, deleteTask } = mediaStore
 const deletingId = ref<number | null>(null)
+const selectedTasks = ref<MediaTask[]>([])
+const batchDeleting = ref(false)
+const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED']
+const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
+
+const displayedTasks = computed(() => {
+  const filtered = statusFilter.value === 'ALL'
+    ? tasks.value
+    : tasks.value.filter((task) => task.status === statusFilter.value)
+  return filtered.slice(0, 20)
+})
 
 onMounted(() => fetchTasks())
 
@@ -109,6 +151,7 @@ function statusTagType(status: TaskStatus) {
     AWAITING_CONFIRMATION: 'warning',
     DONE: 'success',
     FAILED: 'danger',
+    SKIPPED: 'info',
   }
   return map[status] ?? 'info'
 }
@@ -145,6 +188,36 @@ async function handleDeleteTask(task: MediaTask) {
     deletingId.value = null
   }
 }
+
+function handleSelectionChange(selection: MediaTask[]) {
+  selectedTasks.value = selection
+}
+
+async function handleBatchDelete() {
+  const count = selectedTasks.value.length
+  if (count === 0) return
+
+  await ElMessageBox.confirm(
+    t('dashboard.batchDeleteConfirm', { count }),
+    t('dashboard.batchDelete'),
+    {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    },
+  )
+
+  batchDeleting.value = true
+  try {
+    for (const task of selectedTasks.value) {
+      await deleteTask(task.id)
+    }
+    selectedTasks.value = []
+    ElMessage.success(t('dashboard.batchDeleteSuccess'))
+  } finally {
+    batchDeleting.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -170,6 +243,16 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-filter {
+  width: 150px;
 }
 
 .created-time {
