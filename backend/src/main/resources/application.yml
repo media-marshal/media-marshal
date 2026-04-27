@@ -3,8 +3,12 @@ spring:
     name: media-marshal
 
   datasource:
-    url: jdbc:sqlite:/data/media-marshal.db
+    url: jdbc:sqlite:/data/media-marshal.db?busy_timeout=10000&journal_mode=WAL
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      # SQLite 同一时间只允许一个写事务；单连接避免并发 pipeline 触发 SQLITE_BUSY。
+      maximum-pool-size: 1
+      connection-timeout: 30000
 
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect

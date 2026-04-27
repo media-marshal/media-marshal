@@ -68,22 +68,37 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column :label="t('common.actions')" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :loading="deletingId === row.id"
+              @click="handleDeleteTask(row)"
+            >
+              {{ t('common.delete') }}
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
-import type { TaskStatus } from '@/types'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { MediaTask, TaskStatus } from '@/types'
 
 const { t } = useI18n()
 const mediaStore = useMediaStore()
 const { tasks, loading, queueTasks, doneTasks, failedTasks } = storeToRefs(mediaStore)
-const { fetchTasks } = mediaStore
+const { fetchTasks, deleteTask } = mediaStore
+const deletingId = ref<number | null>(null)
 
 onMounted(() => fetchTasks())
 
@@ -108,6 +123,26 @@ function formatCreatedAt(value: string) {
   return {
     date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
     time: `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+  }
+}
+
+async function handleDeleteTask(task: MediaTask) {
+  await ElMessageBox.confirm(
+    t('dashboard.deleteTaskConfirm'),
+    t('common.delete'),
+    {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    },
+  )
+
+  deletingId.value = task.id
+  try {
+    await deleteTask(task.id)
+    ElMessage.success(t('dashboard.deleteTaskSuccess'))
+  } finally {
+    deletingId.value = null
   }
 }
 </script>

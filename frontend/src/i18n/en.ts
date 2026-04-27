@@ -13,6 +13,8 @@ export default {
     pendingTasks: 'Pending',
     failedTasks: 'Failed',
     awaitingTasks: 'Awaiting Review',
+    deleteTaskConfirm: 'Delete this task record? This only removes the record and does not affect media files.',
+    deleteTaskSuccess: 'Task record deleted',
   },
   queue: {
     title: 'Manual Review',
@@ -147,5 +149,6 @@ export default {
     enable: 'Enable',
     disable: 'Disable',
     refresh: 'Refresh',
+    actions: 'Actions',
   },
 }

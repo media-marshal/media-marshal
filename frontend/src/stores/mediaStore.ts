@@ -51,6 +51,11 @@ export const useMediaStore = defineStore('media', () => {
     updateTaskStatus(id, 'FAILED')
   }
 
+  async function deleteTask(id: number) {
+    await mediaApi.deleteTask(id)
+    tasks.value = tasks.value.filter((task) => task.id !== id)
+  }
+
   return {
     tasks,
     loading,
@@ -62,5 +67,6 @@ export const useMediaStore = defineStore('media', () => {
     updateTaskStatus,
     confirmTask,
     skipTask,
+    deleteTask,
   }
 })

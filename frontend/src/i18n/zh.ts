@@ -13,6 +13,8 @@ export default {
     pendingTasks: '待处理',
     failedTasks: '失败',
     awaitingTasks: '待确认',
+    deleteTaskConfirm: '确认删除这条任务记录？此操作只删除记录，不影响媒体文件。',
+    deleteTaskSuccess: '任务记录已删除',
   },
   queue: {
     title: '待人工确认',
@@ -147,5 +149,6 @@ export default {
     enable: '启用',
     disable: '禁用',
     refresh: '刷新',
+    actions: '操作',
   },
 }

@@ -352,8 +352,6 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
----
-
 ## [Windows 目录浏览兼容修复] 2026-04-27
 
 ### 已完成
@@ -383,8 +381,6 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
----
-
 ## [本地开发日志格式优化] 2026-04-27
 
 ### 已完成
@@ -405,8 +401,6 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
-
----
 
 ## [ADR-008 WatchRule 路径模板拆分] 2026-04-27
 
@@ -449,3 +443,55 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 本地已有旧开发库若仍存在 `watch_rule.path_template` 列，Hibernate `ddl-auto=update` 不会自动删除旧列；按 ADR-008 说明，可手动清理该列或重建开发库
+
+---
+
+## [Dashboard 最近任务删除操作] 2026-04-27
+
+### 已完成
+- 仪表盘最近任务列表新增“操作”列
+- 每行支持删除任务记录，删除前使用 Element Plus 确认弹窗提示“只删除记录，不影响媒体文件”
+- 复用已有 `DELETE /api/tasks/{id}` 接口
+- Pinia `mediaStore` 新增 `deleteTask()`，删除成功后从本地任务列表移除，统计卡片随之更新
+- 删除按钮增加行级 loading 状态，避免重复点击
+- 新增中英文 i18n 文案
+
+### 关键文件
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/stores/mediaStore.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无（复用已有 `DELETE /api/tasks/{id}`）
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [SQLite 并发写入锁修复] 2026-04-27
+
+### 已完成
+- 修复测试中多个媒体文件同时进入 pipeline 时触发的 `[SQLITE_BUSY] database is locked`
+- SQLite JDBC URL 增加 `busy_timeout=10000`，锁被短暂占用时等待释放而不是立即失败
+- SQLite 开启 WAL journal mode，提升读写并发下的稳定性
+- Hikari 连接池限制为单连接，避免同一后端进程内多个写事务同时竞争 SQLite 文件锁
+- 本地 dev SQLite URL 同步增加相同参数
+- 已运行 `mvn test`，后端测试通过
+
+### 关键文件
+- `backend/src/main/resources/application.yml`
+- `backend/src/main/resources/application-dev.yml`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- SQLite 适合当前单实例 v1 部署；如果后续需要多后端实例或高并发批量入库，应评估迁移到 PostgreSQL 等服务端数据库

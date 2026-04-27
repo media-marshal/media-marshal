@@ -5,7 +5,7 @@ spring:
     ansi:
       enabled: always
   datasource:
-    url: jdbc:sqlite:Z:\Data\media-marshal-data\media-marshal-dev.db
+    url: "jdbc:sqlite:Z:\\Data\\media-marshal-data\\media-marshal-dev.db?busy_timeout=10000&journal_mode=WAL"
   jpa:
     show-sql: false
     hibernate:
