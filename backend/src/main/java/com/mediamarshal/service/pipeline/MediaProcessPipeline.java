@@ -41,7 +41,7 @@ import java.util.Optional;
  *             - 高置信度：直接继续
  *             - 低置信度：状态改为 AWAITING_CONFIRMATION，推送 WebSocket + 邮件通知
  *             - 前端收到通知后，通过 Queue API 拉取 Step 4b 已保存的候选列表
- *   Step 6: 重命名文件（调用 RenameService，使用规则的 targetDir + pathTemplate）
+ *   Step 6: 重命名文件（调用 RenameService，使用规则 targetDir + 对应媒体类型路径模板）
  *   Step 7: 生成 NFO（调用 NfoGeneratorService）
  *   Step 8: 状态改为 DONE，推送 WebSocket 完成通知
  */

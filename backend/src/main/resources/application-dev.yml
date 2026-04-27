@@ -1,15 +1,29 @@
 # 本地开发环境配置
 # 启动方式：mvn spring-boot:run -Dspring.profiles.active=dev
 spring:
+  output:
+    ansi:
+      enabled: always
   datasource:
     url: jdbc:sqlite:Z:\Data\media-marshal-data\media-marshal-dev.db
   jpa:
-    show-sql: true
+    show-sql: false
     hibernate:
       ddl-auto: update
 
+logging:
+  pattern:
+    console: "%clr(%d{HH:mm:ss}){faint} %clr(%-5level) %clr(%logger{36}){cyan} - %msg%n"
+  level:
+    root: INFO
+    com.mediamarshal: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.apache.catalina: WARN
+    org.apache.tomcat: WARN
+
 media-marshal:
   parser:
-    url: http://localhost:8000     # parser sidecar 需单独启动：docker compose up parser
+    url: http://192.168.0.160:8000     # parser sidecar 需单独启动：docker compose up parser
   watcher:
     watch-dirs: ""                 # 开发时留空，通过 Web UI 配置或手动触发

@@ -60,7 +60,14 @@
             {{ row.matchConfidence != null ? (row.matchConfidence * 100).toFixed(0) + '%' : '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="160" />
+        <el-table-column prop="createdAt" label="创建时间" width="130">
+          <template #default="{ row }">
+            <div class="created-time">
+              <span>{{ formatCreatedAt(row.createdAt).date }}</span>
+              <span>{{ formatCreatedAt(row.createdAt).time }}</span>
+            </div>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
   </div>
@@ -90,6 +97,19 @@ function statusTagType(status: TaskStatus) {
   }
   return map[status] ?? 'info'
 }
+
+function formatCreatedAt(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return { date: '-', time: '-' }
+  }
+
+  const pad = (num: number) => num.toString().padStart(2, '0')
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+  }
+}
 </script>
 
 <style scoped>
@@ -115,5 +135,17 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.created-time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+}
+
+.created-time span:last-child {
+  color: #909399;
+  font-size: 12px;
 }
 </style>

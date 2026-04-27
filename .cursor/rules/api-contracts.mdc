@@ -150,7 +150,8 @@ interface WatchRule {
   sourceDir: string
   targetDir: string
   mediaType: 'MOVIE' | 'TV_SHOW' | 'AUTO'
-  pathTemplate: string | null      // null = 使用全局默认模板
+  moviePathTemplate: string | null // null = 使用全局电影默认模板
+  tvPathTemplate: string | null    // null = 使用全局剧集默认模板
   operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'
   enabled: boolean
   userId: number | null            // v1 始终为 null，多用户版本启用
@@ -166,11 +167,14 @@ interface RuleRequest {
   sourceDir: string                // required
   targetDir: string                // required
   mediaType: 'MOVIE' | 'TV_SHOW' | 'AUTO'   // required
-  pathTemplate?: string            // 不填 = 使用全局默认模板
+  moviePathTemplate?: string       // 电影模板；不填 = 使用全局电影默认模板
+  tvPathTemplate?: string          // 剧集模板；不填 = 使用全局剧集默认模板
   operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'  // required
   enabled?: boolean                // 不填默认 true
 }
 ```
+
+> v1 后端枚举保留未来扩展值，但前端路径设置页只允许用户选择 `MOVE`。
 
 ---
 
@@ -182,13 +186,13 @@ interface RuleRequest {
 **Query Parameters**
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `path` | string | `/` | 要浏览的绝对路径 |
+| `path` | string | `/` | 要浏览的绝对路径；Windows 下 `/` 表示虚拟根目录，返回可用盘符列表 |
 
 **Response**
 ```typescript
 interface BrowseResult {
-  currentPath: string         // 当前路径（已规范化，斜杠统一）
-  parentPath: string | null   // 父目录路径，根目录时为 null
+  currentPath: string         // 当前路径（已规范化，斜杠统一；Windows 盘符示例 D:/）
+  parentPath: string | null   // 父目录路径，根目录时为 null；Windows 盘符根目录的父级为 /
   dirs: Array<{
     name: string              // 目录名
     path: string              // 完整绝对路径

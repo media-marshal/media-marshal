@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
  * 替代原来的 watcher.watch-dirs / output.movie-dir 等平铺配置项。
  *
  * media_type = AUTO 时，系统用 guessit 自动判断，无法判断则进人工确认队列。
- * path_template 为 NULL 时，fallback 到全局配置 rename.template.movie / rename.template.tv。
+ * movie_path_template / tv_path_template 为 NULL 时，fallback 到对应全局模板配置。
  *
  * user_id：v1 始终为 null，多用户版本启用后按此字段隔离规则，无需改表结构。
  */
@@ -47,14 +47,13 @@ public class WatchRule {
     @Column(nullable = false, length = 20)
     private RuleMediaType mediaType = RuleMediaType.AUTO;
 
-    /**
-     * 目标目录内的路径模板（ADR-001 变量系统）
-     * NULL 时 fallback 到全局模板配置
-     * 示例（电影）：{title} ({year})/{title} ({year}){ext}
-     * 示例（剧集）：{title}/Season {season:02d}/{title} - S{season:02d}E{episode:02d}{ext}
-     */
+    /** 电影目标目录内的路径模板（ADR-001 变量系统），NULL 时 fallback 到全局电影模板 */
     @Column(length = 500)
-    private String pathTemplate;
+    private String moviePathTemplate;
+
+    /** 剧集目标目录内的路径模板（ADR-001 变量系统），NULL 时 fallback 到全局剧集模板 */
+    @Column(length = 500)
+    private String tvPathTemplate;
 
     /** 文件操作方式，v1 仅实现 MOVE */
     @Enumerated(EnumType.STRING)

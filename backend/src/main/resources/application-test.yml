@@ -14,6 +14,6 @@ spring:
 
 media-marshal:
   parser:
-    url: http://localhost:8000
+    url: http://192.168.0.160:8000     # parser sidecar 需单独启动：docker compose up parser
   watcher:
     watch-dirs: ""

@@ -7,7 +7,8 @@ export interface WatchRule {
   sourceDir: string
   targetDir: string
   mediaType: 'AUTO' | 'MOVIE' | 'TV_SHOW'
-  pathTemplate?: string
+  moviePathTemplate?: string | null
+  tvPathTemplate?: string | null
   operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'
   enabled: boolean
   userId?: number

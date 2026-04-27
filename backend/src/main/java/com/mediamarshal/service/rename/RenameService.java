@@ -12,13 +12,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 重命名服务（ADR-001 + ADR-002 整合）
  *
  * 职责：
  *   1. 通过 task.ruleId 加载对应的 WatchRule
- *   2. 选取有效路径模板（规则模板 > 全局默认模板）
+ *   2. 根据任务最终媒体类型选取有效路径模板（规则类型模板 > 全局默认模板）
  *   3. 从 task 数据构建 TemplateVariables 变量袋
  *   4. 调用 TemplateRenderer 渲染最终相对路径
  *   5. 拼接 targetDir + 渲染路径，得到目标绝对路径
@@ -58,9 +59,10 @@ public class RenameService {
         boolean isDebug = Boolean.parseBoolean(settingsService.get("debug", "false"));
 
         // 1. 加载规则
-        WatchRule rule = watchRuleRepository.findById(task.getRuleId())
+        Long ruleId = Objects.requireNonNull(task.getRuleId(), "MediaTask.ruleId is required for rename");
+        WatchRule rule = watchRuleRepository.findById(ruleId)
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "WatchRule not found: ruleId=" + task.getRuleId()));
+                        "WatchRule not found: ruleId=" + ruleId));
 
         // 2. 选取路径模板：规则模板 > 全局配置 > 内置默认值
         String template = resolveTemplate(rule, task.getMediaType());
@@ -96,19 +98,26 @@ public class RenameService {
     }
 
     /**
-     * 模板选取优先级：规则自定义模板 > 全局配置模板 > 内置默认模板
+     * 模板选取优先级：对应媒体类型的规则自定义模板 > 全局配置模板 > 内置默认模板
      */
-    private String resolveTemplate(WatchRule rule, MediaTask.MediaType mediaType) {
-        // 优先使用规则自定义模板
-        if (rule.getPathTemplate() != null && !rule.getPathTemplate().isBlank()) {
-            return rule.getPathTemplate();
-        }
-        // 全局配置模板
+    String resolveTemplate(WatchRule rule, MediaTask.MediaType mediaType) {
         if (mediaType == MediaTask.MediaType.MOVIE) {
+            String ruleTemplate = rule.getMoviePathTemplate();
+            if (ruleTemplate != null && !ruleTemplate.isBlank()) {
+                return ruleTemplate;
+            }
             return settingsService.get("rename.template.movie", DEFAULT_MOVIE_TEMPLATE);
-        } else {
+        }
+
+        if (mediaType == MediaTask.MediaType.TV_SHOW) {
+            String ruleTemplate = rule.getTvPathTemplate();
+            if (ruleTemplate != null && !ruleTemplate.isBlank()) {
+                return ruleTemplate;
+            }
             return settingsService.get("rename.template.tv", DEFAULT_TV_TEMPLATE);
         }
+
+        throw new IllegalArgumentException("Media type is required before rendering target path");
     }
 
     /**

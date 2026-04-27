@@ -328,3 +328,124 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - `npm run build` 仍有 Vite 默认 chunk size warning（Element Plus / 依赖打包体积较大），不影响构建产物；如后续关注首屏体积，可单独规划 manualChunks 拆包优化
+
+---
+
+## [Dashboard 创建时间显示优化] 2026-04-27
+
+### 已完成
+- 优化仪表盘最近任务列表的“创建时间”列显示
+  - 第一行显示日期：`YYYY-MM-DD`
+  - 第二行显示时间：`HH:mm:ss`
+  - 增加轻量样式区分日期和时间
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/DashboardView.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [Windows 目录浏览兼容修复] 2026-04-27
+
+### 已完成
+- 修复 Windows 路径在目录浏览面包屑中被错误拼成 `/D:` 导致后端 `InvalidPathException` 的问题
+- `FilesystemController` 增加 Windows 虚拟根目录处理：请求 `/` 时返回可用盘符列表，盘符根目录的父级返回 `/`
+- `FilesystemController` 对非法路径增加 `InvalidPathException` 捕获，避免请求错误路径时抛出 500 堆栈
+- `DirBrowserDialog` 增加路径输入框，支持直接输入 `D:/Media` 等路径并回车跳转
+- `DirBrowserDialog` 增加“根目录 / 盘符”按钮，方便在 Windows 不同盘符之间切换起始位置
+- 修正 Windows 盘符路径的面包屑生成逻辑，`D:/Data` 会生成 `/` → `D:/` → `Data`
+- 路径输入框和目录浏览新增文案已补充中英文 i18n
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/controller/FilesystemController.java`
+- `frontend/src/components/DirBrowserDialog.vue`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `GET /api/filesystem/browse` 响应结构不变
+- 明确 Windows 下 `path=/` 为虚拟根目录，返回可用盘符列表；已更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [本地开发日志格式优化] 2026-04-27
+
+### 已完成
+- 优化 `dev` profile 控制台日志格式，时间只显示 `HH:mm:ss`，不再显示日期
+- 本地开发日志格式简化为：时间、级别、logger、消息，去除进程号、线程名等低频信息
+- dev 环境开启 ANSI 输出，并使用 Spring Boot `%clr` pattern 保留 IDEA 控制台日志颜色
+- 关闭 dev 环境 `spring.jpa.show-sql`，避免 Hibernate SQL 直接刷屏
+- 将 Spring、Hibernate、Tomcat 等框架日志在 dev 环境降为 `WARN`，应用日志 `com.mediamarshal` 保持 `INFO`
+
+### 关键文件
+- `backend/src/main/resources/application-dev.yml`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [ADR-008 WatchRule 路径模板拆分] 2026-04-27
+
+### 已完成
+- `WatchRule` 实体按 ADR-008 移除旧单字段模板，新增 `moviePathTemplate` 与 `tvPathTemplate`
+- `WatchRuleController.RuleRequest` 同步改为接收 `moviePathTemplate` / `tvPathTemplate`，不再接收旧 `pathTemplate`
+- `RenameService` 根据任务最终 `mediaType` 选择对应媒体类型模板
+  - `MOVIE`：规则电影模板 → `rename.template.movie` → ADR-001 内置电影模板
+  - `TV_SHOW`：规则剧集模板 → `rename.template.tv` → ADR-001 内置剧集模板
+  - 缺少最终媒体类型时直接报错，避免渲染阶段继续使用不明确模板
+- 新增 `RenameServiceTest` 覆盖电影 / 剧集模板优先级、全局 fallback 和缺少媒体类型的异常场景
+- 前端 `PathsView.vue` 改为按规则媒体类型动态展示模板配置
+  - `AUTO` 同时展示电影路径模板和剧集路径模板
+  - `MOVIE` 只展示电影路径模板
+  - `TV_SHOW` 只展示剧集路径模板
+  - 同一次编辑中切换媒体类型时，暂时隐藏的模板输入状态会保留
+- 模板预设选项增加“电影模板 / 剧集模板”类型标签
+- 前端 WatchRule 类型移除旧 `pathTemplate`，新增 `moviePathTemplate` / `tvPathTemplate`
+- 路径设置页 v1 操作方式只暴露 `MOVE`，不再向用户展示未实现的 `COPY` / `HARD_LINK` / `SYMBOLIC_LINK`
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/WatchRule.java`
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+- `frontend/src/api/watchRule.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `WatchRule` 响应字段新增 `moviePathTemplate: string | null`、`tvPathTemplate: string | null`
+- `RuleRequest` 请求体新增 `moviePathTemplate?: string`、`tvPathTemplate?: string`
+- `WatchRule` / `RuleRequest` 契约移除旧 `pathTemplate`
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 本地已有旧开发库若仍存在 `watch_rule.path_template` 列，Hibernate `ddl-auto=update` 不会自动删除旧列；按 ADR-008 说明，可手动清理该列或重建开发库

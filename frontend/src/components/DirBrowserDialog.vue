@@ -1,11 +1,23 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="title || '选择目录'"
+    :title="title || t('dirBrowser.title')"
     width="480px"
     :close-on-click-modal="false"
     @open="handleOpen"
   >
+    <div class="path-toolbar">
+      <el-input
+        v-model="pathInput"
+        size="small"
+        :placeholder="t('dirBrowser.pathPlaceholder')"
+        @keyup.enter="navigateToInput"
+      />
+      <el-button size="small" @click="navigateTo('/')">
+        {{ t('dirBrowser.root') }}
+      </el-button>
+    </div>
+
     <!-- 面包屑路径导航 -->
     <div class="breadcrumb-bar">
       <el-icon class="folder-icon"><FolderOpened /></el-icon>
@@ -25,7 +37,7 @@
     <el-scrollbar height="320px" class="dir-list">
       <div v-if="loading" class="dir-loading">
         <el-icon class="is-loading"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
 
       <!-- 返回上级 -->
@@ -35,7 +47,7 @@
         @click="navigateTo(parentPath!)"
       >
         <el-icon><ArrowLeft /></el-icon>
-        <span>返回上级</span>
+        <span>{{ t('dirBrowser.parent') }}</span>
       </div>
 
       <div
@@ -51,20 +63,20 @@
       </div>
 
       <div v-if="!loading && dirs.length === 0 && parentPath !== null" class="dir-empty">
-        此目录下没有子目录
+        {{ t('dirBrowser.empty') }}
       </div>
     </el-scrollbar>
 
     <!-- 当前选中路径预览 -->
     <div class="selected-path">
-      <span class="selected-label">当前路径：</span>
+      <span class="selected-label">{{ t('dirBrowser.currentPath') }}</span>
       <code class="selected-value">{{ currentPath }}</code>
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
+      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" @click="handleConfirm">
-        选择此目录
+        {{ t('dirBrowser.selectCurrent') }}
       </el-button>
     </template>
   </el-dialog>
@@ -72,6 +84,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { filesystemApi } from '@/api/filesystem'
 import type { DirEntry } from '@/api/filesystem'
 
@@ -90,12 +103,15 @@ const emit = defineEmits<{
   'select': [path: string]
 }>()
 
+const { t } = useI18n()
+
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
 })
 
 const currentPath = ref('/')
+const pathInput = ref('/')
 const parentPath = ref<string | null>(null)
 const dirs = ref<DirEntry[]>([])
 const loading = ref(false)
@@ -106,6 +122,23 @@ const breadcrumbs = computed(() => {
   // 统一斜杠
   const normalized = path.replace(/\\/g, '/')
   if (normalized === '/') return [{ label: '/', path: '/' }]
+
+  const windowsDriveMatch = normalized.match(/^([A-Za-z]:)(?:\/(.*))?$/)
+  if (windowsDriveMatch) {
+    const driveRoot = `${windowsDriveMatch[1]}/`
+    const rest = windowsDriveMatch[2] ?? ''
+    const parts = rest.split('/').filter(Boolean)
+    const crumbs = [
+      { label: '/', path: '/' },
+      { label: driveRoot, path: driveRoot },
+    ]
+    let accumulated = driveRoot
+    for (const part of parts) {
+      accumulated += (accumulated.endsWith('/') ? '' : '/') + part
+      crumbs.push({ label: part, path: accumulated })
+    }
+    return crumbs
+  }
 
   const parts = normalized.split('/').filter(Boolean)
   const crumbs = [{ label: '/', path: '/' }]
@@ -123,11 +156,17 @@ async function navigateTo(path: string) {
     const res = await filesystemApi.browse(path)
     const data = res.data.data
     currentPath.value = data.currentPath
+    pathInput.value = data.currentPath
     parentPath.value = data.parentPath
     dirs.value = data.dirs
   } finally {
     loading.value = false
   }
+}
+
+function navigateToInput() {
+  const path = pathInput.value.trim()
+  navigateTo(path || '/')
 }
 
 function handleOpen() {
@@ -141,6 +180,12 @@ function handleConfirm() {
 </script>
 
 <style scoped>
+.path-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .breadcrumb-bar {
   display: flex;
   align-items: center;

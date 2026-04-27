@@ -53,19 +53,30 @@
             {{ t(`watchRule.mediaTypeOptions.${rule.mediaType}`) }}
           </el-tag>
           <el-tag size="small" type="info">
-            {{ t(`watchRule.operationOptions.${rule.operation}`) }}
+            {{ t('watchRule.operationOptions.MOVE') }}
           </el-tag>
           <el-tag v-if="!rule.enabled" size="small" type="warning">已停用</el-tag>
         </div>
 
-        <!-- 路径模板（有值时才显示） -->
-        <div v-if="rule.pathTemplate" class="template-row">
-          <el-icon><Document /></el-icon>
-          <span class="template-text" :title="rule.pathTemplate">{{ rule.pathTemplate }}</span>
-        </div>
-        <div v-else class="template-row template-row--default">
-          <el-icon><Document /></el-icon>
-          <span>使用全局默认模板</span>
+        <!-- 路径模板摘要 -->
+        <div class="template-summary-list">
+          <div
+            v-for="summary in templateSummaries(rule)"
+            :key="summary.kind"
+            class="template-row"
+            :class="{ 'template-row--default': !summary.value }"
+          >
+            <el-icon><Document /></el-icon>
+            <el-tag size="small" :type="summary.kind === 'movie' ? 'primary' : 'success'">
+              {{ summary.label }}
+            </el-tag>
+            <span
+              class="template-text"
+              :title="summary.value || t('watchRule.defaultTemplate')"
+            >
+              {{ summary.value || t('watchRule.defaultTemplate') }}
+            </span>
+          </div>
         </div>
 
         <!-- 操作按钮 -->
@@ -101,18 +112,18 @@
 
         <!-- 源目录（带浏览按钮） -->
         <el-form-item :label="t('watchRule.sourceDir')" prop="sourceDir">
-          <el-input v-model="form.sourceDir" placeholder="/media/incoming（容器内绝对路径）">
+          <el-input v-model="form.sourceDir" :placeholder="t('watchRule.sourceDirPlaceholder')">
             <template #append>
-              <el-button :icon="FolderOpened" @click="openDirBrowser('source')" title="浏览目录" />
+              <el-button :icon="FolderOpened" @click="openDirBrowser('source')" :title="t('dirBrowser.title')" />
             </template>
           </el-input>
         </el-form-item>
 
         <!-- 目标目录（带浏览按钮） -->
         <el-form-item :label="t('watchRule.targetDir')" prop="targetDir">
-          <el-input v-model="form.targetDir" placeholder="/media/movies（容器内绝对路径）">
+          <el-input v-model="form.targetDir" :placeholder="t('watchRule.targetDirPlaceholder')">
             <template #append>
-              <el-button :icon="FolderOpened" @click="openDirBrowser('target')" title="浏览目录" />
+              <el-button :icon="FolderOpened" @click="openDirBrowser('target')" :title="t('dirBrowser.title')" />
             </template>
           </el-input>
         </el-form-item>
@@ -145,47 +156,93 @@
           </el-col>
         </el-row>
 
-        <!-- 路径模板：下拉预设 + 自定义切换 -->
-        <el-form-item :label="t('watchRule.pathTemplate')">
-          <!-- 预设模式 -->
-          <div v-if="!templateCustomMode" class="template-input-row">
+        <!-- 路径模板：按媒体类型拆分 -->
+        <el-form-item
+          v-if="showMovieTemplate"
+          :label="t('watchRule.moviePathTemplate')"
+        >
+          <div v-if="!templateStates.movie.customMode" class="template-input-row">
             <el-select
-              v-model="selectedTemplateValue"
+              v-model="templateStates.movie.selected"
               style="flex: 1"
-              placeholder="使用全局默认模板"
+              :placeholder="t('watchRule.pathTemplatePlaceholder')"
               clearable
             >
               <el-option
-                v-for="tpl in PRESET_TEMPLATES"
+                v-for="tpl in templateOptions('movie')"
                 :key="tpl.value"
-                :label="tpl.label"
+                :label="t(tpl.labelKey)"
                 :value="tpl.value"
               >
                 <div class="template-option">
-                  <span class="template-option-label">{{ tpl.label }}</span>
+                  <div class="template-option-title">
+                    <el-tag size="small" type="primary">{{ t('watchRule.templateType.movie') }}</el-tag>
+                    <span class="template-option-label">{{ t(tpl.labelKey) }}</span>
+                  </div>
                   <span class="template-option-hint">{{ tpl.hint }}</span>
                 </div>
               </el-option>
             </el-select>
-            <el-tooltip content="自定义模板" placement="top">
-              <el-button :icon="EditPen" @click="switchToCustom" />
+            <el-tooltip :content="t('watchRule.customTemplate')" placement="top">
+              <el-button :icon="EditPen" @click="switchToCustom('movie')" />
             </el-tooltip>
           </div>
 
-          <!-- 自定义模式 -->
           <div v-else class="template-input-row">
             <el-input
-              v-model="customTemplateValue"
+              v-model="templateStates.movie.custom"
               style="flex: 1"
-              placeholder="输入自定义路径模板，如：{title} ({year}){ext}"
+              :placeholder="t('watchRule.customTemplatePlaceholder')"
             />
-            <el-tooltip content="返回选择预设" placement="top">
-              <el-button :icon="ArrowLeft" @click="switchToPreset" />
+            <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
+              <el-button :icon="ArrowLeft" @click="switchToPreset('movie')" />
             </el-tooltip>
           </div>
-          <div class="form-hint">
-            可用变量：{title} &nbsp;{year} &nbsp;{season:02d} &nbsp;{episode:02d} &nbsp;{original_title} &nbsp;{ext}
+          <div class="form-hint">{{ t('watchRule.templateVariablesHint') }}</div>
+        </el-form-item>
+
+        <el-form-item
+          v-if="showTvTemplate"
+          :label="t('watchRule.tvPathTemplate')"
+        >
+          <div v-if="!templateStates.tv.customMode" class="template-input-row">
+            <el-select
+              v-model="templateStates.tv.selected"
+              style="flex: 1"
+              :placeholder="t('watchRule.pathTemplatePlaceholder')"
+              clearable
+            >
+              <el-option
+                v-for="tpl in templateOptions('tv')"
+                :key="tpl.value"
+                :label="t(tpl.labelKey)"
+                :value="tpl.value"
+              >
+                <div class="template-option">
+                  <div class="template-option-title">
+                    <el-tag size="small" type="success">{{ t('watchRule.templateType.tv') }}</el-tag>
+                    <span class="template-option-label">{{ t(tpl.labelKey) }}</span>
+                  </div>
+                  <span class="template-option-hint">{{ tpl.hint }}</span>
+                </div>
+              </el-option>
+            </el-select>
+            <el-tooltip :content="t('watchRule.customTemplate')" placement="top">
+              <el-button :icon="EditPen" @click="switchToCustom('tv')" />
+            </el-tooltip>
           </div>
+
+          <div v-else class="template-input-row">
+            <el-input
+              v-model="templateStates.tv.custom"
+              style="flex: 1"
+              :placeholder="t('watchRule.customTemplatePlaceholder')"
+            />
+            <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
+              <el-button :icon="ArrowLeft" @click="switchToPreset('tv')" />
+            </el-tooltip>
+          </div>
+          <div class="form-hint">{{ t('watchRule.templateVariablesHint') }}</div>
         </el-form-item>
       </el-form>
 
@@ -200,7 +257,7 @@
     <!-- 目录浏览弹窗 -->
     <DirBrowserDialog
       v-model="dirBrowserVisible"
-      :title="dirBrowserTarget === 'source' ? '选择监控源目录' : '选择目标根目录'"
+      :title="dirBrowserTarget === 'source' ? t('dirBrowser.sourceTitle') : t('dirBrowser.targetTitle')"
       :initial-path="dirBrowserTarget === 'source' ? form.sourceDir || '/' : form.targetDir || '/'"
       @select="onDirSelected"
     />
@@ -235,39 +292,91 @@ const dirBrowserTarget = ref<'source' | 'target'>('source')
 
 // ─── 预设模板 ────────────────────────────────────────────────────
 // TODO ADR-007：后续从后端接口 GET /api/template-variables 获取，当前硬编码
+type TemplateKind = 'movie' | 'tv'
+
 const PRESET_TEMPLATES = [
   {
-    label: '电影默认',
+    kind: 'movie',
+    labelKey: 'watchRule.presetTemplates.movieDefault',
     value: '{title} ({year})/{title} ({year}){ext}',
     hint: 'The Dark Knight (2008)/The Dark Knight (2008).mkv',
   },
   {
-    label: '剧集默认',
+    kind: 'tv',
+    labelKey: 'watchRule.presetTemplates.tvDefault',
     value: '{title}/Season {season:02d}/{title} - S{season:02d}E{episode:02d}{ext}',
     hint: 'Breaking Bad/Season 03/Breaking Bad - S03E07.mkv',
   },
-]
+] satisfies Array<{ kind: TemplateKind, labelKey: string, value: string, hint: string }>
 
 // ─── 模板选择状态 ─────────────────────────────────────────────────
-const templateCustomMode = ref(false)
-const selectedTemplateValue = ref('')   // 预设模式选中的值
-const customTemplateValue = ref('')     // 自定义模式输入的值
-
-/** 最终提交的 pathTemplate 值 */
-const effectiveTemplate = computed(() => {
-  if (templateCustomMode.value) return customTemplateValue.value.trim() || undefined
-  return selectedTemplateValue.value || undefined
+const templateStates = reactive<Record<TemplateKind, {
+  customMode: boolean
+  selected: string
+  custom: string
+}>>({
+  movie: { customMode: false, selected: '', custom: '' },
+  tv: { customMode: false, selected: '', custom: '' },
 })
 
-function switchToCustom() {
-  // 将当前预设值填入自定义输入框，方便用户在预设基础上修改
-  customTemplateValue.value = selectedTemplateValue.value
-  templateCustomMode.value = true
+const showMovieTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'MOVIE')
+const showTvTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'TV_SHOW')
+
+function templateOptions(kind: TemplateKind) {
+  return PRESET_TEMPLATES.filter(tpl => tpl.kind === kind)
 }
 
-function switchToPreset() {
-  templateCustomMode.value = false
-  selectedTemplateValue.value = ''
+function effectiveTemplate(kind: TemplateKind) {
+  const state = templateStates[kind]
+  if (state.customMode) return state.custom.trim() || undefined
+  return state.selected || undefined
+}
+
+function switchToCustom(kind: TemplateKind) {
+  // 将当前预设值填入自定义输入框，方便用户在预设基础上修改
+  templateStates[kind].custom = templateStates[kind].selected
+  templateStates[kind].customMode = true
+}
+
+function switchToPreset(kind: TemplateKind) {
+  templateStates[kind].customMode = false
+  templateStates[kind].selected = ''
+}
+
+function resetTemplateState(kind: TemplateKind, value?: string | null) {
+  const state = templateStates[kind]
+  state.customMode = false
+  state.selected = ''
+  state.custom = ''
+
+  if (!value) return
+
+  const preset = templateOptions(kind).find(tpl => tpl.value === value)
+  if (preset) {
+    state.selected = preset.value
+  } else {
+    state.customMode = true
+    state.custom = value
+  }
+}
+
+function templateSummaries(rule: WatchRule) {
+  const summaries: Array<{ kind: TemplateKind, label: string, value?: string | null }> = []
+  if (rule.mediaType === 'AUTO' || rule.mediaType === 'MOVIE') {
+    summaries.push({
+      kind: 'movie',
+      label: t('watchRule.templateType.movie'),
+      value: rule.moviePathTemplate,
+    })
+  }
+  if (rule.mediaType === 'AUTO' || rule.mediaType === 'TV_SHOW') {
+    summaries.push({
+      kind: 'tv',
+      label: t('watchRule.templateType.tv'),
+      value: rule.tvPathTemplate,
+    })
+  }
+  return summaries
 }
 
 // ─── 表单 ────────────────────────────────────────────────────────
@@ -276,7 +385,8 @@ const defaultForm = (): WatchRuleRequest => ({
   sourceDir: '',
   targetDir: '',
   mediaType: 'AUTO',
-  pathTemplate: undefined,
+  moviePathTemplate: undefined,
+  tvPathTemplate: undefined,
   operation: 'MOVE',
   enabled: false,   // 新规则默认不启用（在卡片上手动开启）
 })
@@ -292,9 +402,7 @@ const formRules: FormRules = {
 }
 
 const mediaTypeOptions = [{ value: 'AUTO' }, { value: 'MOVIE' }, { value: 'TV_SHOW' }]
-const operationOptions = [
-  { value: 'MOVE' }, { value: 'COPY' }, { value: 'HARD_LINK' }, { value: 'SYMBOLIC_LINK' },
-]
+const operationOptions = [{ value: 'MOVE' }]
 
 // ─── 生命周期 ────────────────────────────────────────────────────
 onMounted(fetchRules)
@@ -312,23 +420,12 @@ async function fetchRules() {
 
 function openDialog(rule?: WatchRule) {
   editingRule.value = rule ?? null
-  Object.assign(form, rule ? { ...rule } : defaultForm())
+  Object.assign(form, defaultForm(), rule ? { ...rule } : {})
+  form.operation = 'MOVE'
 
   // 初始化模板状态
-  templateCustomMode.value = false
-  customTemplateValue.value = ''
-  if (rule?.pathTemplate) {
-    const preset = PRESET_TEMPLATES.find(t => t.value === rule.pathTemplate)
-    if (preset) {
-      selectedTemplateValue.value = preset.value
-    } else {
-      // 已有自定义模板，直接进入自定义模式
-      templateCustomMode.value = true
-      customTemplateValue.value = rule.pathTemplate
-    }
-  } else {
-    selectedTemplateValue.value = ''
-  }
+  resetTemplateState('movie', rule?.moviePathTemplate)
+  resetTemplateState('tv', rule?.tvPathTemplate)
 
   dialogVisible.value = true
   formRef.value?.clearValidate()
@@ -342,7 +439,8 @@ async function handleSave() {
   try {
     const payload: WatchRuleRequest = {
       ...form,
-      pathTemplate: effectiveTemplate.value,
+      moviePathTemplate: showMovieTemplate.value ? effectiveTemplate('movie') : undefined,
+      tvPathTemplate: showTvTemplate.value ? effectiveTemplate('tv') : undefined,
     }
 
     if (editingRule.value?.id) {
@@ -543,6 +641,18 @@ h2 {
   padding: 8px 12px;
 }
 
+.template-summary-list {
+  margin-bottom: 16px;
+}
+
+.template-summary-list .template-row {
+  margin-bottom: 8px;
+}
+
+.template-summary-list .template-row:last-child {
+  margin-bottom: 0;
+}
+
 .template-row--default {
   color: #c9cdd4;
   background: transparent;
@@ -577,6 +687,12 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.template-option-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .template-option-label {

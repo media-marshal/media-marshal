@@ -355,6 +355,108 @@ interface TaskCandidate {
 
 ---
 
+## ADR-008 WatchRule 路径模板按媒体类型拆分（2026-04-27）✅
+
+### 背景
+当前 `watch_rule.path_template` 只有一个模板字段，但同一条规则在 `media_type=AUTO` 时可能同时处理电影和剧集。电影与剧集的目录层级和文件命名结构天然不同，单模板无法同时表达两类媒体的最佳路径。
+
+同时，前端路径设置页目前把路径模板作为单一字段配置，且文件操作方式展示了 `COPY`、`HARD_LINK`、`SYMBOLIC_LINK` 等后端尚未真正实现的选项，容易给用户造成这些能力已可用的误解。
+
+### 结论
+`WatchRule` 的路径模板配置从单字段升级为**按媒体类型拆分**：
+
+- 电影模板：`movie_path_template`
+- 剧集模板：`tv_path_template`
+- 原 `path_template` 字段彻底废弃并删除，不做长期兼容
+
+### 数据模型调整
+`watch_rule` 表移除旧模板字段，并新增两个可空字段：
+
+```sql
+-- 开发阶段可直接调整 Entity，由 Hibernate ddl-auto=update 处理新增列；
+-- 如本地已有旧库，可手动清理 path_template 列或重建开发库。
+ALTER TABLE watch_rule DROP COLUMN path_template;
+ALTER TABLE watch_rule ADD COLUMN movie_path_template VARCHAR(500);
+ALTER TABLE watch_rule ADD COLUMN tv_path_template VARCHAR(500);
+```
+
+字段含义：
+
+| 字段 | 说明 |
+|---|---|
+| `movie_path_template` | 电影目标路径模板，NULL 时使用全局 `rename.template.movie` |
+| `tv_path_template` | 剧集目标路径模板，NULL 时使用全局 `rename.template.tv` |
+
+> 当前开发阶段仍使用 Hibernate `ddl-auto: update`，由 JPA Entity 新增字段自动补列；暂不引入 Flyway / Liquibase。
+
+### 模板选择规则
+`RenameService.buildTargetPath()` 必须根据任务最终确认的 `mediaType` 选择模板，而不是直接使用规则上的单一模板。
+
+推荐优先级：
+
+1. 当任务最终类型为 `MOVIE`：
+   - 优先使用 `watch_rule.movie_path_template`
+   - 若为空，使用 AppSetting `rename.template.movie`
+   - 再为空，使用 ADR-001 内置电影默认模板
+2. 当任务最终类型为 `TV_SHOW`：
+   - 优先使用 `watch_rule.tv_path_template`
+   - 若为空，使用 AppSetting `rename.template.tv`
+   - 再为空，使用 ADR-001 内置剧集默认模板
+
+`media_type=AUTO` 只表示规则允许系统自动识别媒体类型，不表示渲染时使用“自动模板”。渲染阶段必须已经拿到任务最终媒体类型，并按 `MOVIE` / `TV_SHOW` 选择对应模板。
+
+### 前端路径设置页交互要求
+`PathsView.vue` 的新增 / 编辑规则表单根据 `mediaType` 动态展示模板配置：
+
+| 当前规则媒体类型 | 表单展示 |
+|---|---|
+| `AUTO` | 同时展示“电影路径模板”和“剧集路径模板” |
+| `MOVIE` | 只展示“电影路径模板” |
+| `TV_SHOW` | 只展示“剧集路径模板” |
+
+交互要求：
+
+- 电影模板与剧集模板各自保留“预设模板 / 自定义模板”的交互能力
+- 模板选择控件中的每个预设模板必须显示类型标签，明确标识“电影模板”或“剧集模板”，帮助用户理解该模板适用的媒体类型
+- 当媒体类型从 `AUTO` 切换到 `MOVIE` 时，不展示剧集模板；从 `AUTO` 切换到 `TV_SHOW` 时，不展示电影模板
+- 隐藏不等于清空：用户在同一次编辑过程中切换媒体类型时，已输入但暂时隐藏的模板值应尽量保留，避免误删
+- 提交到后端时，只要求当前媒体类型相关的模板字段有效：
+  - `AUTO`：可提交两个模板字段
+  - `MOVIE`：提交 `moviePathTemplate`
+  - `TV_SHOW`：提交 `tvPathTemplate`
+- 规则卡片展示时：
+  - `AUTO` 规则同时展示电影 / 剧集模板摘要
+  - `MOVIE` 规则展示电影模板摘要
+  - `TV_SHOW` 规则展示剧集模板摘要
+
+### 文件操作方式 v1 展示范围
+虽然后端策略接口预留了 `MOVE`、`COPY`、`HARD_LINK`、`SYMBOLIC_LINK`，但当前实际可用能力只有 `MOVE`。
+
+前端路径设置页 v1 只展示“移动（MOVE）”：
+
+- 新建 / 编辑规则时，操作方式下拉框暂时只提供 `MOVE`
+- 规则卡片上只显示移动
+- `COPY`、`HARD_LINK`、`SYMBOLIC_LINK` 暂不在 UI 暴露
+- 后端枚举和接口可继续保留这些值作为未来扩展，但前端不得让用户选择尚未实现的操作方式
+
+### API 契约变更要求
+开发实现该 ADR 时，后端 Agent 必须同步更新 `api-contracts.mdc`：
+
+- `WatchRule` 响应字段新增 `moviePathTemplate: string | null`、`tvPathTemplate: string | null`
+- `RuleRequest` 请求体新增 `moviePathTemplate?: string`、`tvPathTemplate?: string`
+- `pathTemplate` 从 `WatchRule` / `RuleRequest` 契约中移除
+
+### 验收标准
+- `mediaType=AUTO` 的规则可以分别配置电影模板和剧集模板，电影任务按电影模板渲染，剧集任务按剧集模板渲染
+- `mediaType=MOVIE` 的规则只需要配置电影模板，处理电影时路径正确
+- `mediaType=TV_SHOW` 的规则只需要配置剧集模板，处理剧集时路径正确
+- `WatchRule` 实体、接口契约、前端类型中不再包含 `pathTemplate`
+- 模板预设选项带有“电影模板”/“剧集模板”类型标签
+- 前端路径设置页不再展示未实现的 `COPY`、`HARD_LINK`、`SYMBOLIC_LINK`
+- 后端测试至少覆盖模板选择优先级；前端至少通过 type-check / build
+
+---
+
 ## 待讨论事项
 
 - **ADR-007**：模板变量帮助页设计
@@ -362,3 +464,4 @@ interface TaskCandidate {
   - 方向：未来新增独立帮助页，展示所有可用变量的名称、类型、来源、示例值
   - 内容来源：后端提供接口（如 `GET /api/template-variables`）返回变量元数据，与 `TemplateVariables.java` 的 `@TemplateVar` 注解保持同步
   - 前端实现：可在 PathsView 模板输入框旁放「查看可用变量」链接，跳转或弹出帮助内容
+  - 待完成需求：自定义路径模板输入区域增加“预览”功能，用户点击后按当前模板生成一个路径样例，帮助确认变量替换和目录层级是否符合预期

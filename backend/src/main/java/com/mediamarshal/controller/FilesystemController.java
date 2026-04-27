@@ -8,12 +8,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * 服务器本地文件系统浏览接口
@@ -40,7 +43,29 @@ public class FilesystemController {
     public ApiResponse<BrowseResult> browse(
             @RequestParam(defaultValue = "/") String path) {
 
-        Path dir = Paths.get(path).toAbsolutePath().normalize();
+        String requestedPath = normalizeWindowsBreadcrumbPath(path);
+        boolean windowsRootSelector = isWindows() && isVirtualRoot(requestedPath);
+
+        if (windowsRootSelector) {
+            List<DirEntry> roots = StreamSupport.stream(FileSystems.getDefault().getRootDirectories().spliterator(), false)
+                    .filter(Files::isDirectory)
+                    .map(root -> {
+                        String rootPath = formatPath(root);
+                        return new DirEntry(rootPath, rootPath);
+                    })
+                    .sorted(Comparator.comparing(DirEntry::name))
+                    .toList();
+
+            return ApiResponse.ok(new BrowseResult("/", null, roots));
+        }
+
+        Path dir;
+        try {
+            dir = Paths.get(requestedPath).toAbsolutePath().normalize();
+        } catch (InvalidPathException e) {
+            log.warn("Invalid directory path requested: {}", path, e);
+            return ApiResponse.fail("路径格式不正确: " + path);
+        }
 
         if (!Files.exists(dir)) {
             return ApiResponse.fail("路径不存在: " + path);
@@ -54,20 +79,60 @@ public class FilesystemController {
                     .filter(Files::isDirectory)
                     .filter(p -> !p.getFileName().toString().startsWith("."))
                     .sorted(Comparator.comparing(p -> p.getFileName().toString().toLowerCase()))
-                    .map(p -> new DirEntry(p.getFileName().toString(), p.toString().replace("\\", "/")))
+                    .map(p -> new DirEntry(p.getFileName().toString(), formatPath(p)))
                     .toList();
 
             String parentPath = dir.getParent() != null
-                    ? dir.getParent().toString().replace("\\", "/")
+                    ? formatPath(dir.getParent())
                     : null;
 
+            if (isWindowsRoot(dir)) {
+                parentPath = "/";
+            }
+
             log.debug("Browse dir='{}', found {} subdirectories", dir, entries.size());
-            return ApiResponse.ok(new BrowseResult(dir.toString().replace("\\", "/"), parentPath, entries));
+            return ApiResponse.ok(new BrowseResult(formatPath(dir), parentPath, entries));
 
         } catch (IOException e) {
             log.error("Cannot list directory: {}", dir, e);
             return ApiResponse.fail("无法读取目录: " + e.getMessage());
         }
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    private boolean isVirtualRoot(String path) {
+        return path == null || path.isBlank() || "/".equals(path);
+    }
+
+    private String normalizeWindowsBreadcrumbPath(String path) {
+        if (!isWindows() || path == null) {
+            return path;
+        }
+
+        String normalized = path.replace("\\", "/");
+        if (normalized.matches("^/?[A-Za-z]:/?$")) {
+            String drive = normalized.replace("/", "");
+            return drive + "/";
+        }
+        if (normalized.matches("^/[A-Za-z]:/.+")) {
+            return normalized.substring(1);
+        }
+        return path;
+    }
+
+    private boolean isWindowsRoot(Path dir) {
+        if (!isWindows()) {
+            return false;
+        }
+        Path root = dir.getRoot();
+        return root != null && root.equals(dir);
+    }
+
+    private String formatPath(Path path) {
+        return path.toString().replace("\\", "/");
     }
 
     public record DirEntry(String name, String path) {}

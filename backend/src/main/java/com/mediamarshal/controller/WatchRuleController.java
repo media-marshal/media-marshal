@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 监控规则管理 REST API（ADR-002）
@@ -42,7 +43,7 @@ public class WatchRuleController {
     @PostMapping
     public ApiResponse<WatchRule> createRule(@Valid @RequestBody RuleRequest request) {
         WatchRule rule = buildRule(new WatchRule(), request);
-        WatchRule saved = watchRuleRepository.save(rule);
+        WatchRule saved = watchRuleRepository.save(Objects.requireNonNull(rule));
         log.info("WatchRule created: id={}, name={}, sourceDir={}", saved.getId(), saved.getName(), saved.getSourceDir());
         fileWatcherService.reload();
         return ApiResponse.ok(saved);
@@ -50,13 +51,13 @@ public class WatchRuleController {
 
     @PutMapping("/{id}")
     public ApiResponse<WatchRule> updateRule(@PathVariable Long id, @Valid @RequestBody RuleRequest request) {
-        WatchRule rule = watchRuleRepository.findById(id)
+        WatchRule rule = watchRuleRepository.findById(Objects.requireNonNull(id))
                 .orElse(null);
         if (rule == null) {
             return ApiResponse.fail("Rule not found: " + id);
         }
         buildRule(rule, request);
-        WatchRule saved = watchRuleRepository.save(rule);
+        WatchRule saved = watchRuleRepository.save(Objects.requireNonNull(rule));
         log.info("WatchRule updated: id={}, name={}", saved.getId(), saved.getName());
         fileWatcherService.reload();
         return ApiResponse.ok(saved);
@@ -64,7 +65,7 @@ public class WatchRuleController {
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteRule(@PathVariable Long id) {
-        watchRuleRepository.deleteById(id);
+        watchRuleRepository.deleteById(Objects.requireNonNull(id));
         log.info("WatchRule deleted: id={}", id);
         fileWatcherService.reload();
         return ApiResponse.ok();
@@ -72,7 +73,7 @@ public class WatchRuleController {
 
     @PatchMapping("/{id}/toggle")
     public ApiResponse<WatchRule> toggleRule(@PathVariable Long id) {
-        WatchRule rule = watchRuleRepository.findById(id).orElse(null);
+        WatchRule rule = watchRuleRepository.findById(Objects.requireNonNull(id)).orElse(null);
         if (rule == null) {
             return ApiResponse.fail("Rule not found: " + id);
         }
@@ -88,7 +89,8 @@ public class WatchRuleController {
         rule.setSourceDir(req.getSourceDir());
         rule.setTargetDir(req.getTargetDir());
         rule.setMediaType(req.getMediaType());
-        rule.setPathTemplate(req.getPathTemplate());
+        rule.setMoviePathTemplate(req.getMoviePathTemplate());
+        rule.setTvPathTemplate(req.getTvPathTemplate());
         rule.setOperation(req.getOperation());
         rule.setEnabled(req.getEnabled() != null ? req.getEnabled() : true);
         return rule;
@@ -108,8 +110,11 @@ public class WatchRuleController {
         @NotNull
         private WatchRule.RuleMediaType mediaType;
 
-        /** null 表示使用全局默认模板 */
-        private String pathTemplate;
+        /** null 表示使用全局电影默认模板 */
+        private String moviePathTemplate;
+
+        /** null 表示使用全局剧集默认模板 */
+        private String tvPathTemplate;
 
         @NotNull
         private com.mediamarshal.service.rename.FileOperationStrategy.OperationType operation;
