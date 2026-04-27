@@ -75,7 +75,16 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">
+            <el-tooltip
+              v-if="row.status === 'DONE' && row.targetPath"
+              :content="row.targetPath"
+              placement="top"
+            >
+              <el-tag :type="statusTagType(row.status)" size="small">
+                {{ t(`task.status.${row.status}`) }}
+              </el-tag>
+            </el-tooltip>
+            <el-tag v-else :type="statusTagType(row.status)" size="small">
               {{ t(`task.status.${row.status}`) }}
             </el-tag>
           </template>

@@ -46,6 +46,9 @@ public class MediaTask {
     /** guessit 解析出的集号（剧集） */
     private Integer parsedEpisode;
 
+    /** guessit 解析出的分辨率，如 1080p */
+    private String parsedResolution;
+
     /** TMDB 匹配到的 ID */
     private Long tmdbId;
 

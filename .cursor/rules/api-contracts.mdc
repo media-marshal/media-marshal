@@ -34,6 +34,7 @@ interface MediaTask {
   parsedYear: number | null
   parsedSeason: number | null
   parsedEpisode: number | null
+  parsedResolution: string | null    // guessit screen_size，用于 {resolution} 模板变量
   tmdbId: number | null
   confirmedTitle: string | null
   confirmedYear: number | null

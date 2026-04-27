@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,21 +28,32 @@ import java.util.Objects;
  *   6. 委托对应的 FileOperationStrategy 执行文件操作
  *
  * 全局默认模板配置键（AppSetting / application.yml）：
- *   rename.template.movie → {title} ({year})/{title} ({year}){ext}
- *   rename.template.tv    → {title}/Season {season:02d}/{title} - S{season:02d}E{episode:02d}{ext}
+ *   rename.template.movie → {title} ({year})/{title} ({year}) - {resolution}{ext}
+ *   rename.template.tv    → {title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RenameService {
 
-    /** 全局默认电影模板（ADR-001 v1 默认值） */
+    /** 全局默认电影模板 */
     private static final String DEFAULT_MOVIE_TEMPLATE =
-            "{title} ({year})/{title} ({year}){ext}";
+            "{title} ({year})/{title} ({year}) - {resolution}{ext}";
 
-    /** 全局默认剧集模板（ADR-001 v1 默认值） */
+    /** 全局默认剧集模板 */
     private static final String DEFAULT_TV_TEMPLATE =
-            "{title}/Season {season:02d}/{title} - S{season:02d}E{episode:02d}{ext}";
+            "{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}";
+
+    private static final Charset GBK = Charset.forName("GBK");
+    private static final int[] GB2312_AREA_CODES = {
+            -20319, -20283, -19775, -19218, -18710, -18526, -18239, -17922,
+            -17417, -16474, -16212, -15640, -15165, -14922, -14914, -14630,
+            -14149, -14090, -13318, -12838, -12556, -11847, -11055
+    };
+    private static final String[] PINYIN_INITIALS = {
+            "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M",
+            "N", "O", "P", "Q", "R", "S", "T", "W", "X", "Y", "Z"
+    };
 
     private final Map<String, FileOperationStrategy> strategies;
     private final WatchRuleRepository watchRuleRepository;
@@ -77,9 +89,9 @@ public class RenameService {
         TemplateVariables variables = buildVariables(task);
 
         if (isDebug) {
-            log.debug("TemplateVariables: title='{}', year={}, season={}, episode={}, ext='{}'",
+            log.debug("TemplateVariables: title='{}', year={}, season={}, episode={}, resolution='{}', ext='{}'",
                     variables.getTitle(), variables.getYear(),
-                    variables.getSeason(), variables.getEpisode(), variables.getExt());
+                    variables.getSeason(), variables.getEpisode(), variables.getResolution(), variables.getExt());
         }
 
         // 4. 渲染相对路径
@@ -143,16 +155,63 @@ public class RenameService {
                 .season(task.getParsedSeason())
                 .episode(task.getParsedEpisode())
                 .ext(ext)
+                .titleInitial(resolveTitleInitial(task.getConfirmedTitle()))
+                .resolution(task.getParsedResolution())
                 // 以下字段为预留，v1 不填充
                 .originalTitle(null)
                 .episodeTitle(null)
-                .titleInitial(null)
                 .genre1(null).genre2(null).genre3(null).genre4(null)
                 .country(null)
-                .resolution(null)
                 .codec(null)
                 .releaseGroup(null)
                 .build();
+    }
+
+    String resolveTitleInitial(String title) {
+        if (title == null || title.isBlank()) {
+            return null;
+        }
+
+        int firstCodePoint = title.strip().codePointAt(0);
+        if (Character.isDigit(firstCodePoint)) {
+            return "#";
+        }
+        if (isAsciiLetter(firstCodePoint)) {
+            return String.valueOf((char) Character.toUpperCase(firstCodePoint));
+        }
+        if (isCjkUnifiedIdeograph(firstCodePoint)) {
+            return resolveChineseInitial(firstCodePoint);
+        }
+
+        return "#";
+    }
+
+    private boolean isAsciiLetter(int codePoint) {
+        return (codePoint >= 'A' && codePoint <= 'Z') || (codePoint >= 'a' && codePoint <= 'z');
+    }
+
+    private boolean isCjkUnifiedIdeograph(int codePoint) {
+        Character.UnicodeBlock block = Character.UnicodeBlock.of(codePoint);
+        return Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS.equals(block);
+    }
+
+    private String resolveChineseInitial(int codePoint) {
+        String character = new String(Character.toChars(codePoint));
+        byte[] bytes = character.getBytes(GBK);
+        if (bytes.length < 2) {
+            return "#";
+        }
+
+        int code = (bytes[0] & 0xff) * 256 + (bytes[1] & 0xff) - 65536;
+        for (int i = 0; i < GB2312_AREA_CODES.length - 1; i++) {
+            if (code >= GB2312_AREA_CODES[i] && code < GB2312_AREA_CODES[i + 1]) {
+                return PINYIN_INITIALS[i];
+            }
+        }
+        if (code >= GB2312_AREA_CODES[GB2312_AREA_CODES.length - 1]) {
+            return PINYIN_INITIALS[PINYIN_INITIALS.length - 1];
+        }
+        return "#";
     }
 
     private FileOperationStrategy resolveStrategy(String type) {

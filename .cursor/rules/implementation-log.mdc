@@ -949,3 +949,72 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+
+---
+
+## [路径模板预设更新] 2026-04-27
+
+### 已完成
+- 删除前端路径设置页原有电影/剧集预设模板，替换为新的 4 个电影模板和 4 个剧集模板
+- 更新后端全局 fallback 默认模板：
+  - 电影：`{title} ({year})/{title} ({year}) - {resolution}{ext}`
+  - 剧集：`{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}`
+- 自然语言变量映射：
+  - 影片名 → `{title}`
+  - 年份 → `{year}`
+  - 分辨率 → `{resolution}`
+  - 扩展名 → `{ext}`（已包含点）
+  - 视频类型 → `{media_type}`
+  - 首字母 → `{title_initial}`
+  - 季数 → `S{season:02d}`
+  - 集数 → `E{episode:02d}`
+- `MediaTask` 新增 `parsedResolution`，pipeline 从 guessit `screen_size` 写入，RenameService 渲染时填充 `{resolution}`
+- RenameService 渲染时根据确认标题计算 `{title_initial}`
+- 同步更新 API 契约中的 `MediaTask.parsedResolution`
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/resources/application.yml`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/types/index.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `MediaTask` 响应新增字段：`parsedResolution: string | null`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- `design-decisions.mdc` 中 ADR-001 的 v1 默认模板仍保留历史描述；按项目规则未由开发 Agent 修改，后续由 PM 统一更新。
+
+---
+
+## [仪表盘完成路径提示与首字母规则优化] 2026-04-27
+
+### 已完成
+- Dashboard 最近任务列表中，`DONE` 状态标签在鼠标悬停时展示任务最终 `targetPath`
+- 优化 `{title_initial}` 计算规则：
+  - 数字开头返回 `#`
+  - 常用中文汉字开头返回第一个字的拼音首字母大写
+  - 英文开头返回第一个英文单词首字母大写
+  - 特殊字符开头返回 `#`
+- 新增单元测试覆盖数字、中文、英文、特殊字符开头的标题首字母计算
+
+### 关键文件
+- `frontend/src/views/DashboardView.vue`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无

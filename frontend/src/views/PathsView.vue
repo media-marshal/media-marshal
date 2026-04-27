@@ -355,14 +355,50 @@ const PRESET_TEMPLATES = [
   {
     kind: 'movie',
     labelKey: 'watchRule.presetTemplates.movieDefault',
-    value: '{title} ({year})/{title} ({year}){ext}',
-    hint: 'The Dark Knight (2008)/The Dark Knight (2008).mkv',
+    value: '{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    hint: 'The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
+  },
+  {
+    kind: 'movie',
+    labelKey: 'watchRule.presetTemplates.movieByYear',
+    value: '{year}/{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    hint: '2008/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
+  },
+  {
+    kind: 'movie',
+    labelKey: 'watchRule.presetTemplates.movieByTypeYear',
+    value: '{media_type}/{year}/{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    hint: 'MOVIE/2008/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
+  },
+  {
+    kind: 'movie',
+    labelKey: 'watchRule.presetTemplates.movieByTypeInitial',
+    value: '{media_type}/{title_initial}/{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    hint: 'MOVIE/T/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvDefault',
-    value: '{title}/Season {season:02d}/{title} - S{season:02d}E{episode:02d}{ext}',
-    hint: 'Breaking Bad/Season 03/Breaking Bad - S03E07.mkv',
+    value: '{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
+    hint: 'Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+  },
+  {
+    kind: 'tv',
+    labelKey: 'watchRule.presetTemplates.tvByYear',
+    value: '{year}/{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
+    hint: '2008/Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+  },
+  {
+    kind: 'tv',
+    labelKey: 'watchRule.presetTemplates.tvByTypeYear',
+    value: '{media_type}/{year}/{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
+    hint: 'TV_SHOW/2008/Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+  },
+  {
+    kind: 'tv',
+    labelKey: 'watchRule.presetTemplates.tvByTypeInitial',
+    value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
+    hint: 'TV_SHOW/B/Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
   },
 ] satisfies Array<{ kind: TemplateKind, labelKey: string, value: string, hint: string }>
 

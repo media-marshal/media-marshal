@@ -35,7 +35,7 @@ public class TemplateRenderer {
     /**
      * 渲染模板字符串
      *
-     * @param template  模板字符串，如 "{title} ({year})/{title} ({year}){ext}"
+     * @param template  模板字符串，如 "{title} ({year})/{title} ({year}) - {resolution}{ext}"
      * @param variables 变量袋
      * @return 渲染后的路径字符串（不含目标根目录）
      */

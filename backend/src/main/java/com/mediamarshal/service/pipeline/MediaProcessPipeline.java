@@ -184,6 +184,7 @@ public class MediaProcessPipeline {
         task.setParsedYear(parseResult.getYear());
         task.setParsedSeason(parseResult.getSeason());
         task.setParsedEpisode(parseResult.getEpisode());
+        task.setParsedResolution(parseResult.getScreenSize());
         taskRepository.save(task);
     }
 

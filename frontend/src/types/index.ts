@@ -26,6 +26,7 @@ export interface MediaTask {
   parsedYear: number | null
   parsedSeason: number | null
   parsedEpisode: number | null
+  parsedResolution: string | null
   tmdbId: number | null
   confirmedTitle: string | null
   confirmedYear: number | null
