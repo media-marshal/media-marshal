@@ -18,7 +18,7 @@ export default {
     batchDelete: 'Batch Delete',
     batchDeleteConfirm: 'Delete the selected {count} task records? This only removes records and candidates, and does not affect media files.',
     batchDeleteSuccess: 'Selected task records deleted',
-    skipReason: 'Skip Reason',
+    details: 'Details',
     allStatuses: 'All Statuses',
   },
   queue: {
@@ -64,13 +64,16 @@ export default {
       MOVIE: 'Movie',
       TV_SHOW: 'TV Show',
     },
+    details: {
+      MANUALLY_SKIPPED_BY_USER: 'Manually skipped by user',
+    },
     sourcePath: 'Source Path',
     targetPath: 'Target Path',
     createdAt: 'Created At',
   },
   watchRule: {
     title: 'Path Settings',
-    description: 'Configure watch directories and organization rules. Each rule defines a complete strategy from "where to watch" to "where to organize".',
+    description: 'Tell Media Marshal which folders to watch and where organized media should go. You can set up separate rules for movies, TV shows, or automatic detection.',
     addRule: 'Add Rule',
     editRule: 'Edit Rule',
     empty: 'No rules yet. Click "Add Rule" to get started.',

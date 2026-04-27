@@ -39,13 +39,15 @@ interface MediaTask {
   confirmedYear: number | null
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
-  errorMessage: string | null
-  skipReason: string | null          // status=SKIPPED 时说明跳过原因
+  errorMessage: string | null       // status=FAILED 时说明失败原因，如目标文件冲突
+  skipReason: string | null         // status=SKIPPED 时说明跳过原因
   ruleId: number | null            // 触发此任务的 WatchRule ID
   createdAt: string                // ISO 8601
   updatedAt: string
 }
 ```
+
+> 前端任务列表“详情”列组合展示：`FAILED` 读取 `errorMessage`，`SKIPPED` 读取 `skipReason`。
 
 ---
 
@@ -55,9 +57,9 @@ interface MediaTask {
 |---|---|---|---|---|
 | GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务 | — | `MediaTask[]` |
 | GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
-| GET | `/api/queue/{id}/search?q={keyword}` | 用户手动重新搜索 TMDB（不写入候选表） | — | `MatchResult[]` |
+| GET | `/api/queue/{id}/search?q={keyword}` | 用户手动重新搜索 TMDB（不写入候选表）；纯数字先按 TMDB ID 查询再按关键词搜索，非数字仅按关键词搜索 | — | `MatchResult[]` |
 | POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理 | `ConfirmRequest` | — |
-| POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 FAILED） | — | — |
+| POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 SKIPPED，写入 `skipReason`） | — | — |
 
 ### ConfirmRequest
 ```typescript

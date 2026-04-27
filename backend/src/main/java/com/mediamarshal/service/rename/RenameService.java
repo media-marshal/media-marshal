@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
@@ -88,6 +89,10 @@ public class RenameService {
         Path target = Paths.get(rule.getTargetDir()).resolve(relativePath).normalize();
 
         log.info("Rename plan: source='{}' -> target='{}'", task.getSourcePath(), target);
+
+        if (Files.exists(target)) {
+            throw new IOException("目标文件已存在，文件冲突");
+        }
 
         // 6. 执行文件操作
         FileOperationStrategy strategy = resolveStrategy(rule.getOperation().name());

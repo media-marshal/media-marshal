@@ -18,7 +18,7 @@ export default {
     batchDelete: '批量删除',
     batchDeleteConfirm: '确认删除选中的 {count} 条任务记录？此操作只删除记录和候选数据，不影响媒体文件。',
     batchDeleteSuccess: '已删除选中的任务记录',
-    skipReason: '跳过原因',
+    details: '详情',
     allStatuses: '全部状态',
   },
   queue: {
@@ -64,13 +64,16 @@ export default {
       MOVIE: '电影',
       TV_SHOW: '剧集',
     },
+    details: {
+      MANUALLY_SKIPPED_BY_USER: '用户手动跳过',
+    },
     sourcePath: '源路径',
     targetPath: '目标路径',
     createdAt: '创建时间',
   },
   watchRule: {
     title: '路径设置',
-    description: '配置监控目录和整理规则，每条规则定义"从哪里监控"到"整理到哪里"的完整策略。',
+    description: '告诉 Media Marshal 要监听哪些文件夹，以及整理好的影片要放到哪里。你可以为电影、剧集或自动识别分别设置整理方式。',
     addRule: '新增规则',
     editRule: '编辑规则',
     empty: '暂无规则，点击「新增规则」开始配置',

@@ -81,9 +81,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="confirmedTitle" label="匹配标题" width="200" show-overflow-tooltip />
-        <el-table-column prop="skipReason" :label="t('dashboard.skipReason')" width="180" show-overflow-tooltip>
+        <el-table-column :label="t('dashboard.details')" width="220" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.skipReason || '-' }}
+            {{ taskDetails(row) }}
           </template>
         </el-table-column>
         <el-table-column prop="matchConfidence" label="置信度" width="90">
@@ -125,7 +125,7 @@ import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { MediaTask, TaskStatus } from '@/types'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const mediaStore = useMediaStore()
 const { tasks, loading, queueTasks, doneTasks, failedTasks } = storeToRefs(mediaStore)
 const { fetchTasks, deleteTask } = mediaStore
@@ -134,6 +134,7 @@ const selectedTasks = ref<MediaTask[]>([])
 const batchDeleting = ref(false)
 const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
+type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
 const displayedTasks = computed(() => {
   const filtered = statusFilter.value === 'ALL'
@@ -144,10 +145,10 @@ const displayedTasks = computed(() => {
 
 onMounted(() => fetchTasks())
 
-function statusTagType(status: TaskStatus) {
-  const map: Record<TaskStatus, string> = {
+function statusTagType(status: TaskStatus): TagType | undefined {
+  const map: Record<TaskStatus, TagType | undefined> = {
     PENDING: 'info',
-    PROCESSING: '',
+    PROCESSING: undefined,
     AWAITING_CONFIRMATION: 'warning',
     DONE: 'success',
     FAILED: 'danger',
@@ -167,6 +168,27 @@ function formatCreatedAt(value: string) {
     date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
     time: `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
   }
+}
+
+function taskDetails(task: MediaTask) {
+  if (task.status === 'FAILED') {
+    return localizedTaskDetail(task.errorMessage)
+  }
+  if (task.status === 'SKIPPED') {
+    return localizedTaskDetail(task.skipReason)
+  }
+  return '-'
+}
+
+function localizedTaskDetail(detail: string | null) {
+  if (!detail) return '-'
+
+  const key = detail.trim()
+  if (te(`task.details.${key}`)) {
+    return t(`task.details.${key}`)
+  }
+
+  return detail
 }
 
 async function handleDeleteTask(task: MediaTask) {

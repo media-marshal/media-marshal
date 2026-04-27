@@ -3,6 +3,7 @@ package com.mediamarshal.service.rename;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -24,9 +25,9 @@ public class MoveRenameStrategy implements FileOperationStrategy {
         }
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
+        } catch (AtomicMoveNotSupportedException e) {
             // ATOMIC_MOVE 跨磁盘时可能不支持，降级为普通移动
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(source, target);
         }
     }
 

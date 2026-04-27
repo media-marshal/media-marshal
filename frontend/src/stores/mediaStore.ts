@@ -48,7 +48,7 @@ export const useMediaStore = defineStore('media', () => {
 
   async function skipTask(id: number) {
     await mediaApi.skipTask(id)
-    updateTaskStatus(id, 'FAILED')
+    updateTaskStatus(id, 'SKIPPED')
   }
 
   async function deleteTask(id: number) {

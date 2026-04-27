@@ -569,6 +569,68 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
+---
+
+## [路径设置页说明文案优化] 2026-04-27
+
+### 已完成
+- 优化路径设置页面顶部解释性描述
+  - 将偏技术的“监控目录 / 整理规则 / 策略”说明改为用户视角文案
+  - 同步更新中英文 i18n 文案
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [任务详情手动跳过状态修复] 2026-04-27
+
+### 已完成
+- 排查中文界面任务列表仍显示 `Manually skipped by user` 的原因
+  - 后端 `QueueController.skip()` 直接把英文写入 `errorMessage`
+  - 前端 Dashboard “详情”列直接展示 `errorMessage` / `skipReason`
+- 修复后端跳过逻辑
+  - 人工跳过任务从 `FAILED + errorMessage` 改为 `SKIPPED + skipReason`
+  - `skipReason` 写入稳定原因码 `MANUALLY_SKIPPED_BY_USER`
+  - 清空 `errorMessage`，避免跳过任务被视为失败
+- 修复前端展示逻辑
+  - Dashboard “详情”列按当前原因码直连 `task.details.*` 做 i18n 展示
+  - `mediaStore.skipTask()` 本地状态更新为 `SKIPPED`
+  - 收窄 `statusTagType()` 返回类型，清理 IDE 诊断
+- 已运行 `npm run type-check`，通过
+- 已运行 `mvn test`，通过
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/stores/mediaStore.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 更新 `POST /api/queue/{id}/skip` 行为说明：跳过任务标记为 `SKIPPED`，并写入 `skipReason`
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [Windows 目录浏览兼容修复] 2026-04-27
 
 ### 已完成
@@ -818,3 +880,72 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 如需要完整任务管理页（区别于 Dashboard 最近任务），可后续单独设计
 - v1 附属文件移动失败仅记录日志，暂未在任务详情中展示提示
+
+---
+
+## [Queue 手动 TMDB 搜索优化] 2026-04-27
+
+### 已完成
+- 优化 `GET /api/queue/{id}/search?q={keyword}` 的手动搜索逻辑
+- 当用户输入纯数字时，按 TMDB ID 直接查询详情
+  - 若任务已有媒体类型，则按该类型查询
+  - 若任务媒体类型未知，则同时尝试 movie / tv，返回存在的结果
+- 纯数字输入完成 ID 查询后，还会继续作为普通关键词搜索，并按 `mediaType + sourceId` 合并去重，兼容标题本身就是数字的电影 / 剧集
+- 当用户输入非数字关键词时，只使用用户输入的关键词搜索 TMDB
+  - 不再携带 `parsedYear`
+  - 不再携带 `parsedSeason` / `parsedEpisode`
+  - 避免错误解析年份导致正确结果被 TMDB 年份过滤排除
+- 同步更新 API 契约说明
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 无新增接口
+- `GET /api/queue/{id}/search?q={keyword}` 行为变更：支持 TMDB ID 查询，关键词搜索不再带解析年份条件
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [ADR-010 目标文件冲突保护] 2026-04-27
+
+### 已完成
+- `RenameService` 渲染目标路径后、执行文件操作前检查目标文件是否已存在
+- 当目标文件已存在时，直接抛出失败原因 `目标文件已存在，文件冲突`
+  - 不移动源文件
+  - 不覆盖目标文件
+  - 不自动追加后缀改名
+  - pipeline 捕获后将任务标记为 `FAILED`，并写入 `errorMessage`
+- `MoveRenameStrategy` 移除 `REPLACE_EXISTING` 覆盖移动
+  - 优先尝试 `ATOMIC_MOVE`
+  - 仅在跨文件系统不支持原子移动时降级为普通 `Files.move(source, target)`
+  - 普通移动仍不覆盖目标文件
+- Dashboard 最近任务中“跳过原因”列改为通用“详情”列
+  - `FAILED` 展示 `errorMessage`
+  - `SKIPPED` 展示 `skipReason`
+  - 其他状态展示为空
+- 同步更新 API 契约说明
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/MoveRenameStrategy.java`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 无新增字段或接口
+- `api-contracts.mdc` 补充说明：`FAILED` 详情来自 `errorMessage`，`SKIPPED` 详情来自 `skipReason`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无

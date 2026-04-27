@@ -12,20 +12,25 @@ import com.mediamarshal.service.pipeline.MediaProcessPipeline;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 待人工确认队列 REST API
  *
  * GET  /api/queue              查询所有 AWAITING_CONFIRMATION 任务
  * POST /api/queue/{id}/confirm 人工确认：指定 TMDB ID 后继续处理
- * POST /api/queue/{id}/skip    跳过此任务（标记为 FAILED，不处理）
+ * POST /api/queue/{id}/skip    跳过此任务（标记为 SKIPPED，不处理）
  */
 @RestController
 @RequestMapping("/api/queue")
 @RequiredArgsConstructor
+@Slf4j
 public class QueueController {
 
     private final MediaTaskRepository taskRepository;
@@ -57,26 +62,72 @@ public class QueueController {
         MediaTask task = taskRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
 
+        String keyword = q == null ? "" : q.trim();
+        if (keyword.isBlank()) {
+            return ApiResponse.ok(List.of());
+        }
+
         ParseResult parseResult = new ParseResult();
-        parseResult.setTitle(q);
-        parseResult.setYear(task.getParsedYear());
-        parseResult.setSeason(task.getParsedSeason());
-        parseResult.setEpisode(task.getParsedEpisode());
+        parseResult.setTitle(keyword);
+        // 手动搜索应尽量贴近 TMDB 首页体验，只使用用户输入的关键词。
+        // 不带 parsedYear/season/episode，避免文件名误解析出的年份过滤掉正确结果。
         if (MediaTask.MediaType.TV_SHOW.equals(task.getMediaType())) {
             parseResult.setType("episode");
         } else if (MediaTask.MediaType.MOVIE.equals(task.getMediaType())) {
             parseResult.setType("movie");
         }
 
-        return ApiResponse.ok(metadataMatcher.search(parseResult));
+        List<MatchResult> keywordResults = metadataMatcher.search(parseResult);
+        if (!keyword.matches("\\d+")) {
+            return ApiResponse.ok(keywordResults);
+        }
+
+        List<MatchResult> idResults = searchByTmdbId(keyword, task.getMediaType());
+        return ApiResponse.ok(mergeResults(idResults, keywordResults));
+    }
+
+    private List<MatchResult> searchByTmdbId(String tmdbId, MediaTask.MediaType taskMediaType) {
+        if (taskMediaType != null) {
+            return getByIdIfExists(tmdbId, taskMediaType.name());
+        }
+
+        List<MatchResult> results = new ArrayList<>();
+        results.addAll(getByIdIfExists(tmdbId, MediaTask.MediaType.MOVIE.name()));
+        results.addAll(getByIdIfExists(tmdbId, MediaTask.MediaType.TV_SHOW.name()));
+        return results;
+    }
+
+    private List<MatchResult> getByIdIfExists(String tmdbId, String mediaType) {
+        try {
+            return List.of(metadataMatcher.getById(tmdbId, mediaType));
+        } catch (Exception e) {
+            log.debug("TMDB id lookup missed: id={}, mediaType={}, error={}", tmdbId, mediaType, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<MatchResult> mergeResults(List<MatchResult> idResults, List<MatchResult> keywordResults) {
+        Map<String, MatchResult> merged = new LinkedHashMap<>();
+        for (MatchResult result : idResults) {
+            merged.put(resultKey(result), result);
+        }
+        for (MatchResult result : keywordResults) {
+            merged.putIfAbsent(resultKey(result), result);
+        }
+        return new ArrayList<>(merged.values());
+    }
+
+    private String resultKey(MatchResult result) {
+        return result.getMediaType() + ":" + result.getSourceId();
     }
 
     @SuppressWarnings("null")
     @PostMapping("/{id}/skip")
     public ApiResponse<Void> skip(@PathVariable Long id) {
         taskRepository.findById(id).ifPresent(task -> {
-            task.setStatus(MediaTask.TaskStatus.FAILED);
-            task.setErrorMessage("Manually skipped by user");
+            task.setStatus(MediaTask.TaskStatus.SKIPPED);
+            task.setErrorMessage(null);
+            task.setSkipReason("MANUALLY_SKIPPED_BY_USER");
             taskRepository.save(task);
         });
         return ApiResponse.ok();
