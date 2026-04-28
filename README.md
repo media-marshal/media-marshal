@@ -36,12 +36,13 @@ open http://localhost:3000
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `MEDIA_DIRS` | Host media directory mounted into the container at `/media` | `/media` |
 | `MEDIA_MARSHAL_TMDB_API_KEY` | TMDB API v3 key (required) | — |
-| `MEDIA_MARSHAL_WATCH_DIRS` | Comma-separated directories to watch | `/media/incoming` |
 | `MEDIA_MARSHAL_CONFIDENCE_THRESHOLD` | Auto-process threshold (0.0–1.0) | `0.8` |
-| `MEDIA_MARSHAL_OPERATION_STRATEGY` | `MOVE` / `COPY` / `HARD_LINK` / `SYMBOLIC_LINK` | `MOVE` |
 | `MEDIA_MARSHAL_EMAIL_ENABLED` | Enable email notifications | `false` |
 | `MEDIA_MARSHAL_EMAIL_RECIPIENT` | Notification recipient email | — |
+
+Watch directories, target directories, and file operations are configured in the Web UI path settings page.
 
 ### Tech Stack
 

@@ -12,7 +12,7 @@ import java.nio.file.Path;
  * 扩展方式：
  *   1. 新建实现类，标注 @Component
  *   2. 在 FileOperationStrategyFactory 中自动注册（已通过 Map 注入实现）
- *   3. 用户在配置中选择 operation.strategy=COPY 即可切换
+ *   3. 用户在 WatchRule.operation 中选择对应操作类型即可切换
  */
 public interface FileOperationStrategy {
 

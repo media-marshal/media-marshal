@@ -1,0 +1,55 @@
+services:
+  media-marshal:
+    image: ghcr.io/media-marshal/media-marshal:latest
+    container_name: media-marshal
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${MEDIA_DIRS:-/opt/media-marshal}/data:/data # 配置存储路径
+      - ${MEDIA_DIRS:-/Resources}:/Resources # 媒体库目录（宿主机挂载）
+    environment:
+      - MEDIA_MARSHAL_PARSER_URL=http://parser:8000
+      - MEDIA_MARSHAL_TMDB_API_KEY=${MEDIA_MARSHAL_TMDB_API_KEY:-}
+      - MEDIA_MARSHAL_CONFIDENCE_THRESHOLD=${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:-0.8}
+      - MEDIA_MARSHAL_EMAIL_ENABLED=${MEDIA_MARSHAL_EMAIL_ENABLED:-false} # 是否开启邮件通知
+      - MEDIA_MARSHAL_EMAIL_RECIPIENT=${MEDIA_MARSHAL_EMAIL_RECIPIENT:-} # smtp配置, 开启邮件通知必填
+      - MEDIA_MARSHAL_MAIL_HOST=${MEDIA_MARSHAL_MAIL_HOST:-} # smtp配置, 开启邮件通知必填
+      - MEDIA_MARSHAL_MAIL_PORT=${MEDIA_MARSHAL_MAIL_PORT:-587} # smtp配置, 开启邮件通知必填
+      - MEDIA_MARSHAL_MAIL_USERNAME=${MEDIA_MARSHAL_MAIL_USERNAME:-} # smtp配置, 开启邮件通知必填
+      - MEDIA_MARSHAL_MAIL_PASSWORD=${MEDIA_MARSHAL_MAIL_PASSWORD:-} # smtp配置, 开启邮件通知必填
+    depends_on:
+      parser:
+        condition: service_healthy
+    networks:
+      - mm_net
+
+  portal:
+    image: ghcr.io/media-marshal/media-marshal-portal:latest
+    container_name: media-marshal-portal
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - media-marshal
+    networks:
+      - mm_net
+
+  parser:
+    image: ghcr.io/media-marshal/media-marshal-parser:latest
+    container_name: media-marshal-parser
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mm_net
+
+networks:
+  mm_net:
+    driver: bridge

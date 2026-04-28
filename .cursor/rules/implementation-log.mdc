@@ -294,8 +294,6 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
----
-
 ## [QueueView 人工确认页面] 2026-04-25
 
 ### 已完成
@@ -1035,6 +1033,39 @@ alwaysApply: false
 - `frontend/src/views/DashboardView.vue`
 - `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
 - `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [环境变量配置清理] 2026-04-28
+
+### 已完成
+- 清理 `.env.example` 中已废弃的 `MEDIA_MARSHAL_WATCH_DIRS` 和 `MEDIA_MARSHAL_OPERATION_STRATEGY`
+- 清理 `docker-compose.yml` 中对应的废弃环境变量透传
+- 清理 `application.yml`、`application-dev.yml`、`application-test.yml` 中不再生效的 `watch-dirs` 配置
+- 清理前端 `.env.development` / `.env.production` 中未被代码读取的 `VITE_APP_TITLE`
+- 更新 README 和架构文档中关于文件操作配置来源的说明
+- 修正 TMDB 匹配器注释中的环境变量名为 `MEDIA_MARSHAL_TMDB_API_KEY`
+
+### 关键文件
+- `.env.example`
+- `docker-compose.yml`
+- `backend/src/main/resources/application.yml`
+- `backend/src/main/resources/application-dev.yml`
+- `backend/src/main/resources/application-test.yml`
+- `frontend/.env.development`
+- `frontend/.env.production`
+- `README.md`
+- `ARCHITECTURE.md`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
 
 ### 接口变更
 - 无

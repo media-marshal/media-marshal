@@ -132,7 +132,7 @@ Step 4: TMDB 搜索 → List<MatchResult>（按置信度降序）
 ### 策略模式（文件操作）
 
 `FileOperationStrategy` 接口定义 `execute(source, target)` 合约。
-`RenameService` 通过配置项 `operation.strategy` 动态选择实现。
+`RenameService` 通过 `WatchRule.operation` 动态选择实现。
 新增操作类型只需：①新建实现类 + `@Component` ②无需修改任何现有代码。
 
 ### 适配器模式（元数据来源）

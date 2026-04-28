@@ -22,7 +22,7 @@ import java.util.Locale;
  * API 文档：https://developer.themoviedb.org/reference/intro/getting-started
  *
  * API Key 读取顺序（由 SettingsService 统一处理）：
- *   环境变量 MEDIA_MARSHAL_TMDB_KEY > application.yml > 数据库配置
+ *   环境变量 MEDIA_MARSHAL_TMDB_API_KEY > application.yml > 数据库配置
  *
  * 置信度策略（v1 简化版）：标题相似度 80% + 年份匹配 20%。
  * 后续可替换为更成熟的文本相似度算法，不影响 Pipeline 调用契约。

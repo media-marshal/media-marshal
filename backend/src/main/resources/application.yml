@@ -47,8 +47,6 @@ media-marshal:
     timeout-seconds: 5
 
   watcher:
-    # 已废弃：监控目录由 watch_rule.source_dir 管理，保留仅为兼容旧配置
-    watch-dirs: ${MEDIA_MARSHAL_WATCH_DIRS:}
     # 低于此置信度进入待确认队列（0.0-1.0）
     confidence-threshold: ${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:0.8}
     # ADR-005：文件事件防抖窗口，防止处理正在拷贝中的大文件
@@ -63,7 +61,7 @@ media-marshal:
 
   # ─── 废弃配置项（ADR-002，不再生效）────────────────────────────
   # watcher.watch-dirs / output.*-dir / operation.strategy
-  # 均已升级为 watch_rule 表字段，旧配置项保留注释供参考
+  # 均已升级为 watch_rule 表字段，不再通过 application.yml 或 .env 配置
 
   # Debug 模式：开启后打印详细中间过程日志（guessit 原始结果、TMDB 响应、置信度计算等）
   debug: ${MEDIA_MARSHAL_DEBUG:false}

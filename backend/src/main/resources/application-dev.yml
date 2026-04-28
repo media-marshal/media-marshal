@@ -25,5 +25,3 @@ logging:
 media-marshal:
   parser:
     url: http://192.168.0.160:8000     # parser sidecar 需单独启动：docker compose up parser
-  watcher:
-    watch-dirs: ""                 # 开发时留空，通过 Web UI 配置或手动触发
