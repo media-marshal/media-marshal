@@ -16,7 +16,19 @@
           />
         </el-form-item>
         <el-form-item :label="t('settings.tmdbLanguage')">
-          <el-input v-model="form.tmdbLanguage" placeholder="zh-CN" />
+          <el-select
+            v-model="form.tmdbLanguage"
+            filterable
+            style="width: 100%; max-width: 360px"
+            :placeholder="t('settings.tmdbLanguagePlaceholder')"
+          >
+            <el-option
+              v-for="option in TMDB_LANGUAGE_OPTIONS"
+              :key="option.value"
+              :label="t(option.labelKey)"
+              :value="option.value"
+            />
+          </el-select>
           <div class="form-hint">{{ t('settings.tmdbLanguageHelp') }}</div>
         </el-form-item>
       </el-card>
@@ -63,6 +75,25 @@ import { ElMessage } from 'element-plus'
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const { loading } = storeToRefs(settingsStore)
+
+const TMDB_LANGUAGE_OPTIONS = [
+  { value: 'zh-CN', labelKey: 'settings.tmdbLanguageOptions.zhCN' },
+  { value: 'zh-TW', labelKey: 'settings.tmdbLanguageOptions.zhTW' },
+  { value: 'en-US', labelKey: 'settings.tmdbLanguageOptions.enUS' },
+  { value: 'ja-JP', labelKey: 'settings.tmdbLanguageOptions.jaJP' },
+  { value: 'ko-KR', labelKey: 'settings.tmdbLanguageOptions.koKR' },
+  { value: 'fr-FR', labelKey: 'settings.tmdbLanguageOptions.frFR' },
+  { value: 'de-DE', labelKey: 'settings.tmdbLanguageOptions.deDE' },
+  { value: 'es-ES', labelKey: 'settings.tmdbLanguageOptions.esES' },
+  { value: 'it-IT', labelKey: 'settings.tmdbLanguageOptions.itIT' },
+  { value: 'pt-BR', labelKey: 'settings.tmdbLanguageOptions.ptBR' },
+  { value: 'ru-RU', labelKey: 'settings.tmdbLanguageOptions.ruRU' },
+  { value: 'th-TH', labelKey: 'settings.tmdbLanguageOptions.thTH' },
+  { value: 'vi-VN', labelKey: 'settings.tmdbLanguageOptions.viVN' },
+  { value: 'id-ID', labelKey: 'settings.tmdbLanguageOptions.idID' },
+  { value: 'hi-IN', labelKey: 'settings.tmdbLanguageOptions.hiIN' },
+  { value: 'ar-SA', labelKey: 'settings.tmdbLanguageOptions.arSA' },
+] as const
 
 const form = reactive({
   tmdbApiKey: '',
