@@ -294,6 +294,10 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
+---
+
+---
+
 ## [QueueView 人工确认页面] 2026-04-25
 
 ### 已完成
@@ -1131,6 +1135,47 @@ alwaysApply: false
 - `frontend/src/views/PathsView.vue`
 - `frontend/src/i18n/zh.ts`
 - `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [Compose Alpha / Beta 环境规划] 2026-04-29
+
+### 已完成
+- 统一 compose 中前端服务命名为 `portal`
+  - 服务名由 `frontend` 改为 `portal`
+  - 容器名由 `media-marshal-frontend*` 改为 `media-marshal-portal*`
+  - 端口变量由 `MEDIA_MARSHAL_FRONTEND_PORT` 改为 `MEDIA_MARSHAL_PORTAL_PORT`
+- `docker-compose.alpha.yml` 调整为完整 alpha 测试部署文件
+  - 后端、portal、parser 均使用 `image` 拉取镜像，不在 compose 中构建
+  - 镜像 tag 统一通过 `MEDIA_MARSHAL_IMAGE_TAG` 覆盖，默认 `alpha`
+- `docker-compose.beta.yml` 调整为完整 beta 测试部署文件
+  - 后端、portal、parser 均使用本仓库 Dockerfile 由 compose 构建
+  - 构建产物 tag 默认 `beta`，可通过 `MEDIA_MARSHAL_IMAGE_TAG` 覆盖
+  - 容器名、网络和数据卷去除 `beta` 标记，与正式名称保持一致
+- beta 构建增加可配置镜像加速
+  - `.env.example` 中 `MAVEN_MIRROR_URL` / `NPM_REGISTRY` 留空并补充说明
+  - `.env.local` 中补充阿里 Maven 镜像源和 npm 镜像源
+  - 生产 compose 不传加速参数，仍使用默认 Maven / npm 源
+- 两个测试 compose 文件均复用生产环境的核心配置：端口映射、`/data` 数据目录、`/media` 媒体目录、后端环境变量、parser 健康检查
+- 已运行 `docker compose -f docker-compose.yml config --quiet`、`docker compose -f docker-compose.alpha.yml config --quiet` 与 `docker compose -f docker-compose.beta.yml config --quiet`，均通过
+
+### 关键文件
+- `.env.example`
+- `.env.local`
+- `backend/Dockerfile`
+- `docker-compose.alpha.yml`
+- `docker-compose.beta.yml`
+- `docker-compose.yml`
+- `frontend/Dockerfile`
 
 ### 接口变更
 - 无
