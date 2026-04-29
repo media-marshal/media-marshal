@@ -659,6 +659,54 @@ alwaysApply: false
 
 ---
 
+## [目录浏览面包屑展示移除] 2026-04-29
+
+### 已完成
+- 移除选择监控源目录弹窗中的 `breadcrumb-bar` 面包屑展示
+  - 避免 `/media`、Windows 盘符路径等场景出现重复斜杠或视觉歧义
+  - 保留路径输入框、返回上级、目录列表和底部当前路径预览
+  - 删除不再使用的面包屑计算逻辑、样式和 i18n key
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/components/DirBrowserDialog.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [目录浏览路径工具栏字号优化] 2026-04-29
+
+### 已完成
+- 优化目录选择弹窗顶部 `path-toolbar`
+  - 将路径输入框文字字号调大到 `13px`
+  - 将“根目录 / 盘符”按钮文字字号调大到 `13px`
+  - 保持原有布局尺寸基本不变
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/components/DirBrowserDialog.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [Windows 目录浏览兼容修复] 2026-04-27
 
 ### 已完成

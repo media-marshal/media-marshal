@@ -18,21 +18,6 @@
       </el-button>
     </div>
 
-    <!-- 面包屑路径导航 -->
-    <div class="breadcrumb-bar">
-      <el-icon class="folder-icon"><FolderOpened /></el-icon>
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item
-          v-for="(segment, idx) in breadcrumbs"
-          :key="idx"
-          class="breadcrumb-item"
-          @click="navigateTo(segment.path)"
-        >
-          {{ segment.label || '/' }}
-        </el-breadcrumb-item>
-      </el-breadcrumb>
-    </div>
-
     <!-- 目录列表 -->
     <el-scrollbar height="320px" class="dir-list">
       <div v-if="loading" class="dir-loading">
@@ -116,40 +101,6 @@ const parentPath = ref<string | null>(null)
 const dirs = ref<DirEntry[]>([])
 const loading = ref(false)
 
-/** 将路径拆分为面包屑片段 */
-const breadcrumbs = computed(() => {
-  const path = currentPath.value
-  // 统一斜杠
-  const normalized = path.replace(/\\/g, '/')
-  if (normalized === '/') return [{ label: '/', path: '/' }]
-
-  const windowsDriveMatch = normalized.match(/^([A-Za-z]:)(?:\/(.*))?$/)
-  if (windowsDriveMatch) {
-    const driveRoot = `${windowsDriveMatch[1]}/`
-    const rest = windowsDriveMatch[2] ?? ''
-    const parts = rest.split('/').filter(Boolean)
-    const crumbs = [
-      { label: '/', path: '/' },
-      { label: driveRoot, path: driveRoot },
-    ]
-    let accumulated = driveRoot
-    for (const part of parts) {
-      accumulated += (accumulated.endsWith('/') ? '' : '/') + part
-      crumbs.push({ label: part, path: accumulated })
-    }
-    return crumbs
-  }
-
-  const parts = normalized.split('/').filter(Boolean)
-  const crumbs = [{ label: '/', path: '/' }]
-  let accumulated = ''
-  for (const part of parts) {
-    accumulated += '/' + part
-    crumbs.push({ label: part, path: accumulated })
-  }
-  return crumbs
-})
-
 async function navigateTo(path: string) {
   loading.value = true
   try {
@@ -186,37 +137,9 @@ function handleConfirm() {
   margin-bottom: 10px;
 }
 
-.breadcrumb-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  margin-bottom: 12px;
-  min-height: 36px;
-}
-
-.folder-icon {
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.breadcrumb-item {
-  cursor: pointer;
-}
-
-:deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
-  font-weight: 600;
-  color: #303133;
-}
-
-:deep(.el-breadcrumb__inner) {
-  cursor: pointer !important;
-}
-
-:deep(.el-breadcrumb__inner:hover) {
-  color: var(--el-color-primary) !important;
+.path-toolbar :deep(.el-input__inner),
+.path-toolbar :deep(.el-button) {
+  font-size: 13px;
 }
 
 .dir-list {

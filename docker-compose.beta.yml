@@ -8,6 +8,7 @@ services:
       args:
         MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-}
     image: media-marshal/media-marshal:${MEDIA_MARSHAL_IMAGE_TAG:-beta}
+    pull_policy: build
     container_name: media-marshal
     restart: unless-stopped
     ports:
@@ -39,6 +40,7 @@ services:
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     image: media-marshal/media-marshal-portal:${MEDIA_MARSHAL_IMAGE_TAG:-beta}
+    pull_policy: build
     container_name: media-marshal-portal
     restart: unless-stopped
     ports:
@@ -53,6 +55,7 @@ services:
       context: ./parser
       dockerfile: Dockerfile
     image: media-marshal/media-marshal-parser:${MEDIA_MARSHAL_IMAGE_TAG:-beta}
+    pull_policy: build
     container_name: media-marshal-parser
     restart: unless-stopped
     healthcheck:
