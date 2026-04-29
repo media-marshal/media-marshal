@@ -296,8 +296,6 @@ alwaysApply: false
 
 ---
 
----
-
 ## [QueueView 人工确认页面] 2026-04-25
 
 ### 已完成
@@ -353,8 +351,6 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
-
----
 
 ## [侧边栏待确认徽标对齐优化] 2026-04-27
 
@@ -1224,6 +1220,28 @@ alwaysApply: false
 - `docker-compose.beta.yml`
 - `docker-compose.yml`
 - `frontend/Dockerfile`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [README Compose 参数说明同步] 2026-04-29
+
+### 已完成
+- 按当前 `docker-compose.yml` / `docker-compose.alpha.yml` / `docker-compose.beta.yml` 和 `.env.example` 同步 README 参数说明
+- 英文与中文均新增完整环境变量表，包含参数名、参数解释、默认值、是否必填
+- 补充三份 compose 文件的用途和镜像行为说明
+- 明确监控目录、目标目录、文件操作方式和路径模板在 Web UI 路径设置页面配置
+
+### 关键文件
+- `README.md`
 
 ### 接口变更
 - 无
