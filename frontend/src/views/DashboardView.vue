@@ -36,7 +36,7 @@
     <el-card shadow="never" class="task-table-card">
       <template #header>
         <div class="card-header">
-          <span>最近任务</span>
+          <span>{{ t('dashboard.recentTasks') }}</span>
           <div class="header-actions">
             <el-select v-model="statusFilter" size="small" class="status-filter">
               <el-option :label="t('dashboard.allStatuses')" value="ALL" />
@@ -56,7 +56,7 @@
             >
               {{ t('dashboard.batchDelete') }}
             </el-button>
-            <el-button size="small" @click="fetchTasks()">刷新</el-button>
+            <el-button size="small" @click="fetchTasks()">{{ t('common.refresh') }}</el-button>
           </div>
         </div>
       </template>
@@ -67,13 +67,13 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="42" />
-        <el-table-column prop="sourcePath" label="文件" min-width="300" show-overflow-tooltip />
-        <el-table-column prop="mediaType" label="类型" width="80">
+        <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="mediaType" :label="t('dashboard.mediaType')" width="80">
           <template #default="{ row }">
             {{ row.mediaType ? t(`task.mediaType.${row.mediaType}`) : '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="120">
+        <el-table-column prop="status" :label="t('dashboard.status')" width="120">
           <template #default="{ row }">
             <el-tooltip
               v-if="row.status === 'DONE' && row.targetPath"
@@ -89,18 +89,18 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confirmedTitle" label="匹配标题" width="200" show-overflow-tooltip />
+        <el-table-column prop="confirmedTitle" :label="t('dashboard.matchedTitle')" width="200" show-overflow-tooltip />
         <el-table-column :label="t('dashboard.details')" width="220" show-overflow-tooltip>
           <template #default="{ row }">
             {{ taskDetails(row) }}
           </template>
         </el-table-column>
-        <el-table-column prop="matchConfidence" label="置信度" width="90">
+        <el-table-column prop="matchConfidence" :label="t('dashboard.confidence')" width="90">
           <template #default="{ row }">
             {{ row.matchConfidence != null ? (row.matchConfidence * 100).toFixed(0) + '%' : '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="130">
+        <el-table-column prop="createdAt" :label="t('dashboard.createdAt')" width="130">
           <template #default="{ row }">
             <div class="created-time">
               <span>{{ formatCreatedAt(row.createdAt).date }}</span>
@@ -122,12 +122,21 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="pagination-row">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="filteredTasks.length"
+          layout="total, sizes, prev, pager, next"
+        />
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
@@ -143,16 +152,48 @@ const selectedTasks = ref<MediaTask[]>([])
 const batchDeleting = ref(false)
 const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
+const currentPage = ref(1)
+const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
-const displayedTasks = computed(() => {
-  const filtered = statusFilter.value === 'ALL'
+const filteredTasks = computed(() => {
+  return statusFilter.value === 'ALL'
     ? tasks.value
     : tasks.value.filter((task) => task.status === statusFilter.value)
-  return filtered.slice(0, 20)
+})
+
+const sortedTasks = computed(() => {
+  return [...filteredTasks.value].sort((a, b) => taskTime(b) - taskTime(a))
+})
+
+const displayedTasks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return sortedTasks.value.slice(start, start + pageSize.value)
 })
 
 onMounted(() => fetchTasks())
+
+watch([statusFilter, pageSize], () => {
+  selectedTasks.value = []
+  currentPage.value = 1
+})
+
+watch(currentPage, () => {
+  selectedTasks.value = []
+})
+
+watch(filteredTasks, () => {
+  const maxPage = Math.max(1, Math.ceil(filteredTasks.value.length / pageSize.value))
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage
+  }
+})
+
+function taskTime(task: MediaTask) {
+  const value = task.updatedAt || task.createdAt
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
 
 function statusTagType(status: TaskStatus): TagType | undefined {
   const map: Record<TaskStatus, TagType | undefined> = {
@@ -214,6 +255,8 @@ async function handleDeleteTask(task: MediaTask) {
   deletingId.value = task.id
   try {
     await deleteTask(task.id)
+    const maxPage = Math.max(1, Math.ceil(filteredTasks.value.length / pageSize.value))
+    currentPage.value = Math.min(currentPage.value, maxPage)
     ElMessage.success(t('dashboard.deleteTaskSuccess'))
   } finally {
     deletingId.value = null
@@ -244,6 +287,8 @@ async function handleBatchDelete() {
       await deleteTask(task.id)
     }
     selectedTasks.value = []
+    const maxPage = Math.max(1, Math.ceil(filteredTasks.value.length / pageSize.value))
+    currentPage.value = Math.min(currentPage.value, maxPage)
     ElMessage.success(t('dashboard.batchDeleteSuccess'))
   } finally {
     batchDeleting.value = false
@@ -284,6 +329,12 @@ h2 {
 
 .status-filter {
   width: 150px;
+}
+
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .created-time {

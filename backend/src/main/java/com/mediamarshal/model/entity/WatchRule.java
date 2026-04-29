@@ -79,7 +79,7 @@ public class WatchRule {
     @Column(nullable = false)
     private Boolean generateNfo = false;
 
-    /** v1 保留字段；NULL 表示使用系统默认忽略规则 */
+    /** ADR-011：NULL 表示使用系统默认忽略规则，空字符串表示不启用任何忽略规则。 */
     @Column(columnDefinition = "TEXT")
     private String ignoredFilePatterns;
 
@@ -113,14 +113,22 @@ public class WatchRule {
     }
 
     public List<String> getIgnoredFilePatterns() {
-        return ignoredFilePatterns == null || ignoredFilePatterns.isBlank()
-                ? null
-                : Arrays.stream(ignoredFilePatterns.split("\n")).filter(s -> !s.isBlank()).toList();
+        if (ignoredFilePatterns == null) {
+            return null;
+        }
+        if (ignoredFilePatterns.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(ignoredFilePatterns.split("\n")).filter(s -> !s.isBlank()).toList();
     }
 
     public void setIgnoredFilePatterns(List<String> ignoredFilePatterns) {
-        this.ignoredFilePatterns = ignoredFilePatterns == null || ignoredFilePatterns.isEmpty()
-                ? null
+        if (ignoredFilePatterns == null) {
+            this.ignoredFilePatterns = null;
+            return;
+        }
+        this.ignoredFilePatterns = ignoredFilePatterns.isEmpty()
+                ? ""
                 : String.join("\n", ignoredFilePatterns);
     }
 

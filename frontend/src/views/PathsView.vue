@@ -37,12 +37,12 @@
         <!-- 路径信息 -->
         <div class="path-row">
           <div class="path-block">
-            <div class="path-label">监控源目录</div>
+            <div class="path-label">{{ t('watchRule.sourceDir') }}</div>
             <div class="path-value" :title="rule.sourceDir">{{ rule.sourceDir }}</div>
           </div>
           <el-icon class="path-arrow"><ArrowRight /></el-icon>
           <div class="path-block">
-            <div class="path-label">目标根目录</div>
+            <div class="path-label">{{ t('watchRule.targetDir') }}</div>
             <div class="path-value" :title="rule.targetDir">{{ rule.targetDir }}</div>
           </div>
         </div>
@@ -55,7 +55,9 @@
           <el-tag size="small" type="info">
             {{ t('watchRule.operationOptions.MOVE') }}
           </el-tag>
-          <el-tag v-if="!rule.enabled" size="small" type="warning">已停用</el-tag>
+          <el-tag v-if="!rule.enabled" size="small" type="warning">
+            {{ t('watchRule.disabled') }}
+          </el-tag>
         </div>
 
         <!-- 路径模板摘要 -->
@@ -92,10 +94,10 @@
           </el-button>
           <div class="card-actions-right">
             <el-button link type="primary" :icon="Edit" @click="openDialog(rule)">
-              编辑
+              {{ t('common.edit') }}
             </el-button>
             <el-button link type="danger" :icon="Delete" @click="handleDelete(rule)">
-              删除
+              {{ t('common.delete') }}
             </el-button>
           </div>
         </div>
@@ -122,7 +124,7 @@
             <div class="form-panel-title">{{ t('watchRule.basicSettings') }}</div>
 
             <el-form-item :label="t('watchRule.name')" prop="name">
-              <el-input v-model="form.name" placeholder="如：电影库、剧集收录" />
+              <el-input v-model="form.name" :placeholder="t('watchRule.namePlaceholder')" />
             </el-form-item>
 
             <el-form-item :label="t('watchRule.sourceDir')" prop="sourceDir">
@@ -283,17 +285,50 @@
                   <el-switch v-model="form.cleanupEmptyDirs" />
                 </div>
                 <div class="ignored-patterns">
-                  <div class="switch-title">{{ t('watchRule.ignoredFilePatterns') }}</div>
-                  <div class="switch-desc">{{ t('watchRule.ignoredFilePatternsHelp') }}</div>
+                  <div class="ignored-header">
+                    <div>
+                      <div class="switch-title">{{ t('watchRule.ignoredFilePatterns') }}</div>
+                      <div class="switch-desc">{{ t('watchRule.ignoredFilePatternsHelp') }}</div>
+                    </div>
+                    <div class="ignored-actions">
+                      <el-tag v-if="form.ignoredFilePatterns === null" size="small" type="success">
+                        {{ t('watchRule.usingDefaultIgnoredPatterns') }}
+                      </el-tag>
+                      <el-button size="small" link type="primary" @click="ignoredPatternsEditing = !ignoredPatternsEditing">
+                        {{ ignoredPatternsEditing ? t('common.done') : t('common.edit') }}
+                      </el-button>
+                    </div>
+                  </div>
                   <div class="ignored-tags">
                     <el-tag
-                      v-for="pattern in defaultIgnoredPatterns"
+                      v-for="pattern in effectiveIgnoredPatterns"
                       :key="pattern"
                       size="small"
                       type="info"
+                      :closable="ignoredPatternsEditing"
+                      @close="removeIgnoredPattern(pattern)"
                     >
                       {{ pattern }}
                     </el-tag>
+                    <el-text v-if="effectiveIgnoredPatterns.length === 0" size="small" type="info">
+                      {{ t('watchRule.noIgnoredPatterns') }}
+                    </el-text>
+                  </div>
+                  <div v-if="ignoredPatternsEditing" class="ignored-editor">
+                    <div class="ignored-input-row">
+                      <el-input
+                        v-model="ignoredPatternInput"
+                        size="small"
+                        :placeholder="t('watchRule.ignoredPatternPlaceholder')"
+                        @keyup.enter="addIgnoredPattern"
+                      />
+                      <el-button size="small" type="primary" @click="addIgnoredPattern">
+                        {{ t('common.add') }}
+                      </el-button>
+                    </div>
+                    <el-button size="small" link type="warning" @click="restoreDefaultIgnoredPatterns">
+                      {{ t('watchRule.restoreDefaultIgnoredPatterns') }}
+                    </el-button>
                   </div>
                 </div>
               </div>
@@ -342,6 +377,8 @@ const dialogVisible = ref(false)
 const editingRule = ref<WatchRule | null>(null)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
+const ignoredPatternsEditing = ref(false)
+const ignoredPatternInput = ref('')
 
 // ─── 目录浏览器 ──────────────────────────────────────────────────
 const dirBrowserVisible = ref(false)
@@ -491,16 +528,18 @@ const defaultForm = (): WatchRuleRequest => ({
 const form = reactive<WatchRuleRequest>(defaultForm())
 
 const formRules: FormRules = {
-  name: [{ required: true, message: '请输入规则名称', trigger: 'blur' }],
-  sourceDir: [{ required: true, message: '请输入监控源目录', trigger: 'blur' }],
-  targetDir: [{ required: true, message: '请输入目标根目录', trigger: 'blur' }],
+  name: [{ required: true, message: t('watchRule.validation.nameRequired'), trigger: 'blur' }],
+  sourceDir: [{ required: true, message: t('watchRule.validation.sourceDirRequired'), trigger: 'blur' }],
+  targetDir: [{ required: true, message: t('watchRule.validation.targetDirRequired'), trigger: 'blur' }],
   mediaType: [{ required: true }],
   operation: [{ required: true }],
 }
 
 const mediaTypeOptions = [{ value: 'AUTO' }, { value: 'MOVIE' }, { value: 'TV_SHOW' }]
 const operationOptions = [{ value: 'MOVE' }]
-const defaultIgnoredPatterns = ['.*', 'Thumbs.db', 'desktop.ini', '*.part', '*.tmp', '*.crdownload', '*.lock', '~$*']
+const defaultIgnoredPatterns = ['.DS_Store', 'Thumbs.db', 'desktop.ini', '*.part', '*.tmp', '*.crdownload', '*.lock', '~$*', '.*', '__MACOSX/', '@eaDir/']
+
+const effectiveIgnoredPatterns = computed(() => form.ignoredFilePatterns ?? defaultIgnoredPatterns)
 
 // ─── 生命周期 ────────────────────────────────────────────────────
 onMounted(fetchRules)
@@ -524,6 +563,8 @@ function openDialog(rule?: WatchRule) {
   // 初始化模板状态
   resetTemplateState('movie', rule?.moviePathTemplate)
   resetTemplateState('tv', rule?.tvPathTemplate)
+  ignoredPatternsEditing.value = false
+  ignoredPatternInput.value = ''
 
   dialogVisible.value = true
   formRef.value?.clearValidate()
@@ -604,6 +645,34 @@ function onDirSelected(path: string) {
   } else {
     form.targetDir = path
   }
+}
+
+function addIgnoredPattern() {
+  const pattern = ignoredPatternInput.value.trim()
+  if (!pattern) return
+
+  const current = form.ignoredFilePatterns === null
+    ? [...defaultIgnoredPatterns]
+    : [...form.ignoredFilePatterns]
+  if (!current.includes(pattern)) {
+    current.push(pattern)
+  }
+  form.ignoredFilePatterns = current
+  ignoredPatternInput.value = ''
+}
+
+function removeIgnoredPattern(pattern: string) {
+  if (form.ignoredFilePatterns === null) {
+    ElMessage.info(t('watchRule.removeDefaultIgnoredPatternTip'))
+    form.ignoredFilePatterns = defaultIgnoredPatterns.filter(item => item !== pattern)
+    return
+  }
+  form.ignoredFilePatterns = form.ignoredFilePatterns.filter(item => item !== pattern)
+}
+
+function restoreDefaultIgnoredPatterns() {
+  form.ignoredFilePatterns = null
+  ignoredPatternInput.value = ''
 }
 
 function mediaTypeTagType(type: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined {
@@ -915,11 +984,34 @@ h2 {
   padding-top: 10px;
 }
 
+.ignored-header,
+.ignored-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ignored-actions {
+  flex-shrink: 0;
+  align-items: center;
+}
+
 .ignored-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.ignored-editor {
+  margin-top: 10px;
+}
+
+.ignored-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 @media (max-width: 980px) {

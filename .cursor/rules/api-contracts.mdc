@@ -163,7 +163,7 @@ interface WatchRule {
   moveAssociatedFiles: boolean
   cleanupEmptyDirs: boolean
   generateNfo: boolean
-  ignoredFilePatterns: string[] | null  // v1 为系统默认忽略规则，前端只读展示
+  ignoredFilePatterns: string[] | null  // 可编辑忽略规则；null = 使用系统默认，[] = 不启用任何忽略规则
   userId: number | null            // v1 始终为 null，多用户版本启用
   createdAt: string
   updatedAt: string
@@ -184,11 +184,12 @@ interface RuleRequest {
   moveAssociatedFiles?: boolean    // 不填默认 true
   cleanupEmptyDirs?: boolean       // 不填默认 false
   generateNfo?: boolean            // 不填默认 false
-  ignoredFilePatterns?: string[] | null // v1 可不传，使用系统默认忽略规则
+  ignoredFilePatterns?: string[] | null // 完整忽略规则列表；传 null = 恢复系统默认，传 [] = 不启用任何忽略规则
 }
 ```
 
 > v1 后端枚举保留未来扩展值，但前端路径设置页只允许用户选择 `MOVE`。
+> 忽略规则支持文件名、通配符和目录规则（如 `sample/`）；命中规则的文件或目录会被静默忽略，不生成 `SKIPPED` 任务。
 
 ---
 

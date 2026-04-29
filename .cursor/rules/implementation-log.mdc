@@ -1075,3 +1075,68 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+
+---
+
+## [ADR-011 WatchRule 忽略规则与任务分页] 2026-04-29
+
+### 已完成
+- WatchRule `ignoredFilePatterns` 存储语义调整：
+  - `null`：使用系统默认忽略规则
+  - `[]`：不启用任何忽略规则
+  - 非空数组：使用规则自己的完整忽略规则列表
+- 后端新增统一忽略规则匹配逻辑，实时监听和手动全量扫描共用
+- 支持文件名、通配符、隐藏文件和目录规则；被忽略目录不会递归注册或扫描子树
+- 路径设置页将忽略规则从只读展示升级为可编辑：
+  - 展示当前生效规则
+  - 新增规则
+  - 删除规则
+  - 恢复系统默认
+  - 删除默认规则时提示会产生 `SKIPPED` 记录
+- Dashboard 最近任务按更新时间 / 创建时间倒序展示
+- Dashboard 最近任务新增本地分页、每页条数切换、页码切换
+- 状态筛选、单条删除、批量删除与分页联动，删除后自动修正当前页
+- 同步更新 API 契约中 `ignoredFilePatterns` 字段说明
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/WatchRule.java`
+- `backend/src/main/java/com/mediamarshal/service/watcher/FileWatcherService.java`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 复用现有 `POST /api/watch-rules` 与 `PUT /api/watch-rules/{id}`
+- 字段语义变更：`ignoredFilePatterns` 现在可编辑；`null` 表示系统默认，`[]` 表示禁用忽略规则
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [ADR-011 i18n 文案修复] 2026-04-29
+
+### 已完成
+- 为 Element Plus 增加 `el-config-provider`，分页组件内置文案跟随当前语言切换
+- 修复路径设置页规则卡片操作按钮、禁用标签、路径标签、规则名称占位符、校验提示的硬编码中文
+- 确认 Dashboard 最近任务列表新增分页与列名文案均走 vue-i18n
+
+### 关键文件
+- `frontend/src/App.vue`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无

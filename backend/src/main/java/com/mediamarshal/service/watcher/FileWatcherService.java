@@ -15,13 +15,18 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,6 +67,20 @@ public class FileWatcherService {
 
     private static final List<String> GENERIC_COVER_NAMES = List.of(
             "poster.jpg", "folder.jpg", "cover.jpg"
+    );
+
+    private static final List<String> DEFAULT_IGNORED_PATTERNS = List.of(
+            ".DS_Store",
+            "Thumbs.db",
+            "desktop.ini",
+            "*.part",
+            "*.tmp",
+            "*.crdownload",
+            "*.lock",
+            "~$*",
+            ".*",
+            "__MACOSX/",
+            "@eaDir/"
     );
 
     private final WatchRuleRepository watchRuleRepository;
@@ -153,9 +172,25 @@ public class FileWatcherService {
                 rule.getId(), rule.getName(), root);
 
         ScanCounter counter = new ScanCounter();
-        try (Stream<Path> stream = Files.walk(root)) {
-            stream.filter(Files::isRegularFile)
-                    .forEach(file -> scanFile(file.toAbsolutePath().normalize(), rule, counter));
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    Path normalized = dir.toAbsolutePath().normalize();
+                    if (!normalized.equals(root) && isIgnored(normalized, rule)) {
+                        counter.skipped++;
+                        log.debug("Full scan ignored directory subtree: {}", normalized);
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    scanFile(file.toAbsolutePath().normalize(), rule, counter);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
             log.info("Full scan completed: ruleId={}, scanned={}, queued={}, skipped={}",
                     rule.getId(), counter.scanned, counter.queued, counter.skipped);
         } catch (IOException e) {
@@ -167,8 +202,13 @@ public class FileWatcherService {
 
     private void scanFile(Path file, WatchRule rule, ScanCounter counter) {
         counter.scanned++;
+        if (isIgnored(file, rule)) {
+            counter.skipped++;
+            return;
+        }
+
         FileCategory category = categorizeFile(file);
-        if (category == FileCategory.IGNORED || category == FileCategory.ASSOCIATED) {
+        if (category == FileCategory.ASSOCIATED) {
             counter.skipped++;
             return;
         }
@@ -220,9 +260,20 @@ public class FileWatcherService {
             return;
         }
 
-        try (Stream<Path> stream = Files.walk(root)) {
-            stream.filter(Files::isDirectory)
-                    .forEach(dir -> registerDirectory(dir.toAbsolutePath().normalize(), rule));
+        Path normalizedRoot = root.toAbsolutePath().normalize();
+        try {
+            Files.walkFileTree(normalizedRoot, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    Path normalized = dir.toAbsolutePath().normalize();
+                    if (!normalized.equals(normalizedRoot) && isIgnored(normalized, rule)) {
+                        log.debug("Ignored watch directory subtree, not registering: {}", normalized);
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    registerDirectory(normalized, rule);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
         } catch (IOException e) {
             log.error("Failed to recursively register watch directory: {}", root, e);
         }
@@ -303,6 +354,11 @@ public class FileWatcherService {
             log.debug("File event: kind={}, path={}, rule={}", kind.name(), fullPath, rule.getName());
         }
 
+        if (isIgnored(fullPath, rule)) {
+            log.debug("Ignoring path by WatchRule ignoredFilePatterns: {}", fullPath);
+            return;
+        }
+
         // 运行期间若收到新目录创建事件，立即递归注册，确保后续子文件可被检测。
         if (kind == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(fullPath)) {
             log.info("New directory detected, registering recursively: {} (rule='{}')",
@@ -317,11 +373,6 @@ public class FileWatcherService {
         }
 
         FileCategory category = categorizeFile(fullPath);
-        if (category == FileCategory.IGNORED) {
-            log.debug("Ignoring system/noise file: {}", fullPath);
-            return;
-        }
-
         if (category == FileCategory.ASSOCIATED) {
             log.debug("Ignoring associated file until main video completes: {}", fullPath);
             return;
@@ -465,17 +516,6 @@ public class FileWatcherService {
         String name = path.getFileName().toString();
         String lowerName = name.toLowerCase();
 
-        if (name.startsWith(".")
-                || lowerName.equals("thumbs.db")
-                || lowerName.equals("desktop.ini")
-                || lowerName.endsWith(".part")
-                || lowerName.endsWith(".tmp")
-                || lowerName.endsWith(".crdownload")
-                || lowerName.endsWith(".lock")
-                || name.startsWith("~$")) {
-            return FileCategory.IGNORED;
-        }
-
         if (isVideoFile(path)) {
             return FileCategory.VIDEO;
         }
@@ -514,6 +554,80 @@ public class FileWatcherService {
         return dot > 0 ? filename.substring(0, dot) : filename;
     }
 
+    private boolean isIgnored(Path path, WatchRule rule) {
+        List<String> patterns = effectiveIgnoredPatterns(rule);
+        if (patterns.isEmpty()) {
+            return false;
+        }
+
+        Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
+        Path normalized = path.toAbsolutePath().normalize();
+        Path relative = root.equals(normalized) || !normalized.startsWith(root)
+                ? normalized.getFileName()
+                : root.relativize(normalized);
+
+        if (relative == null) {
+            return false;
+        }
+
+        for (String pattern : patterns) {
+            if (matchesIgnorePattern(relative, pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> effectiveIgnoredPatterns(WatchRule rule) {
+        List<String> patterns = rule.getIgnoredFilePatterns();
+        if (patterns == null) {
+            return DEFAULT_IGNORED_PATTERNS;
+        }
+        return patterns.stream()
+                .map(String::trim)
+                .filter(pattern -> !pattern.isBlank())
+                .toList();
+    }
+
+    private boolean matchesIgnorePattern(Path relativePath, String pattern) {
+        String normalizedPattern = pattern.replace("\\", "/").trim();
+        if (normalizedPattern.isBlank()) {
+            return false;
+        }
+
+        if (normalizedPattern.endsWith("/")) {
+            String directoryPattern = normalizedPattern.substring(0, normalizedPattern.length() - 1);
+            return pathSegments(relativePath).stream()
+                    .anyMatch(segment -> matchesNamePattern(segment, directoryPattern));
+        }
+
+        Path fileName = relativePath.getFileName();
+        return fileName != null && matchesNamePattern(fileName.toString(), normalizedPattern);
+    }
+
+    private List<String> pathSegments(Path relativePath) {
+        List<String> segments = new ArrayList<>();
+        for (Path segment : relativePath) {
+            segments.add(segment.toString());
+        }
+        return segments;
+    }
+
+    private boolean matchesNamePattern(String name, String pattern) {
+        String normalizedName = name.toLowerCase();
+        String normalizedPattern = pattern.toLowerCase();
+        if (normalizedPattern.equals(normalizedName)) {
+            return true;
+        }
+        try {
+            PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + normalizedPattern);
+            return matcher.matches(Paths.get(normalizedName));
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid ignored file pattern skipped: pattern='{}', error={}", pattern, e.getMessage());
+            return false;
+        }
+    }
+
     private static class ScanCounter {
         private int scanned;
         private int queued;
@@ -523,7 +637,6 @@ public class FileWatcherService {
     private enum FileCategory {
         VIDEO,
         ASSOCIATED,
-        IGNORED,
         MISC
     }
 }
