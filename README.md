@@ -23,12 +23,11 @@ Media Marshal watches your download directories and automatically:
 ```bash
 # 1. Copy environment template
 cp .env.example .env
-# Edit .env and set MEDIA_MARSHAL_TMDB_API_KEY
 
 # 2. Start all services
 docker compose up -d
 
-# 3. Open Web UI
+# 3. Open Web UI and set the TMDB API key in System Settings
 open http://localhost:3000
 ```
 
@@ -37,7 +36,6 @@ open http://localhost:3000
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `MEDIA_DIRS` | Host media directory mounted into the container. Production and beta mount it to `/media`; alpha mounts it to `/Resources`. | Production/beta: `/media`; alpha: `/Resources` | Yes |
-| `MEDIA_MARSHAL_TMDB_API_KEY` | TMDB API v3 key. Required for metadata matching and manual search. | empty | Yes |
 | `MEDIA_MARSHAL_CONFIDENCE_THRESHOLD` | Auto-processing confidence threshold. Matches below this value enter the manual confirmation queue. Valid range: `0.0` to `1.0`. | `0.8` | No |
 | `MEDIA_MARSHAL_DEBUG` | Enables verbose backend debug logs. Currently passed by alpha and beta compose files. | `false` | No |
 | `MEDIA_MARSHAL_EMAIL_ENABLED` | Enables email notifications. | `false` | No |
@@ -53,6 +51,7 @@ open http://localhost:3000
 | `NPM_REGISTRY` | Optional npm registry used only by beta Docker builds. Leave empty to use the default npm registry. | empty | No |
 
 Watch directories, target directories, and file operations are configured in the Web UI path settings page.
+The TMDB API key is configured only in the Web UI system settings page; it is no longer read from environment variables.
 
 ### Compose Files
 
@@ -91,12 +90,11 @@ Media Marshal 监控您的下载目录，自动完成：
 ```bash
 # 1. 复制环境变量模板
 cp .env.example .env
-# 编辑 .env，填写 MEDIA_MARSHAL_TMDB_API_KEY
 
 # 2. 启动所有服务
 docker compose up -d
 
-# 3. 打开 Web UI
+# 3. 打开 Web UI，并在系统设置中填写 TMDB API Key
 open http://localhost:3000
 ```
 
@@ -118,7 +116,6 @@ cd frontend && npm install && npm run dev
 | 参数名 | 参数解释 | 默认值 | 是否必填 |
 |--------|----------|--------|----------|
 | `MEDIA_DIRS` | 宿主机媒体目录挂载路径。生产和 beta 会挂载到容器 `/media`；alpha 会挂载到容器 `/Resources`。 | 生产/beta：`/media`；alpha：`/Resources` | 是 |
-| `MEDIA_MARSHAL_TMDB_API_KEY` | TMDB API v3 Key，用于元数据匹配和人工搜索。 | 空 | 是 |
 | `MEDIA_MARSHAL_CONFIDENCE_THRESHOLD` | 自动处理置信度阈值，低于该值进入人工确认队列。取值范围：`0.0` 到 `1.0`。 | `0.8` | 否 |
 | `MEDIA_MARSHAL_DEBUG` | 是否开启后端详细调试日志。当前 alpha 和 beta compose 会传入该变量。 | `false` | 否 |
 | `MEDIA_MARSHAL_EMAIL_ENABLED` | 是否开启邮件通知。 | `false` | 否 |
@@ -134,6 +131,7 @@ cd frontend && npm install && npm run dev
 | `NPM_REGISTRY` | beta Docker 构建时可选的 npm registry。留空时使用 npm 官方默认源。 | 空 | 否 |
 
 监控目录、目标目录、文件操作方式、路径模板等整理规则在 Web UI 的路径设置页面中配置。
+TMDB API Key 仅在 Web UI 的系统设置页面中配置，不再从环境变量读取。
 
 ### Compose 文件
 

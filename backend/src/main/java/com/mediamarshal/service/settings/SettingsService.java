@@ -8,7 +8,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
  * 配置管理服务
@@ -16,9 +15,11 @@ import java.util.Optional;
  * 统一入口读取和写入系统配置，屏蔽三个配置源的优先级差异。
  *
  * 优先级（从高到低）：
- *   1. 环境变量：MEDIA_MARSHAL_{KEY_UPPER_SNAKE}（如 MEDIA_MARSHAL_TMDB_API_KEY）
+ *   1. 环境变量：MEDIA_MARSHAL_{KEY_UPPER_SNAKE}
  *   2. application.yml：media-marshal.{key}
  *   3. 数据库（app_setting 表，由 Web UI 写入）
+ *
+ * 例外：tmdb.api-key 只能通过 Web UI 写入数据库，避免测试 / 部署环境变量覆盖页面配置。
  *
  * 所有模块通过本服务读取配置，不得直接读取 @Value 或 Environment（统一管理便于调试）。
  */
@@ -37,7 +38,13 @@ public class SettingsService {
      * @param defaultValue 所有来源均未配置时的默认值
      */
     public String get(String key, String defaultValue) {
-        // 1. 环境变量：tmdb.api-key -> MEDIA_MARSHAL_TMDB_API_KEY
+        if ("tmdb.api-key".equals(key)) {
+            return settingRepository.findByKey(key)
+                    .map(AppSetting::getValue)
+                    .orElse(defaultValue);
+        }
+
+        // 1. 环境变量。TMDB API Key 是敏感业务配置，只允许从 Web UI / 数据库读取。
         String envKey = "MEDIA_MARSHAL_" + key.replace(".", "_").replace("-", "_").toUpperCase();
         String envValue = System.getenv(envKey);
         if (envValue != null && !envValue.isBlank()) {

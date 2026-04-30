@@ -31,13 +31,14 @@ server:
 
 # ─────────────────────────────────────────────
 # MediaMarshal 应用配置
-# 所有配置均可被同名环境变量覆盖（优先级最高）
+# 除明确仅允许 Web UI 设置的敏感项外，配置可被同名环境变量覆盖
 # 环境变量命名规则：MEDIA_MARSHAL_{KEY_UPPER_SNAKE}
-# 示例：media-marshal.tmdb.api-key -> MEDIA_MARSHAL_TMDB_API_KEY
+# 示例：media-marshal.debug -> MEDIA_MARSHAL_DEBUG
 # ─────────────────────────────────────────────
 media-marshal:
   tmdb:
-    api-key: ${MEDIA_MARSHAL_TMDB_API_KEY:}
+    # TMDB API Key 仅通过 Web UI 写入 app_setting，不再从环境变量读取。
+    api-key:
     base-url: https://api.themoviedb.org/3
     # 返回语言，zh-CN 优先，fallback 到 en-US
     language: zh-CN
