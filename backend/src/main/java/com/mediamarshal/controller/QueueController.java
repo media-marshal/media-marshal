@@ -25,6 +25,7 @@ import java.util.Map;
  *
  * GET  /api/queue              查询所有 AWAITING_CONFIRMATION 任务
  * POST /api/queue/{id}/confirm 人工确认：指定 TMDB ID 后继续处理
+ * POST /api/queue/batch-confirm 批量人工确认
  * POST /api/queue/{id}/skip    跳过此任务（标记为 SKIPPED，不处理）
  */
 @RestController
@@ -49,6 +50,26 @@ public class QueueController {
     public ApiResponse<Void> confirm(@PathVariable Long id, @RequestBody ConfirmRequest request) {
         pipeline.confirm(id, request.getTmdbId(), request.getMediaType());
         return ApiResponse.ok();
+    }
+
+    @PostMapping("/batch-confirm")
+    public ApiResponse<BatchConfirmResponse> batchConfirm(@RequestBody BatchConfirmRequest request) {
+        List<BatchConfirmResult> results = new ArrayList<>();
+        for (ConfirmItem item : request.getItems()) {
+            try {
+                pipeline.confirm(
+                        item.getTaskId(),
+                        item.getTmdbId(),
+                        item.getMediaType(),
+                        MediaTask.ConfirmationSource.MANUAL_BATCH
+                );
+                results.add(BatchConfirmResult.success(item.getTaskId()));
+            } catch (Exception e) {
+                log.warn("Batch confirm item failed: taskId={}, error={}", item.getTaskId(), e.getMessage());
+                results.add(BatchConfirmResult.fail(item.getTaskId(), e.getMessage()));
+            }
+        }
+        return ApiResponse.ok(new BatchConfirmResponse(results));
     }
 
     @GetMapping("/{id}/candidates")
@@ -139,5 +160,33 @@ public class QueueController {
         private Long tmdbId;
         @NotNull
         private String mediaType;
+    }
+
+    @Data
+    public static class BatchConfirmRequest {
+        private List<ConfirmItem> items = List.of();
+    }
+
+    @Data
+    public static class ConfirmItem {
+        @NotNull
+        private Long taskId;
+        @NotNull
+        private Long tmdbId;
+        @NotNull
+        private String mediaType;
+    }
+
+    public record BatchConfirmResponse(List<BatchConfirmResult> results) {
+    }
+
+    public record BatchConfirmResult(Long taskId, boolean success, String message) {
+        static BatchConfirmResult success(Long taskId) {
+            return new BatchConfirmResult(taskId, true, null);
+        }
+
+        static BatchConfirmResult fail(Long taskId, String message) {
+            return new BatchConfirmResult(taskId, false, message);
+        }
     }
 }

@@ -57,6 +57,17 @@ export default {
     rank: 'Pick #{rank}',
     noPoster: 'No Poster',
     noOverview: 'No overview available.',
+    selectPageRecommended: 'Select Current Page Recommendations',
+    clearPageSelection: 'Clear Current Page Selection',
+    batchConfirm: 'Batch Confirm ({count})',
+    pageSelectionHint: 'Batch actions only affect selected tasks on the current page',
+    sameCandidateHint: '{count} tasks on this page are recommended as {title}',
+    selectThisGroup: 'Select This Group',
+    batchConfirmTitle: 'Batch Confirm',
+    batchConfirmAction: 'Confirm and Continue',
+    batchConfirmMessage: 'This will confirm {count} tasks. {lowConfidenceCount} selected candidates are below 60% confidence. The files will continue organizing and this action cannot be directly undone.',
+    batchConfirmResult: 'Batch confirm completed: {success} succeeded, {failed} failed',
+    batchConfirmUnknownError: 'Batch confirm failed',
   },
   task: {
     status: {

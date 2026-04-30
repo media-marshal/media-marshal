@@ -57,6 +57,17 @@ export default {
     rank: '推荐 #{rank}',
     noPoster: '暂无海报',
     noOverview: '暂无简介',
+    selectPageRecommended: '选择当前页系统推荐',
+    clearPageSelection: '清空当前页选择',
+    batchConfirm: '批量确认（{count}）',
+    pageSelectionHint: '批量操作仅作用于当前页已选择任务',
+    sameCandidateHint: '当前页有 {count} 个任务推荐为 {title}',
+    selectThisGroup: '选择这一组',
+    batchConfirmTitle: '批量确认',
+    batchConfirmAction: '确认并继续整理',
+    batchConfirmMessage: '本次将确认 {count} 个任务，其中 {lowConfidenceCount} 个候选置信度低于 60%。确认后会继续文件整理，操作不可直接撤销。',
+    batchConfirmResult: '批量确认完成：成功 {success} 个，失败 {failed} 个',
+    batchConfirmUnknownError: '批量确认失败',
   },
   task: {
     status: {

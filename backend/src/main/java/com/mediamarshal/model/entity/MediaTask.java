@@ -61,6 +61,11 @@ public class MediaTask {
     /** 匹配置信度 0.0-1.0，低于阈值进入 AWAITING_CONFIRMATION */
     private Double matchConfidence;
 
+    /** 元数据确认来源，用于区分自动采纳、单条人工确认和批量人工确认。 */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private ConfirmationSource confirmationSource;
+
     /**
      * 触发此任务的监控规则 ID（FK → watch_rule.id，ADR-002）
      * 用于 RenameService 查询目标目录和路径模板
@@ -112,5 +117,11 @@ public class MediaTask {
     public enum MediaType {
         MOVIE,
         TV_SHOW
+    }
+
+    public enum ConfirmationSource {
+        AUTO_MATCH,
+        MANUAL_SINGLE,
+        MANUAL_BATCH
     }
 }

@@ -130,6 +130,8 @@ public class MediaProcessPipeline {
             candidateRepository.save(topCandidate);
             MatchResult topMatch = toMatchResult(topCandidate);
             applyMatchToTask(task, topMatch);
+            task.setConfirmationSource(MediaTask.ConfirmationSource.AUTO_MATCH);
+            taskRepository.save(task);
             continueAfterMetadataConfirmed(task, topMatch);
 
         } catch (Exception e) {
@@ -160,6 +162,11 @@ public class MediaProcessPipeline {
      */
     @SuppressWarnings("null")
     public void confirm(Long taskId, Long tmdbId, String mediaType) {
+        confirm(taskId, tmdbId, mediaType, MediaTask.ConfirmationSource.MANUAL_SINGLE);
+    }
+
+    @SuppressWarnings("null")
+    public void confirm(Long taskId, Long tmdbId, String mediaType, MediaTask.ConfirmationSource confirmationSource) {
         MediaTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
 
@@ -176,6 +183,8 @@ public class MediaProcessPipeline {
 
         MatchResult match = metadataMatcher.getById(String.valueOf(tmdbId), confirmedType.name());
         applyMatchToTask(task, match);
+        task.setConfirmationSource(confirmationSource);
+        taskRepository.save(task);
         continueAfterMetadataConfirmed(task, match);
     }
 

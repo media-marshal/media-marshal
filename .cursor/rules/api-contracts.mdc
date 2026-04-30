@@ -38,6 +38,7 @@ interface MediaTask {
   tmdbId: number | null
   confirmedTitle: string | null
   confirmedYear: number | null
+  confirmationSource: 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | null
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
   errorMessage: string | null       // status=FAILED 时说明失败原因，如目标文件冲突
@@ -60,6 +61,7 @@ interface MediaTask {
 | GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
 | GET | `/api/queue/{id}/search?q={keyword}` | 用户手动重新搜索 TMDB（不写入候选表）；纯数字先按 TMDB ID 查询再按关键词搜索，非数字仅按关键词搜索 | — | `MatchResult[]` |
 | POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理 | `ConfirmRequest` | — |
+| POST | `/api/queue/batch-confirm` | 批量人工确认；逐条处理，单条失败不回滚整个批次 | `BatchConfirmRequest` | `BatchConfirmResponse` |
 | POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 SKIPPED，写入 `skipReason`） | — | — |
 
 ### ConfirmRequest
@@ -69,6 +71,30 @@ interface ConfirmRequest {
   mediaType: 'MOVIE' | 'TV_SHOW'
 }
 ```
+
+### BatchConfirmRequest
+```typescript
+interface BatchConfirmRequest {
+  items: Array<{
+    taskId: number
+    tmdbId: number
+    mediaType: 'MOVIE' | 'TV_SHOW'
+  }>
+}
+```
+
+### BatchConfirmResponse
+```typescript
+interface BatchConfirmResponse {
+  results: Array<{
+    taskId: number
+    success: boolean
+    message: string | null
+  }>
+}
+```
+
+> 人工单条确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_SINGLE`；批量确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_BATCH`。系统高置信度自动采纳时 `confirmationSource=AUTO_MATCH`。
 
 ### TaskCandidate
 ```typescript

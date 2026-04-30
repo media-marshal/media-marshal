@@ -15,6 +15,7 @@ export type TaskStatus =
   | 'SKIPPED'
 
 export type MediaType = 'MOVIE' | 'TV_SHOW'
+export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH'
 
 export interface MediaTask {
   id: number
@@ -30,6 +31,7 @@ export interface MediaTask {
   tmdbId: number | null
   confirmedTitle: string | null
   confirmedYear: number | null
+  confirmationSource: ConfirmationSource | null
   matchConfidence: number | null
   operationType: string | null
   errorMessage: string | null
@@ -74,6 +76,22 @@ export interface MatchResult {
   overview: string | null
   posterUrl: string | null
   confidence: number | null
+}
+
+export interface BatchConfirmItem {
+  taskId: number
+  tmdbId: number
+  mediaType: MediaType
+}
+
+export interface BatchConfirmResult {
+  taskId: number
+  success: boolean
+  message: string | null
+}
+
+export interface BatchConfirmResponse {
+  results: BatchConfirmResult[]
 }
 
 // ─── WebSocket 事件 ──────────────────────────────────────────────

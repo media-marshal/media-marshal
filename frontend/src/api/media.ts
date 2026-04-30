@@ -1,5 +1,5 @@
 import http from './http'
-import type { ApiResponse, MatchResult, MediaTask, MediaType, TaskCandidate, TaskStatus } from '@/types'
+import type { ApiResponse, BatchConfirmItem, BatchConfirmResponse, MatchResult, MediaTask, MediaType, TaskCandidate, TaskStatus } from '@/types'
 
 export const mediaApi = {
   listTasks(status?: TaskStatus) {
@@ -35,6 +35,12 @@ export const mediaApi = {
     return http.post<ApiResponse<void>>(`/api/queue/${id}/confirm`, {
       tmdbId,
       mediaType,
+    })
+  },
+
+  batchConfirm(items: BatchConfirmItem[]) {
+    return http.post<ApiResponse<BatchConfirmResponse>>('/api/queue/batch-confirm', {
+      items,
     })
   },
 

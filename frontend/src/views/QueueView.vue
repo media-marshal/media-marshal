@@ -13,7 +13,49 @@
     <el-empty v-if="!loading && queueTasks.length === 0" :description="t('queue.empty')" />
 
     <div v-else class="queue-list" v-loading="loading">
-      <el-card v-for="task in queueTasks" :key="task.id" class="queue-card" shadow="never">
+      <div class="batch-toolbar">
+        <div class="batch-actions">
+          <el-button size="small" :disabled="!canSelectCurrentPageRecommended" @click="selectCurrentPageRecommended">
+            {{ t('queue.selectPageRecommended') }}
+          </el-button>
+          <el-button size="small" @click="clearCurrentPageSelection">
+            {{ t('queue.clearPageSelection') }}
+          </el-button>
+          <el-button
+            size="small"
+            type="primary"
+            :loading="batchConfirming"
+            :disabled="currentPageBatchItems.length === 0"
+            @click="handleBatchConfirm"
+          >
+            {{ t('queue.batchConfirm', { count: currentPageBatchItems.length }) }}
+          </el-button>
+        </div>
+        <el-text size="small" type="info">
+          {{ t('queue.pageSelectionHint') }}
+        </el-text>
+      </div>
+
+      <div v-if="recommendationGroups.length > 0" class="recommendation-groups">
+        <el-alert
+          v-for="group in recommendationGroups"
+          :key="group.key"
+          type="info"
+          show-icon
+          :closable="false"
+        >
+          <template #title>
+            <span>
+              {{ t('queue.sameCandidateHint', { count: group.count, title: group.title }) }}
+            </span>
+            <el-button size="small" link type="primary" @click="selectRecommendationGroup(group.key)">
+              {{ t('queue.selectThisGroup') }}
+            </el-button>
+          </template>
+        </el-alert>
+      </div>
+
+      <el-card v-for="task in displayedTasks" :key="task.id" class="queue-card" shadow="never">
         <template #header>
           <div class="card-header">
             <div class="file-path" :title="task.sourcePath">{{ task.sourcePath }}</div>
@@ -69,7 +111,12 @@
             :image-size="80"
           />
 
-          <el-radio-group v-else v-model="selectedOptionByTask[task.id]" class="candidate-list">
+          <el-radio-group
+            v-else
+            v-model="selectedOptionByTask[task.id]"
+            class="candidate-list"
+            @change="markManualSelection(task.id)"
+          >
             <el-radio
               v-for="option in getTaskOptions(task.id)"
               :key="option.key"
@@ -115,6 +162,9 @@
         </div>
 
         <div class="actions">
+          <el-text v-if="batchErrorByTask[task.id]" type="danger" size="small">
+            {{ batchErrorByTask[task.id] }}
+          </el-text>
           <el-button
             type="primary"
             :loading="actionLoadingByTask[task.id]"
@@ -128,18 +178,27 @@
           </el-button>
         </div>
       </el-card>
+      <div class="pagination-row">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="sortedQueueTasks.length"
+          layout="total, sizes, prev, pager, next"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mediaApi } from '@/api/media'
-import type { MatchResult, MediaTask, MediaType, TaskCandidate } from '@/types'
+import type { BatchConfirmItem, MatchResult, MediaTask, MediaType, TaskCandidate } from '@/types'
 
 const { t } = useI18n()
 const mediaStore = useMediaStore()
@@ -168,12 +227,86 @@ const searchKeywordByTask = reactive<Record<number, string>>({})
 const candidateLoadingByTask = reactive<Record<number, boolean>>({})
 const searchLoadingByTask = reactive<Record<number, boolean>>({})
 const actionLoadingByTask = reactive<Record<number, boolean>>({})
+const batchErrorByTask = reactive<Record<number, string>>({})
+const manualSelectedTaskIds = reactive(new Set<number>())
+const currentPage = ref(1)
+const pageSize = ref(20)
+const batchConfirming = ref(false)
+
+const sortedQueueTasks = computed(() => {
+  return [...queueTasks.value].sort((a, b) => taskTime(b) - taskTime(a))
+})
+
+const displayedTasks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return sortedQueueTasks.value.slice(start, start + pageSize.value)
+})
+
+const currentPageBatchItems = computed<BatchConfirmItem[]>(() => {
+  return displayedTasks.value
+    .map((task) => {
+      const selected = getSelectedOption(task.id)
+      return selected
+        ? { taskId: task.id, tmdbId: selected.tmdbId, mediaType: selected.mediaType }
+        : null
+    })
+    .filter((item): item is BatchConfirmItem => item !== null)
+})
+
+const isCurrentPageCandidateLoading = computed(() => {
+  return displayedTasks.value.some((task) => candidateLoadingByTask[task.id])
+})
+
+const canSelectCurrentPageRecommended = computed(() => {
+  return !isCurrentPageCandidateLoading.value
+    && displayedTasks.value.some((task) => Boolean(getRecommendedOption(task.id)))
+})
+
+const recommendationGroups = computed(() => {
+  const groups = new Map<string, { key: string, title: string, count: number }>()
+  for (const task of displayedTasks.value) {
+    const recommended = getRecommendedOption(task.id)
+    if (!recommended) continue
+
+    const group = groups.get(recommended.key)
+    if (group) {
+      group.count++
+    } else {
+      groups.set(recommended.key, {
+        key: recommended.key,
+        title: displayTitle(recommended),
+        count: 1,
+      })
+    }
+  }
+
+  return [...groups.values()].filter((group) => group.count > 1)
+})
 
 onMounted(loadQueue)
 
+watch([currentPage, pageSize], async () => {
+  await loadCurrentPageCandidates()
+})
+
+watch(pageSize, () => {
+  currentPage.value = 1
+})
+
+watch(sortedQueueTasks, () => {
+  const maxPage = Math.max(1, Math.ceil(sortedQueueTasks.value.length / pageSize.value))
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage
+  }
+})
+
 async function loadQueue() {
   await mediaStore.fetchQueue()
-  await Promise.all(queueTasks.value.map((task) => loadCandidates(task.id)))
+  await loadCurrentPageCandidates()
+}
+
+async function loadCurrentPageCandidates() {
+  await Promise.all(displayedTasks.value.map((task) => loadCandidates(task.id)))
 }
 
 async function loadCandidates(taskId: number) {
@@ -241,11 +374,95 @@ async function handleSkip(taskId: number) {
   }
 }
 
+function selectCurrentPageRecommended() {
+  for (const task of displayedTasks.value) {
+    const recommended = getRecommendedOption(task.id)
+    if (recommended) {
+      selectedOptionByTask[task.id] = recommended.key
+      manualSelectedTaskIds.delete(task.id)
+    }
+  }
+}
+
+function selectRecommendationGroup(groupKey: string) {
+  for (const task of displayedTasks.value) {
+    if (manualSelectedTaskIds.has(task.id)) continue
+    const recommended = getRecommendedOption(task.id)
+    if (recommended?.key === groupKey) {
+      selectedOptionByTask[task.id] = recommended.key
+    }
+  }
+}
+
+function clearCurrentPageSelection() {
+  for (const task of displayedTasks.value) {
+    selectedOptionByTask[task.id] = ''
+    manualSelectedTaskIds.delete(task.id)
+  }
+}
+
+function markManualSelection(taskId: number) {
+  manualSelectedTaskIds.add(taskId)
+  delete batchErrorByTask[taskId]
+}
+
+async function handleBatchConfirm() {
+  const items = currentPageBatchItems.value
+  if (items.length === 0) return
+
+  const lowConfidenceCount = displayedTasks.value.filter((task) => {
+    const selected = getSelectedOption(task.id)
+    return selected && (selected.confidence == null || selected.confidence < 0.6)
+  }).length
+
+  try {
+    await ElMessageBox.confirm(
+      t('queue.batchConfirmMessage', { count: items.length, lowConfidenceCount }),
+      t('queue.batchConfirmTitle'),
+      {
+        confirmButtonText: t('queue.batchConfirmAction'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  batchConfirming.value = true
+  try {
+    for (const item of items) {
+      delete batchErrorByTask[item.taskId]
+    }
+
+    const res = await mediaApi.batchConfirm(items)
+    const results = res.data.data.results
+    const successCount = results.filter((result) => result.success).length
+    const failedResults = results.filter((result) => !result.success)
+    for (const result of failedResults) {
+      batchErrorByTask[result.taskId] = result.message || t('queue.batchConfirmUnknownError')
+    }
+
+    ElMessage.success(t('queue.batchConfirmResult', { success: successCount, failed: failedResults.length }))
+    await loadQueue()
+  } finally {
+    batchConfirming.value = false
+  }
+}
+
 function getTaskOptions(taskId: number) {
   const candidates = candidateOptionsByTask[taskId] ?? []
   const searches = searchOptionsByTask[taskId] ?? []
   const seen = new Set(candidates.map((option) => option.key))
   return [...candidates, ...searches.filter((option) => !seen.has(option.key))]
+}
+
+function getRecommendedOption(taskId: number) {
+  return (candidateOptionsByTask[taskId] ?? []).find((option) => option.rank === 1)
+}
+
+function getSelectedOption(taskId: number) {
+  return getTaskOptions(taskId).find((option) => option.key === selectedOptionByTask[taskId])
 }
 
 function hasSearchKeyword(taskId: number) {
@@ -311,6 +528,11 @@ function formatSeasonEpisode(task: MediaTask) {
 function formatConfidence(confidence: number | null) {
   return confidence == null ? t('queue.unknown') : `${(confidence * 100).toFixed(0)}%`
 }
+
+function taskTime(task: MediaTask) {
+  const timestamp = new Date(task.createdAt).getTime()
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
 </script>
 
 <style scoped>
@@ -343,6 +565,28 @@ h2 {
   grid-template-columns: 1fr;
   gap: 18px;
   min-height: 160px;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.batch-actions,
+.recommendation-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recommendation-groups {
+  flex-direction: column;
 }
 
 .queue-card {
@@ -522,14 +766,22 @@ h2 {
 .actions {
   margin-top: 16px;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 @media (max-width: 760px) {
   .page-header,
   .card-header,
-  .search-row {
+  .search-row,
+  .batch-toolbar {
     flex-direction: column;
     align-items: stretch;
   }

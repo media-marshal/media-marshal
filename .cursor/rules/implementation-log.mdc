@@ -296,6 +296,49 @@ alwaysApply: false
 
 ---
 
+## [ADR-012 Queue 批量确认流程] 2026-04-30
+
+### 已完成
+- `MediaTask` 新增 `confirmationSource` 字段，区分 `AUTO_MATCH`、`MANUAL_SINGLE`、`MANUAL_BATCH`
+- 高置信度自动采纳时写入 `AUTO_MATCH`
+- 单条人工确认继续使用现有接口，写入 `MANUAL_SINGLE`
+- 新增 `POST /api/queue/batch-confirm`
+  - 逐条复用现有确认流程
+  - 单条失败不回滚整个批次
+  - 返回每个任务的成功 / 失败结果
+- Queue 页面新增本地分页，默认按 `createdAt desc` 展示
+- Queue 页面新增当前页批量操作栏：
+  - 选择当前页系统推荐
+  - 清空当前页选择
+  - 批量确认（N）
+- 当前页按 `mediaType + tmdbId` 聚合同候选推荐，支持一键选择同一组推荐
+- 批量确认前弹出确认框，展示确认数量和低置信度候选数量
+- 批量确认完成后展示成功 / 失败数量，失败任务保留并显示失败原因
+- 同步更新 API 契约
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/api/media.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 新增 `POST /api/queue/batch-confirm`
+- `MediaTask` 响应新增 `confirmationSource`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [QueueView 人工确认页面] 2026-04-25
 
 ### 已完成
