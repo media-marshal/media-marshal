@@ -111,6 +111,7 @@
       width="960px"
       align-center
       :close-on-click-modal="false"
+      @closed="variableDrawerVisible = false"
     >
       <el-form
         ref="formRef"
@@ -171,7 +172,7 @@
               <template #label>
                 <span class="template-label">
                   <span>{{ t('watchRule.moviePathTemplate') }}</span>
-                  <a href="https://www.media-marshal.com" target="_blank" rel="noopener noreferrer">
+                  <a href="#" @click.prevent="toggleVariableDrawer">
                     {{ t('watchRule.templateVariablesLink') }}
                   </a>
                 </span>
@@ -345,6 +346,65 @@
       </template>
     </el-dialog>
 
+    <transition name="variable-panel-slide">
+      <aside v-if="variableDrawerVisible" class="template-variable-panel">
+        <div class="variable-panel-header">
+          <div class="variable-panel-title">{{ t('templateVariables.title') }}</div>
+          <button class="variable-panel-close" type="button" @click="variableDrawerVisible = false">×</button>
+        </div>
+
+        <div class="variable-help">
+          <p class="variable-help-desc">{{ t('templateVariables.description') }}</p>
+
+          <div v-loading="templateVariablesLoading" class="variable-category-list">
+            <el-empty
+              v-if="!templateVariablesLoading && templateVariableGroups.length === 0"
+              :description="t('templateVariables.empty')"
+            />
+
+            <div
+              v-for="group in templateVariableGroups"
+              :key="group.category"
+              class="variable-category"
+            >
+              <div class="variable-category-title">{{ group.categoryName }}</div>
+              <div
+                v-for="variable in group.variables"
+                :key="variable.placeholder"
+                class="variable-card"
+              >
+                <div class="variable-card-header">
+                  <code class="variable-name">{{ variable.placeholder }}</code>
+                  <el-tag size="small" :type="templateVariableStatusType(variable.status)">
+                    {{ t(`templateVariables.status.${variable.status}`) }}
+                  </el-tag>
+                </div>
+                <p class="variable-desc">{{ variable.description }}</p>
+                <div class="variable-meta">
+                  <span>{{ t('templateVariables.type') }}：{{ variable.type }}</span>
+                  <span>{{ t('templateVariables.source') }}：{{ variable.source }}</span>
+                </div>
+                <div class="variable-media-types">
+                  <el-tag
+                    v-for="mediaType in variable.mediaTypes"
+                    :key="mediaType"
+                    size="small"
+                    effect="plain"
+                  >
+                    {{ t(`task.mediaType.${mediaType}`) }}
+                  </el-tag>
+                </div>
+                <div class="variable-example">
+                  <span>{{ t('templateVariables.example') }}</span>
+                  <code>{{ variable.example }}</code>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </transition>
+
     <!-- 目录浏览弹窗 -->
     <DirBrowserDialog
       v-model="dirBrowserVisible"
@@ -362,6 +422,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { watchRuleApi, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
+import { templateVariablesApi } from '@/api/templateVariables'
+import type { TemplateVariableGroup, TemplateVariableStatus } from '@/types'
 import DirBrowserDialog from '@/components/DirBrowserDialog.vue'
 
 const { t } = useI18n()
@@ -379,6 +441,9 @@ const saving = ref(false)
 const formRef = ref<FormInstance>()
 const ignoredPatternsEditing = ref(false)
 const ignoredPatternInput = ref('')
+const variableDrawerVisible = ref(false)
+const templateVariablesLoading = ref(false)
+const templateVariableGroups = ref<TemplateVariableGroup[]>([])
 
 // ─── 目录浏览器 ──────────────────────────────────────────────────
 const dirBrowserVisible = ref(false)
@@ -555,6 +620,25 @@ async function fetchRules() {
   }
 }
 
+async function fetchTemplateVariables() {
+  if (templateVariableGroups.value.length > 0) return
+
+  templateVariablesLoading.value = true
+  try {
+    const res = await templateVariablesApi.listVariables()
+    templateVariableGroups.value = res.data.data
+  } finally {
+    templateVariablesLoading.value = false
+  }
+}
+
+async function toggleVariableDrawer() {
+  variableDrawerVisible.value = !variableDrawerVisible.value
+  if (variableDrawerVisible.value) {
+    await fetchTemplateVariables()
+  }
+}
+
 function openDialog(rule?: WatchRule) {
   editingRule.value = rule ?? null
   Object.assign(form, defaultForm(), rule ? { ...rule } : {})
@@ -677,6 +761,10 @@ function restoreDefaultIgnoredPatterns() {
 
 function mediaTypeTagType(type: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined {
   return type === 'AUTO' ? 'info' : type === 'MOVIE' ? 'primary' : 'success'
+}
+
+function templateVariableStatusType(status: TemplateVariableStatus): 'success' | 'info' {
+  return status === 'AVAILABLE' ? 'success' : 'info'
 }
 </script>
 
@@ -1006,6 +1094,168 @@ h2 {
 
 .ignored-editor {
   margin-top: 10px;
+}
+
+.template-variable-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3000;
+  width: 380px;
+  max-width: min(420px, 92vw);
+  padding: 22px;
+  overflow-y: auto;
+  border-left: 1px solid #e4e7ed;
+  background: #fff;
+  box-shadow: -12px 0 36px rgba(31, 45, 61, 0.16);
+}
+
+.variable-panel-slide-enter-active,
+.variable-panel-slide-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.variable-panel-slide-enter-from,
+.variable-panel-slide-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.variable-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px -4px 18px;
+  padding: 4px 4px 16px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.variable-panel-title {
+  color: #303133;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.variable-panel-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: #f5f7fa;
+  color: #909399;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.variable-panel-close:hover {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.variable-help {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.variable-help-desc {
+  margin: 0;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.variable-category-list {
+  min-height: 120px;
+}
+
+.variable-category {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.variable-category + .variable-category {
+  margin-top: 18px;
+}
+
+.variable-category-title {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.variable-card {
+  padding: 14px;
+  border: 1px solid #e4e7ed;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafcff 100%);
+  box-shadow: 0 8px 24px rgba(31, 45, 61, 0.06);
+}
+
+.variable-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.variable-name {
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #f0f9eb;
+  color: #529b2e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.variable-desc {
+  margin: 0 0 12px;
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.variable-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+  color: #909399;
+  font-size: 12px;
+}
+
+.variable-media-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.variable-example {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  color: #909399;
+  font-size: 12px;
+}
+
+.variable-example code {
+  color: #303133;
+  font-family: monospace;
 }
 
 .ignored-input-row {

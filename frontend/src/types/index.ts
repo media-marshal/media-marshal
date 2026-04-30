@@ -94,6 +94,26 @@ export interface BatchConfirmResponse {
   results: BatchConfirmResult[]
 }
 
+// ─── 模板变量帮助 ──────────────────────────────────────────────────
+export type TemplateVariableStatus = 'AVAILABLE' | 'RESERVED'
+
+export interface TemplateVariableItem {
+  name: string
+  placeholder: string
+  type: string
+  source: string
+  description: string
+  example: string
+  mediaTypes: MediaType[]
+  status: TemplateVariableStatus
+}
+
+export interface TemplateVariableGroup {
+  category: string
+  categoryName: string
+  variables: TemplateVariableItem[]
+}
+
 // ─── WebSocket 事件 ──────────────────────────────────────────────
 export type WsEventType =
   | 'task.created'

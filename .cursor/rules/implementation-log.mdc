@@ -294,8 +294,6 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
----
-
 ## [ADR-012 Queue 批量确认流程] 2026-04-30
 
 ### 已完成
@@ -743,6 +741,40 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+
+---
+
+## [路径模板变量帮助非阻塞面板样式版] 2026-04-30
+
+### 已完成
+- 在路径设置页新增 / 编辑规则弹窗中，将“点击查看可用变量”从外链改为非阻塞右侧帮助面板开关
+  - 点击后从右侧滑出全高变量帮助抽屉
+  - 再次点击“点击查看可用变量”会关闭面板
+  - 使用自定义固定定位侧栏，不使用 `el-drawer` 的全屏容器，因此不阻塞左侧模板编辑
+  - 面板暂不接后端接口，仅硬编码 1 个变量 `{title}` 和说明，用于预览设计效果
+- 新增变量帮助面板样式
+  - 贴右侧展示，高度撑满屏幕
+  - 顶部说明文案
+  - 分类标题
+  - 变量卡片
+  - 变量名、可用标签、说明和示例展示
+  - 关闭按钮和右侧滑入 / 滑出过渡
+- 同步新增中英文 i18n 文案
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 变量帮助内容暂时前端硬编码，后续再接入后端变量元数据接口
+
+### 遗留问题 / 需 PM 决策
+- 后续需要实现 `GET /api/template-variables` 或同类接口后替换硬编码数据源
 
 ---
 
@@ -1350,3 +1382,36 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+
+---
+
+## [模板变量帮助接口接入] 2026-04-30
+
+### 已完成
+- 新增 `GET /api/template-variables`，返回路径模板变量分组、占位符、类型、来源、说明、样例、适用媒体类型和可用状态
+- 后端变量目录以 `TemplateVariables` 的 `@TemplateVar` 注解为支持范围，额外按 ADR-001 暴露季 / 集格式化变量
+- 路径设置页变量帮助面板从硬编码 `{title}` 改为接口驱动渲染
+- 前端新增模板变量 API 封装和类型定义，帮助面板支持 loading 与空状态
+- 同步更新 API 契约
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/controller/TemplateVariableController.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TemplateVariableGroup.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariableCatalogService.java`
+- `frontend/src/api/templateVariables.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 新增 `GET /api/template-variables`
+- 响应 `data` 为 `TemplateVariableGroup[]`
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 当前变量说明和样例由后端固定中文内容返回；如后续要求帮助内容随前端语言切换，需要增加 locale 入参或返回多语言字段。

@@ -169,6 +169,18 @@ export default {
       targetDirRequired: 'Please enter a target directory',
     },
   },
+  templateVariables: {
+    title: 'Available Variables',
+    description: 'Use these variables in path templates. Media Marshal replaces them with media metadata when organizing files.',
+    empty: 'No variables available',
+    type: 'Type',
+    source: 'Source',
+    example: 'Example',
+    status: {
+      AVAILABLE: 'Available',
+      RESERVED: 'Reserved',
+    },
+  },
   dirBrowser: {
     title: 'Select Directory',
     sourceTitle: 'Select Source Directory',

@@ -219,6 +219,39 @@ interface RuleRequest {
 
 ---
 
+## 模板变量 `/api/template-variables`
+
+| 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
+|---|---|---|---|---|
+| GET | `/api/template-variables` | 查询路径模板中可用的变量、解释、样例和适用媒体类型 | — | `TemplateVariableGroup[]` |
+
+### TemplateVariableGroup
+```typescript
+interface TemplateVariableGroup {
+  category: 'BASIC' | 'EPISODE' | 'CLASSIFICATION' | 'TECHNICAL'
+  categoryName: string
+  variables: TemplateVariableItem[]
+}
+```
+
+### TemplateVariableItem
+```typescript
+interface TemplateVariableItem {
+  name: string              // 如 title、season:02d
+  placeholder: string       // 如 {title}、{season:02d}
+  type: string              // String / Integer / Long 等展示类型
+  source: string            // TMDB / guessit / Pipeline / Source file
+  description: string       // 变量说明
+  example: string           // 示例值
+  mediaTypes: Array<'MOVIE' | 'TV_SHOW'>
+  status: 'AVAILABLE' | 'RESERVED' // RESERVED 表示渲染器支持但当前版本暂不填充，未填充时占位符原样保留
+}
+```
+
+> 变量名来源以 `TemplateVariables` 上的 `@TemplateVar` 注解为准；格式化变量目前按 ADR-001 暴露 `{season:02d}`、`{season:04d}`、`{episode:02d}`、`{episode:04d}`。
+
+---
+
 ## 文件系统
 
 ### GET /api/filesystem/browse

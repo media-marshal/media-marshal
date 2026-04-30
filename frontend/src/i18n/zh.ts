@@ -169,6 +169,18 @@ export default {
       targetDirRequired: '请输入目标根目录',
     },
   },
+  templateVariables: {
+    title: '可用变量',
+    description: '这些变量可以写入路径模板中，整理文件时会自动替换为对应的媒体信息。',
+    empty: '暂无可用变量',
+    type: '类型',
+    source: '来源',
+    example: '示例',
+    status: {
+      AVAILABLE: '可用',
+      RESERVED: '预留',
+    },
+  },
   dirBrowser: {
     title: '选择目录',
     sourceTitle: '选择监控源目录',
