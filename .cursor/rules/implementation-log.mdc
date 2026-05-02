@@ -778,6 +778,57 @@ alwaysApply: false
 
 ---
 
+## [系统设置邮件通知临时禁用] 2026-04-30
+
+### 已完成
+- 在系统设置页面临时禁用邮件通知配置
+  - `启用邮件通知` 开关置灰不可操作
+  - 邮箱输入框在显示时也置灰不可编辑
+  - 增加提示文案说明邮件通知功能暂未开放
+  - 保存系统设置时暂不提交 `notification.email.enabled` 和 `notification.email.recipient`
+- 同步新增中英文 i18n 文案
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 邮件通知后端能力未完成前，前端临时禁用该配置入口
+
+### 遗留问题 / 需 PM 决策
+- 邮件通知功能完成后，需要恢复开关可编辑并重新提交邮件配置项
+
+---
+
+## [网站图标与邮件通知提示样式优化] 2026-05-02
+
+### 已完成
+- 将前端站点 favicon 从 `/favicon.svg` 改为 `/favicon.png`
+- 优化系统设置页邮件通知模块
+  - 禁用提示从开关下方改为开关右侧展示
+  - 增加开关与提示文案的水平间距，避免文字过于贴近
+- 已运行 `npm run type-check`，通过
+
+### 关键文件
+- `frontend/index.html`
+- `frontend/src/views/SystemSettingsView.vue`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [Windows 目录浏览兼容修复] 2026-04-27
 
 ### 已完成

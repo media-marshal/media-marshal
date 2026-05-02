@@ -223,6 +223,7 @@ export default {
     confidenceThresholdHelp: 'Matches below this score go to the review queue (0-100)',
     emailEnabled: 'Enable Email Notifications',
     emailRecipient: 'Notification Email',
+    emailComingSoon: 'Email notifications are not available yet and will be enabled in a later release.',
     emailSection: 'Email Notifications',
     tmdbSection: 'TMDB Configuration',
     matchingSection: 'Matching Configuration',

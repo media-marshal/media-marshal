@@ -223,6 +223,7 @@ export default {
     confidenceThresholdHelp: '低于此阈值的匹配将进入待确认队列（0-100）',
     emailEnabled: '启用邮件通知',
     emailRecipient: '通知邮箱',
+    emailComingSoon: '邮件通知功能暂未开放，后续完成后会重新启用。',
     emailSection: '邮件通知',
     tmdbSection: 'TMDB 配置',
     matchingSection: '识别配置',

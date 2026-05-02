@@ -53,10 +53,13 @@
       <el-card shadow="never" class="settings-section">
         <template #header>{{ t('settings.emailSection') }}</template>
         <el-form-item :label="t('settings.emailEnabled')">
-          <el-switch v-model="form.emailEnabled" />
+          <div class="email-toggle-row">
+            <el-switch v-model="form.emailEnabled" disabled />
+            <span class="email-disabled-hint">{{ t('settings.emailComingSoon') }}</span>
+          </div>
         </el-form-item>
         <el-form-item v-if="form.emailEnabled" :label="t('settings.emailRecipient')">
-          <el-input v-model="form.emailRecipient" type="email" placeholder="you@example.com" />
+          <el-input v-model="form.emailRecipient" type="email" placeholder="you@example.com" disabled />
         </el-form-item>
       </el-card>
 
@@ -123,8 +126,6 @@ async function handleSave() {
       String(form.confidenceThreshold / 100),
       '匹配置信度阈值',
     ),
-    settingsStore.updateSetting('notification.email.enabled', String(form.emailEnabled), '邮件通知开关'),
-    settingsStore.updateSetting('notification.email.recipient', form.emailRecipient, '通知邮箱'),
   ])
   ElMessage.success(t('settings.saved'))
 }
@@ -155,5 +156,17 @@ h2 {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+
+.email-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.email-disabled-hint {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>
