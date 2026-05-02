@@ -72,8 +72,8 @@ alwaysApply: true
 
 - **电影**：`{title} ({year})/{title} ({year}) - {resolution}{ext}`
   - 示例：`The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv`
-- **剧集**：`{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}`
-  - 示例：`Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv`
+- **剧集**：`{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}`
+  - 示例：`Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv`
 
 ### v1 前端预设模板
 路径设置页提供多组电影模板和剧集模板预设，预设模板本质上仍是 ADR-001 变量系统的字符串应用。
@@ -1427,7 +1427,7 @@ The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv
 剧集：
 
 ```text
-Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv
+Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv
 ```
 
 ### 预览实现建议

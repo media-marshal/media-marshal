@@ -539,26 +539,26 @@ const PRESET_TEMPLATES = [
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvDefault',
-    value: '{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
-    hint: 'Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+    value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    hint: 'Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvByYear',
-    value: '{year}/{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
-    hint: '2008/Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+    value: '{year}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    hint: '2008/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvByTypeYear',
-    value: '{media_type}/{year}/{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
-    hint: 'TV_SHOW/2008/Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+    value: '{media_type}/{year}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    hint: 'TV_SHOW/2008/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvByTypeInitial',
-    value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}',
-    hint: 'TV_SHOW/B/Breaking Bad (2008)/S03/Breaking Bad.S03E07.2008.mkv',
+    value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    hint: 'TV_SHOW/B/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
 ] satisfies Array<{ kind: TemplateKind, labelKey: string, value: string, hint: string }>
 

@@ -58,7 +58,7 @@ media-marshal:
   rename:
     template:
       movie: ${MEDIA_MARSHAL_TEMPLATE_MOVIE:{title} ({year})/{title} ({year}) - {resolution}{ext}}
-      tv: ${MEDIA_MARSHAL_TEMPLATE_TV:{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}}
+      tv: ${MEDIA_MARSHAL_TEMPLATE_TV:{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}}
 
   # ─── 废弃配置项（ADR-002，不再生效）────────────────────────────
   # watcher.watch-dirs / output.*-dir / operation.strategy

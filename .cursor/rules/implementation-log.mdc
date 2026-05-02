@@ -404,6 +404,39 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 暂未新增后台批量确认进度查询接口；当前通过任务状态刷新和 WebSocket 追踪最终结果
 
+---
+
+## 2026-05-02 剧集路径模板预设更新
+
+### 背景
+- 用户要求系统自带剧集路径模板改为新的 4 个预设
+- 电影模板保持不变
+- 新的第一个剧集模板作为系统默认模板
+
+### 完成内容
+- 更新后端 `RenameService` 内置剧集 fallback 默认模板
+- 更新 `application.yml` 中 `MEDIA_MARSHAL_TEMPLATE_TV` 未配置时的默认值
+- 更新路径设置页 4 个剧集预设模板和示例
+- 保持 `{ext}` 直接拼接，不额外增加点号，因为 `{ext}` 已包含 `.mkv` 这类扩展名前缀点
+- 同步更新 ADR-001 默认模板说明和预览示例
+- 更新 `RenameServiceTest` 中剧集全局 fallback 期望值
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+- `frontend/src/views/PathsView.vue`
+- `.cursor/rules/design-decisions.mdc`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
 ## [ADR-012 Queue 批量确认流程] 2026-04-30
 
 ### 已完成
@@ -1297,7 +1330,7 @@ alwaysApply: false
 - 删除前端路径设置页原有电影/剧集预设模板，替换为新的 4 个电影模板和 4 个剧集模板
 - 更新后端全局 fallback 默认模板：
   - 电影：`{title} ({year})/{title} ({year}) - {resolution}{ext}`
-  - 剧集：`{title} ({year})/S{season:02d}/{title}.S{season:02d}E{episode:02d}.{year}{ext}`
+  - 剧集：`{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}`
 - 自然语言变量映射：
   - 影片名 → `{title}`
   - 年份 → `{year}`
