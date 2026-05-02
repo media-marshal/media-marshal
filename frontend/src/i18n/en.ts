@@ -174,7 +174,6 @@ export default {
     generateNfoHelp: 'Generate an NFO only when no user-provided NFO exists',
     cleanupEmptyDirs: 'Clean Empty Folders',
     cleanupEmptyDirsHelp: 'Delete empty folders left in the source directory after organizing, without deleting the source root',
-    cleanupEmptyDirsMoveOnly: 'Cleaning empty folders only takes effect in Move mode.',
     ignoredFilePatterns: 'Ignored File Rules',
     ignoredFilePatternsHelp: 'Files or folders matching these rules are ignored silently and will not create skipped tasks',
     usingDefaultIgnoredPatterns: 'Using system default',

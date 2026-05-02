@@ -174,7 +174,6 @@ export default {
     generateNfoHelp: '没有用户自带 NFO 时自动生成',
     cleanupEmptyDirs: '自动清理空文件夹',
     cleanupEmptyDirsHelp: '整理完成后删除源目录中的空文件夹，不会删除源根目录',
-    cleanupEmptyDirsMoveOnly: '自动清理空文件夹仅在移动模式下生效。',
     ignoredFilePatterns: '忽略文件规则',
     ignoredFilePatternsHelp: '匹配这些规则的文件或文件夹会被静默忽略，不会生成跳过任务',
     usingDefaultIgnoredPatterns: '使用系统默认',

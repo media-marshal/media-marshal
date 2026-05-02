@@ -310,15 +310,12 @@
                   </div>
                   <el-switch v-model="form.generateNfo" />
                 </div>
-                <div class="switch-row">
+                <div v-if="form.operation === 'MOVE'" class="switch-row">
                   <div>
                     <div class="switch-title">{{ t('watchRule.cleanupEmptyDirs') }}</div>
                     <div class="switch-desc">{{ t('watchRule.cleanupEmptyDirsHelp') }}</div>
                   </div>
                   <el-switch v-model="form.cleanupEmptyDirs" />
-                </div>
-                <div v-if="form.operation !== 'MOVE'" class="switch-desc operation-limited-help">
-                  {{ t('watchRule.cleanupEmptyDirsMoveOnly') }}
                 </div>
                 <div class="ignored-patterns">
                   <div class="ignored-header">
@@ -714,6 +711,7 @@ async function handleSave() {
     form.scanIntervalMinutes = Math.max(form.scanIntervalMinutes || 10, 5)
     const payload: WatchRuleRequest = {
       ...form,
+      cleanupEmptyDirs: form.operation === 'MOVE' ? form.cleanupEmptyDirs : false,
       moviePathTemplate: showMovieTemplate.value ? effectiveTemplate('movie') : undefined,
       tvPathTemplate: showTvTemplate.value ? effectiveTemplate('tv') : undefined,
     }
@@ -1168,11 +1166,6 @@ h2 {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
-}
-
-.operation-limited-help {
-  padding-top: 8px;
-  color: #e6a23c;
 }
 
 .ignored-patterns {
