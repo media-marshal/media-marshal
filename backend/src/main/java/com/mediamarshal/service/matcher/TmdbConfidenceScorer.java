@@ -17,9 +17,9 @@ class TmdbConfidenceScorer {
 
     TmdbScore score(ParseResult parseResult, MatchResult candidate, TitleSearchPlan plan,
                     TitleSearchQuery matchedQuery, int searchResultCount) {
-        TitleScore titleScore = titleScore(candidate, plan.queries(), matchedQuery, searchResultCount);
         double yearScore = yearScore(parseResult.getYear(), candidate.getYear());
         double mediaTypeScore = mediaTypeScore(parseResult, candidate);
+        TitleScore titleScore = titleScore(candidate, plan.queries(), matchedQuery, searchResultCount, yearScore, mediaTypeScore);
         double structureBonus = structureBonus(candidate, plan);
         double confidence = titleScore.score() * 0.60
                 + yearScore * 0.20
@@ -30,7 +30,8 @@ class TmdbConfidenceScorer {
     }
 
     private TitleScore titleScore(MatchResult candidate, List<TitleSearchQuery> queries,
-                                  TitleSearchQuery matchedQuery, int searchResultCount) {
+                                  TitleSearchQuery matchedQuery, int searchResultCount,
+                                  double yearScore, double mediaTypeScore) {
         TitleScore best = new TitleScore(null, null, 0.0);
         for (TitleSearchQuery query : queries) {
             double rawScore = Math.max(
@@ -41,14 +42,15 @@ class TmdbConfidenceScorer {
                 best = new TitleScore(query.query(), query.type(), weighted);
             }
         }
-        TitleScore aliasEvidence = aliasSearchEvidenceScore(candidate, matchedQuery, searchResultCount);
+        TitleScore aliasEvidence = aliasSearchEvidenceScore(candidate, matchedQuery, searchResultCount, yearScore, mediaTypeScore);
         if (aliasEvidence.score() > best.score()) {
             return aliasEvidence;
         }
         return best;
     }
 
-    private TitleScore aliasSearchEvidenceScore(MatchResult candidate, TitleSearchQuery matchedQuery, int searchResultCount) {
+    private TitleScore aliasSearchEvidenceScore(MatchResult candidate, TitleSearchQuery matchedQuery,
+                                                int searchResultCount, double yearScore, double mediaTypeScore) {
         if (matchedQuery == null || searchResultCount <= 0 || isTitleDirectlyComparable(candidate)) {
             return new TitleScore(null, null, 0.0);
         }
@@ -61,7 +63,14 @@ class TmdbConfidenceScorer {
          * 未必包含该英文别名。若英文 query 只召回极少候选，就把“搜索命中本身”
          * 作为弱标题证据，避免正确中文候选因标题字段不可比而固定落到 30%。
          */
-        double evidence = searchResultCount == 1 ? 0.75 : (searchResultCount <= 3 ? 0.55 : 0.0);
+        double evidence;
+        if (searchResultCount == 1 && yearScore == 1.0 && mediaTypeScore == 1.0) {
+            evidence = 0.92;
+        } else if (searchResultCount == 1) {
+            evidence = 0.45;
+        } else {
+            evidence = searchResultCount <= 3 ? 0.35 : 0.0;
+        }
         return new TitleScore(matchedQuery.query(), matchedQuery.type(), evidence * matchedQuery.weight());
     }
 
@@ -75,15 +84,15 @@ class TmdbConfidenceScorer {
 
     private double yearScore(Integer parsedYear, Integer candidateYear) {
         if (parsedYear == null) {
-            return 0.5;
+            return 0.3;
         }
         if (candidateYear == null) {
-            return 0.3;
+            return 0.1;
         }
         if (parsedYear.equals(candidateYear)) {
             return 1.0;
         }
-        return Math.abs(parsedYear - candidateYear) == 1 ? 0.6 : 0.0;
+        return Math.abs(parsedYear - candidateYear) == 1 ? 0.3 : 0.0;
     }
 
     private double mediaTypeScore(ParseResult parseResult, MatchResult candidate) {

@@ -325,6 +325,40 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - `Shameless.U.S...` 这类国家/版本缩写仍未作为通用规则处理；如需要支持，应单独设计英文标题后缀规范化策略，例如同时搜索 `Shameless` 与 `Shameless U.S`
 
+---
+
+## [英文别名唯一命中评分策略调优] 2026-05-03
+
+### 已完成
+- 继续优化英文别名命中中文候选的评分策略
+  - 当英文别名 query 只返回唯一候选，且年份完全匹配、媒体类型完全匹配时，提升标题证据分
+  - 该类场景最终置信度从约 73% 提升到约 82%，可通过当前默认 80% 阈值
+  - 代表场景：`The Flowers of War -> 金陵十三钗`、`For the Sake of the Republic -> 走向共和`
+- 收紧年份评分
+  - 文件名缺少年份时 `yearScore` 从 0.5 降为 0.3
+  - 候选缺少年份时 `yearScore` 从 0.3 降为 0.1
+  - 年份相差 1 年时 `yearScore` 从 0.6 降为 0.3
+  - 年份明显不一致仍为 0
+- 弱别名证据随年份/类型可信度变化
+  - 唯一结果 + 年份/类型全匹配：高证据
+  - 唯一结果但年份缺失或不一致：低证据
+  - 2-3 个候选：更低证据
+  - 超过 3 个候选：不使用搜索命中作为标题证据
+- 补充单元测试覆盖 82% 区间、年份缺失扣分、年份不一致扣分
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbConfidenceScorer.java`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TmdbConfidenceScorerTest.java`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
 ## [ADR-015 模板变量帮助与路径预览] 2026-05-02
 
 ### 已完成
