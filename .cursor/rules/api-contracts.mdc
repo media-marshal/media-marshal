@@ -170,6 +170,7 @@ interface UpdateRequest {
 | DELETE | `/api/watch-rules/{id}` | 删除规则 | — | — |
 | PATCH | `/api/watch-rules/{id}/toggle` | 启用/禁用规则 | — | `WatchRule` |
 | POST | `/api/watch-rules/{id}/scan` | 异步触发该规则源目录全量扫描 | — | — |
+| POST | `/api/watch-rules/validate` | 保存前校验规则路径与文件操作能力 | `RuleRequest` | `WatchRuleValidationResult` |
 
 > 规则变更后后端自动触发 `FileDiscoveryService.reload()`，无需前端额外操作。
 > 全量扫描会递归遍历 `sourceDir` 下已有视频文件，并复用数据库查重；接口返回时仅表示扫描任务已开始。同一路径已有扫描未结束时，接口返回 `success=false`，提示稍后再试。
@@ -221,8 +222,24 @@ interface RuleRequest {
 }
 ```
 
-> v1 后端枚举保留未来扩展值，但前端路径设置页只允许用户选择 `MOVE`。
+> v0.2.x 前端路径设置页开放 `MOVE`、`COPY`、`HARD_LINK`、`SYMBOLIC_LINK`。保存规则前必须先调用 `POST /api/watch-rules/validate`，校验失败时不得保存。
 > 忽略规则支持文件名、通配符和目录规则（如 `sample/`）；命中规则的文件或目录会被静默忽略，不生成 `SKIPPED` 任务。
+
+### WatchRuleValidationResult
+```typescript
+interface WatchRuleValidationResult {
+  valid: boolean
+  message: string | null
+  details?: string[]
+}
+```
+
+校验规则：
+- `MOVE`：`sourceDir` 必须存在且可读写；`targetDir` 必须可创建 / 可写。
+- `COPY`：`sourceDir` 必须存在且可读；`targetDir` 必须可创建 / 可写。
+- `HARD_LINK`：除基础读写校验外，后端会创建临时文件并真实尝试创建硬链接；失败时返回明确原因。
+- `SYMBOLIC_LINK`：除基础读写校验外，后端会创建临时文件并真实尝试创建符号链接；失败时返回明确原因。
+- 校验使用随机临时文件名，完成后清理临时文件和链接，不覆盖用户已有文件。
 
 ---
 

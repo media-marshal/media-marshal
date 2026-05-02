@@ -12,6 +12,7 @@ import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.matcher.MetadataMatcher;
 import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
+import com.mediamarshal.service.rename.FileOperationStrategy;
 import com.mediamarshal.service.rename.RenameService;
 import com.mediamarshal.service.settings.SettingsService;
 import com.mediamarshal.websocket.EventPublisher;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -65,6 +67,7 @@ public class MediaProcessPipeline {
     private final SettingsService settingsService;
     private final EventPublisher eventPublisher;
     private final EmailNotificationService emailNotificationService;
+    private final Map<String, FileOperationStrategy> fileOperationStrategies;
 
     /**
      * 处理一个新发现的媒体文件（由 FileDiscoveryService 调用）
@@ -355,7 +358,7 @@ public class MediaProcessPipeline {
                 }
 
                 if (destination != null) {
-                    moveAssociatedFile(associated, destination);
+                    operateAssociatedFile(rule, associated, destination);
                 }
             }
         } catch (IOException e) {
@@ -366,19 +369,27 @@ public class MediaProcessPipeline {
         return userNfoFound;
     }
 
-    private void moveAssociatedFile(Path source, Path destination) {
+    private void operateAssociatedFile(WatchRule rule, Path source, Path destination) {
         try {
             if (Files.exists(destination)) {
                 log.warn("Associated file target already exists, skipping: source={}, target={}", source, destination);
                 return;
             }
-            Files.createDirectories(destination.getParent());
-            Files.move(source, destination);
-            log.info("Associated file moved: {} -> {}", source, destination);
+            FileOperationStrategy strategy = resolveStrategy(rule.getOperation());
+            strategy.execute(source, destination);
+            log.info("Associated file processed: operation={}, source={} -> target={}",
+                    rule.getOperation(), source, destination);
         } catch (IOException e) {
-            log.warn("Failed to move associated file: source={}, target={}, error={}",
-                    source, destination, e.getMessage());
+            log.warn("Failed to process associated file: operation={}, source={}, target={}, error={}",
+                    rule.getOperation(), source, destination, e.getMessage());
         }
+    }
+
+    private FileOperationStrategy resolveStrategy(FileOperationStrategy.OperationType operation) {
+        return fileOperationStrategies.values().stream()
+                .filter(strategy -> strategy.getType() == operation)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown file operation strategy: " + operation));
     }
 
     private void cleanupEmptySourceDirs(WatchRule rule, Path startDir) {

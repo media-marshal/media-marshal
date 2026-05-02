@@ -53,7 +53,7 @@
             {{ t(`watchRule.mediaTypeOptions.${rule.mediaType}`) }}
           </el-tag>
           <el-tag size="small" type="info">
-            {{ t('watchRule.operationOptions.MOVE') }}
+            {{ t(`watchRule.operationOptions.${rule.operation}`) }}
           </el-tag>
           <el-tag v-if="!rule.enabled" size="small" type="warning">
             {{ t('watchRule.disabled') }}
@@ -167,6 +167,9 @@
                   :value="opt.value"
                 />
               </el-select>
+              <div class="operation-help">
+                {{ t(`watchRule.operationHelp.${form.operation}`) }}
+              </div>
             </el-form-item>
 
             <el-form-item
@@ -314,6 +317,9 @@
                   </div>
                   <el-switch v-model="form.cleanupEmptyDirs" />
                 </div>
+                <div v-if="form.operation !== 'MOVE'" class="switch-desc operation-limited-help">
+                  {{ t('watchRule.cleanupEmptyDirsMoveOnly') }}
+                </div>
                 <div class="ignored-patterns">
                   <div class="ignored-header">
                     <div>
@@ -450,7 +456,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { watchRuleApi, type DiscoveryMode, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
+import { watchRuleApi, type DiscoveryMode, type FileOperationType, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
 import { templateVariablesApi } from '@/api/templateVariables'
 import type { TemplateVariableGroup, TemplateVariableStatus } from '@/types'
 import DirBrowserDialog from '@/components/DirBrowserDialog.vue'
@@ -634,7 +640,12 @@ const formRules: FormRules = {
 }
 
 const mediaTypeOptions = [{ value: 'AUTO' }, { value: 'MOVIE' }, { value: 'TV_SHOW' }]
-const operationOptions = [{ value: 'MOVE' }]
+const operationOptions: Array<{ value: FileOperationType }> = [
+  { value: 'MOVE' },
+  { value: 'COPY' },
+  { value: 'HARD_LINK' },
+  { value: 'SYMBOLIC_LINK' },
+]
 const discoveryModeOptions: Array<{ value: DiscoveryMode }> = [
   { value: 'WATCH_EVENT' },
   { value: 'PERIODIC_SCAN' },
@@ -680,7 +691,6 @@ async function toggleVariableDrawer() {
 function openDialog(rule?: WatchRule) {
   editingRule.value = rule ?? null
   Object.assign(form, defaultForm(), rule ? { ...rule } : {})
-  form.operation = 'MOVE'
   form.discoveryMode = form.discoveryMode || 'HYBRID'
   form.scanIntervalMinutes = Math.max(form.scanIntervalMinutes || 10, 5)
   form.webhookEnabled = false
@@ -706,6 +716,17 @@ async function handleSave() {
       ...form,
       moviePathTemplate: showMovieTemplate.value ? effectiveTemplate('movie') : undefined,
       tvPathTemplate: showTvTemplate.value ? effectiveTemplate('tv') : undefined,
+    }
+
+    const validation = (await watchRuleApi.validateRule(payload)).data.data
+    if (!validation.valid) {
+      const detailText = validation.details?.length ? `\n${validation.details.join('\n')}` : ''
+      await ElMessageBox.alert(
+        `${validation.message || t('watchRule.validation.preflightFailed')}${detailText}`,
+        t('watchRule.validation.preflightFailedTitle'),
+        { confirmButtonText: t('common.confirm'), type: 'error' },
+      )
+      return
     }
 
     if (editingRule.value?.id) {
@@ -1048,6 +1069,13 @@ h2 {
   text-decoration: underline;
 }
 
+.operation-help {
+  margin-top: 6px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .template-option {
   display: flex;
   align-items: center;
@@ -1140,6 +1168,11 @@ h2 {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
+}
+
+.operation-limited-help {
+  padding-top: 8px;
+  color: #e6a23c;
 }
 
 .ignored-patterns {

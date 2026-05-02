@@ -1518,3 +1518,57 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - Webhook 通知接口、token 配置来源和前端开关需后续单独实现。
+
+---
+
+## [ADR-014 文件操作策略与保存前校验] 2026-05-02
+
+### 已完成
+- 新增并开放四种文件操作策略：
+  - `MOVE`：沿用移动策略，不覆盖目标文件
+  - `COPY`：复制文件，源文件保留，不覆盖目标文件
+  - `HARD_LINK`：创建硬链接，不 fallback 到其他策略
+  - `SYMBOLIC_LINK`：创建指向源文件绝对路径的符号链接，不 fallback 到其他策略
+- 新增 `POST /api/watch-rules/validate` 保存前校验接口
+  - 请求体复用 `RuleRequest`
+  - 返回 `WatchRuleValidationResult`
+  - 校验源目录、目标目录读写能力
+  - 硬链接 / 符号链接通过临时文件真实创建验证
+- 附属文件处理改为复用当前 WatchRule 的文件操作策略
+  - 字幕、用户 NFO、封面在 `MOVE` 下移动
+  - 在 `COPY` 下复制
+  - 在 `HARD_LINK` 下创建硬链接
+  - 在 `SYMBOLIC_LINK` 下创建符号链接
+- 路径设置页文件操作方式下拉框正式展示四种操作
+- 前端保存规则前先调用校验接口，校验失败保持弹窗打开并展示原因
+- 非 `MOVE` 模式下提示自动清理空文件夹仅移动模式生效
+- 补充后端策略和 preflight 单元测试
+- 同步更新 API 契约
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/rename/CopyRenameStrategy.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/HardLinkRenameStrategy.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/SymbolicLinkRenameStrategy.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/FileOperationStrategy.java`
+- `backend/src/main/java/com/mediamarshal/service/watchrule/WatchRulePreflightService.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleValidationResult.java`
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `frontend/src/api/watchRule.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `backend/src/test/java/com/mediamarshal/service/rename/FileOperationStrategyTest.java`
+- `backend/src/test/java/com/mediamarshal/service/watchrule/WatchRulePreflightServiceTest.java`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 新增 `POST /api/watch-rules/validate`
+- `WatchRule.operation` / `RuleRequest.operation` 四种值均为前端可选
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无

@@ -1,9 +1,11 @@
 package com.mediamarshal.controller;
 
 import com.mediamarshal.model.dto.ApiResponse;
+import com.mediamarshal.model.dto.WatchRuleValidationResult;
 import com.mediamarshal.model.entity.WatchRule;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.discovery.FileDiscoveryService;
+import com.mediamarshal.service.watchrule.WatchRulePreflightService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -35,6 +37,7 @@ public class WatchRuleController {
 
     private final WatchRuleRepository watchRuleRepository;
     private final FileDiscoveryService fileDiscoveryService;
+    private final WatchRulePreflightService watchRulePreflightService;
 
     @GetMapping
     public ApiResponse<List<WatchRule>> listRules() {
@@ -48,6 +51,11 @@ public class WatchRuleController {
         log.info("WatchRule created: id={}, name={}, sourceDir={}", saved.getId(), saved.getName(), saved.getSourceDir());
         fileDiscoveryService.reload();
         return ApiResponse.ok(saved);
+    }
+
+    @PostMapping("/validate")
+    public ApiResponse<WatchRuleValidationResult> validateRule(@Valid @RequestBody RuleRequest request) {
+        return ApiResponse.ok(watchRulePreflightService.validate(request));
     }
 
     @PutMapping("/{id}")

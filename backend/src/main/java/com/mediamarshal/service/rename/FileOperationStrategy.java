@@ -6,8 +6,8 @@ import java.nio.file.Path;
 /**
  * 文件操作策略接口（Strategy Pattern）
  *
- * MVP 实现：MoveRenameStrategy（移动+改名）
- * 后续扩展：CopyRenameStrategy、HardLinkRenameStrategy、SymbolicLinkRenameStrategy
+ * v0.2.x 实现：MoveRenameStrategy、CopyRenameStrategy、
+ * HardLinkRenameStrategy、SymbolicLinkRenameStrategy。
  *
  * 扩展方式：
  *   1. 新建实现类，标注 @Component
