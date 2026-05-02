@@ -131,6 +131,8 @@ interface MatchResult {
 }
 ```
 
+> ADR-018 仅升级后端内部匹配策略，不新增前端可见字段：`GET /api/queue/{id}/search` 和自动匹配仍返回 `MatchResult[]`。后端会基于原始文件名与 guessit 标题生成多 query，使用进程内 TMDB 搜索 / 详情缓存与 in-flight 去重，并按标题、年份、媒体类型、文件结构综合评分；评分解释仅在 `media-marshal.debug=true` 时写入后端日志。
+
 ---
 
 ## 系统配置 `/api/settings`

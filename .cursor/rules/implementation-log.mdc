@@ -1967,3 +1967,84 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+
+---
+
+## [ADR-018 中文 / 双语标题多 Query 匹配] 2026-05-03
+
+### 已完成
+- 新增标题搜索计划构建组件，从 `originalFilename`、guessit 标题、年份和媒体类型提取 titleRegion，并生成中文标题、英文标题、组合标题和 guessit 兜底 query
+- `TmdbMetadataMatcher.search(ParseResult)` 从单 query 搜索升级为多 query 搜索
+  - 根据解析媒体类型选择 movie / tv 搜索端点
+  - 按 `mediaType + tmdbId` 合并去重
+  - 同一候选被多个 query 命中时保留最高置信度结果
+- 新增 TMDB 进程内缓存与 in-flight 去重
+  - 搜索缓存 key：`endpoint|query|year|language`
+  - 详情缓存 key：`mediaType|tmdbId|language`
+  - 普通搜索结果、空搜索结果、详情结果分别使用独立 TTL
+  - 缓存最大容量由配置控制，超限时优先清理过期项
+- 新增多维置信度评分
+  - 公式：`titleScore * 0.60 + yearScore * 0.20 + mediaTypeScore * 0.10 + structureBonus * 0.10`
+  - 明确媒体类型不匹配的候选直接过滤
+  - `media-marshal.debug=true` 时输出最佳候选的评分解释
+- 补充单元测试覆盖 ADR 验收样例、评分逻辑和缓存去重
+- 新增 TMDB 缓存配置默认值
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/matcher/TitleSearchPlanBuilder.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TitleSearchPlan.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TitleSearchQuery.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbInMemoryCache.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbConfidenceScorer.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TitleSearchPlanBuilderTest.java`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TmdbConfidenceScorerTest.java`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TmdbInMemoryCacheTest.java`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 无新增接口或前端可见字段
+- 已在 `api-contracts.mdc` 补充说明：ADR-018 仅升级后端内部匹配策略，现有 `MatchResult[]` 契约不变
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 当前缓存为进程内内存缓存，服务重启后失效；如后续需要缓存命中率统计、主动清理或跨实例共享，可再评估 Caffeine / Redis 等方案
+
+---
+
+## [ADR-018 验收补充修正] 2026-05-03
+
+### 已完成
+- 补齐 Debug 可解释日志字段
+  - `media-marshal.debug=true` 时输出 `originalFilename`、`guessitTitle`、`titleRegion`
+  - 输出 query 列表、query 类型和权重
+  - 输出每次 TMDB 搜索的 endpoint、query、year、cache `HIT/MISS/IN_FLIGHT` 和结果数量
+  - 输出 top candidates 的核心信息和 `bestQuery`、`titleScore`、`yearScore`、`mediaTypeScore`、`structureBonus`、最终置信度
+- 缓存层新增 `getWithStatus()`，保留原 `get()` 调用能力，同时支持调用方获取缓存命中状态
+- 补充 `方圆八百米.Eight.Hundred.S01E02...` 标题计划测试，确保生成 `方圆八百米`、`Eight Hundred`
+- 按验收补充要求移除 `Shameless.U.S...` 作为 ADR-018 必过测试样例
+- 调整 `structureBonus` 语义
+  - 仅当本地化 query 命中候选本地化标题、原始语言 query 命中候选 `originalTitle`，且二者指向同一候选时加分
+  - 不再按“是否剧集 / 是否非 guessit query / 是否高相似度”泛化加分
+  - 当前实现使用轻量相似度阈值近似判断，不引入 NLP / 分词库
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbInMemoryCache.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbConfidenceScorer.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TitleSearchPlanBuilder.java`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TitleSearchPlanBuilderTest.java`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TmdbConfidenceScorerTest.java`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TmdbInMemoryCacheTest.java`
+
+### 接口变更
+- 无新增接口或前端可见字段
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无

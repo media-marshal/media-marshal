@@ -44,6 +44,10 @@ media-marshal:
     language: zh-CN
     timeout-seconds: ${MEDIA_MARSHAL_TMDB_TIMEOUT_SECONDS:30}
     confirm-retry-attempts: ${MEDIA_MARSHAL_TMDB_CONFIRM_RETRY_ATTEMPTS:3}
+    search-cache-ttl-minutes: ${MEDIA_MARSHAL_TMDB_SEARCH_CACHE_TTL_MINUTES:360}
+    empty-search-cache-ttl-minutes: ${MEDIA_MARSHAL_TMDB_EMPTY_SEARCH_CACHE_TTL_MINUTES:10}
+    detail-cache-ttl-minutes: ${MEDIA_MARSHAL_TMDB_DETAIL_CACHE_TTL_MINUTES:1440}
+    cache-max-size: ${MEDIA_MARSHAL_TMDB_CACHE_MAX_SIZE:5000}
 
   parser:
     url: ${MEDIA_MARSHAL_PARSER_URL:http://parser:8000}
