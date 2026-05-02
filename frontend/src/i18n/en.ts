@@ -20,6 +20,7 @@ export default {
     batchDeleteSuccess: 'Selected task records deleted',
     details: 'Details',
     allStatuses: 'All Statuses',
+    allMediaTypes: 'All Types',
     recentTasks: 'Recent Tasks',
     file: 'File',
     mediaType: 'Type',

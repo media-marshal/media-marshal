@@ -20,6 +20,7 @@ export default {
     batchDeleteSuccess: '已删除选中的任务记录',
     details: '详情',
     allStatuses: '全部状态',
+    allMediaTypes: '全部类型',
     recentTasks: '最近任务',
     file: '文件',
     mediaType: '类型',
