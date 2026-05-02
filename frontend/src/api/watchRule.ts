@@ -1,6 +1,8 @@
 import http from './http'
 import type { ApiResponse } from '@/types'
 
+export type DiscoveryMode = 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
+
 export interface WatchRule {
   id?: number
   name: string
@@ -15,6 +17,9 @@ export interface WatchRule {
   cleanupEmptyDirs: boolean
   generateNfo: boolean
   ignoredFilePatterns: string[] | null
+  discoveryMode: DiscoveryMode
+  scanIntervalMinutes: number
+  webhookEnabled: boolean
   userId?: number
   createdAt?: string
   updatedAt?: string

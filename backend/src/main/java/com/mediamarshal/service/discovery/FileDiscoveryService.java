@@ -1,4 +1,4 @@
-package com.mediamarshal.service.watcher;
+package com.mediamarshal.service.discovery;
 
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.WatchRule;
@@ -38,24 +38,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
- * 文件监控服务（ADR-002 + ADR-005）
+ * 文件发现服务（ADR-013）。
  *
- * 职责：
- *  1. 从 watch_rule 表读取启用规则
- *  2. 递归监听每条规则的 sourceDir 及全部已存在子目录
- *  3. 运行期间发现新目录时立即递归注册
- *  4. 对视频文件事件执行防抖 + 文件大小稳定检测
- *  5. 通过数据库查重避免同一路径重复生成任务
- *
- * 关键约束：
- *  - WatchService 原生不支持递归监听，必须业务层逐目录注册
- *  - reload() 必须重建 WatchService，避免禁用/删除规则后旧 WatchKey 继续触发
- *  - 正在拷贝的大文件必须等待稳定后才进入 pipeline
+ * 统一承接实时文件事件、周期补扫和手动全量扫描，并复用同一套路径规范化、
+ * 忽略规则、文件分类、数据库查重与 pipeline 投递逻辑。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class FileWatcherService {
+public class FileDiscoveryService {
+
+    private static final int MIN_SCAN_INTERVAL_MINUTES = 5;
 
     private static final List<String> VIDEO_EXTENSIONS = List.of(
             ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".ts", ".m2ts", ".rmvb"
@@ -97,11 +90,14 @@ public class FileWatcherService {
     /** 文件绝对路径 → 防抖任务；同路径新事件会取消旧任务并重新计时。 */
     private final Map<String, ScheduledFuture<?>> debounceMap = new ConcurrentHashMap<>();
 
-    /** 正在执行全量扫描的源目录集合，用于防止同一路径重复扫描。 */
-    private final Set<String> activeFullScanSources = ConcurrentHashMap.newKeySet();
+    /** WatchRule ID → 周期扫描任务；reload 时整体重建。 */
+    private final Map<Long, ScheduledFuture<?>> periodicScanFutures = new ConcurrentHashMap<>();
 
-    /** 执行防抖延迟任务和文件大小稳定检测。 */
-    private final ScheduledExecutorService debounceExecutor = Executors.newScheduledThreadPool(2);
+    /** 正在扫描的规则集合，确保同一 WatchRule 同一时间只跑一个扫描。 */
+    private final Set<String> activeScanKeys = ConcurrentHashMap.newKeySet();
+
+    /** 执行防抖、稳定性检测和周期补扫。 */
+    private final ScheduledExecutorService discoveryExecutor = Executors.newScheduledThreadPool(4);
 
     @PostConstruct
     public void init() {
@@ -112,95 +108,143 @@ public class FileWatcherService {
     public void shutdown() throws IOException {
         running = false;
         cancelDebounceTasks();
-        debounceExecutor.shutdownNow();
+        cancelPeriodicScans();
+        discoveryExecutor.shutdownNow();
         if (watchService != null) {
             watchService.close();
         }
-        log.info("FileWatcherService stopped");
+        log.info("FileDiscoveryService stopped");
     }
 
     /**
-     * 热重载：
-     *  1. 重建 WatchService 和目录映射
-     *  2. 递归注册所有 enabled=true 的 WatchRule
-     *  3. 启动新的事件循环
+     * 热重载发现配置：
+     * 1. 重建 WatchService 和目录映射
+     * 2. 按 discoveryMode 注册实时监听或调度周期补扫
+     * 3. 清理旧防抖任务与旧周期扫描任务
      */
     public synchronized void reload() {
         rebuildWatchService();
+        cancelPeriodicScans();
 
         List<WatchRule> rules = watchRuleRepository.findByEnabledTrue();
         if (rules.isEmpty()) {
-            log.warn("No enabled watch rules found. FileWatcher is idle.");
+            log.warn("No enabled watch rules found. FileDiscovery is idle.");
             return;
         }
 
+        int watchRuleCount = 0;
+        int periodicRuleCount = 0;
         for (WatchRule rule : rules) {
             Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
-            registerDirectoryTree(root, rule);
+            if (usesWatchEvents(rule)) {
+                registerDirectoryTree(root, rule);
+                watchRuleCount++;
+            }
+            if (usesPeriodicScan(rule)) {
+                schedulePeriodicScan(rule);
+                periodicRuleCount++;
+            }
         }
 
-        log.info("FileWatcher reloaded: {} rules active, {} directories registered",
-                rules.size(), dirRuleMap.size());
+        log.info("FileDiscovery reloaded: {} rules active, {} watch rules, {} periodic rules, {} directories registered",
+                rules.size(), watchRuleCount, periodicRuleCount, dirRuleMap.size());
 
-        startWatchLoop();
+        if (!dirRuleMap.isEmpty()) {
+            startWatchLoop();
+        }
     }
 
     /**
      * 手动触发某条规则的历史文件全量扫描。
      *
-     * 扫描与 WatchService 事件处理共用视频扩展名过滤和数据库查重逻辑，
-     * 但不做防抖等待，因为历史文件通常已经稳定存在于磁盘上。
+     * 手动扫描是用户动作，不受规则 discoveryMode 限制。
      */
     public void triggerFullScan(WatchRule rule) {
         Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("WatchRule sourceDir is not a directory: " + rule.getSourceDir());
         }
+        startScan(rule, root, "manual full scan", true);
+    }
 
-        String scanKey = root.toString();
-        if (!activeFullScanSources.add(scanKey)) {
-            throw new IllegalStateException("Full scan is already running for this path. Please try again later.");
+    private void schedulePeriodicScan(WatchRule rule) {
+        int intervalMinutes = normalizeScanIntervalMinutes(rule.getScanIntervalMinutes());
+        ScheduledFuture<?> future = discoveryExecutor.scheduleWithFixedDelay(
+                () -> runPeriodicScan(rule),
+                intervalMinutes,
+                intervalMinutes,
+                TimeUnit.MINUTES
+        );
+        periodicScanFutures.put(rule.getId(), future);
+        log.info("Periodic scan scheduled: ruleId={}, rule='{}', interval={}m",
+                rule.getId(), rule.getName(), intervalMinutes);
+    }
+
+    private void runPeriodicScan(WatchRule rule) {
+        Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
+        if (!Files.isDirectory(root)) {
+            log.warn("Periodic scan skipped because sourceDir is not a directory: ruleId={}, sourceDir={}",
+                    rule.getId(), root);
+            return;
+        }
+        startScan(rule, root, "periodic scan", false);
+    }
+
+    private void startScan(WatchRule rule, Path root, String label, boolean rejectWhenRunning) {
+        String scanKey = scanKey(rule);
+        if (!activeScanKeys.add(scanKey)) {
+            String message = "Scan is already running for this rule. Please try again later.";
+            if (rejectWhenRunning) {
+                throw new IllegalStateException(message);
+            }
+            log.debug("{} skipped: ruleId={}, reason={}", label, rule.getId(), message);
+            return;
         }
 
         Thread.ofVirtual()
-                .name("watch-rule-full-scan-" + rule.getId())
-                .start(() -> runFullScan(root, rule, scanKey));
+                .name("file-discovery-scan-" + rule.getId())
+                .start(() -> runScan(root, rule, scanKey, label));
     }
 
-    private void runFullScan(Path root, WatchRule rule, String scanKey) {
-        log.info("Full scan started: ruleId={}, rule='{}', sourceDir={}",
-                rule.getId(), rule.getName(), root);
+    private void runScan(Path root, WatchRule rule, String scanKey, String label) {
+        log.info("{} started: ruleId={}, rule='{}', root={}",
+                label, rule.getId(), rule.getName(), root);
 
         ScanCounter counter = new ScanCounter();
         try {
-            Files.walkFileTree(root, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    Path normalized = dir.toAbsolutePath().normalize();
-                    if (!normalized.equals(root) && isIgnored(normalized, rule)) {
-                        counter.skipped++;
-                        log.debug("Full scan ignored directory subtree: {}", normalized);
-                        return FileVisitResult.SKIP_SUBTREE;
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    scanFile(file.toAbsolutePath().normalize(), rule, counter);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-            log.info("Full scan completed: ruleId={}, scanned={}, queued={}, skipped={}",
-                    rule.getId(), counter.scanned, counter.queued, counter.skipped);
+            discoverTree(root, rule, counter);
+            log.info("{} completed: ruleId={}, scanned={}, queued={}, skipped={}",
+                    label, rule.getId(), counter.scanned, counter.queued, counter.skipped);
         } catch (IOException e) {
-            log.error("Full scan failed: ruleId={}, sourceDir={}", rule.getId(), root, e);
+            log.error("{} failed: ruleId={}, root={}", label, rule.getId(), root, e);
         } finally {
-            activeFullScanSources.remove(scanKey);
+            activeScanKeys.remove(scanKey);
         }
     }
 
-    private void scanFile(Path file, WatchRule rule, ScanCounter counter) {
+    private void discoverTree(Path root, WatchRule rule, ScanCounter counter) throws IOException {
+        Path normalizedRoot = root.toAbsolutePath().normalize();
+        Files.walkFileTree(normalizedRoot, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                Path normalized = dir.toAbsolutePath().normalize();
+                if (!normalized.equals(normalizedRoot) && isIgnored(normalized, rule)) {
+                    counter.skipped++;
+                    log.debug("Scan ignored directory subtree: {}", normalized);
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                discoverFile(file.toAbsolutePath().normalize(), rule, counter);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    private void discoverFile(Path file, WatchRule rule, ScanCounter counter) {
         counter.scanned++;
         if (isIgnored(file, rule)) {
             counter.skipped++;
@@ -223,9 +267,6 @@ public class FileWatcherService {
         }
     }
 
-    /**
-     * reload 时重建 WatchService，确保旧目录不再继续触发事件。
-     */
     private void rebuildWatchService() {
         running = false;
         cancelDebounceTasks();
@@ -249,6 +290,11 @@ public class FileWatcherService {
     private void cancelDebounceTasks() {
         debounceMap.values().forEach(future -> future.cancel(false));
         debounceMap.clear();
+    }
+
+    private void cancelPeriodicScans() {
+        periodicScanFutures.values().forEach(future -> future.cancel(false));
+        periodicScanFutures.clear();
     }
 
     /**
@@ -295,8 +341,8 @@ public class FileWatcherService {
                     StandardWatchEventKinds.ENTRY_CREATE,
                     StandardWatchEventKinds.ENTRY_MODIFY);
             dirRuleMap.put(dir, rule);
-            log.info("Watching: {} (rule='{}', mediaType={}, operation={})",
-                    dir, rule.getName(), rule.getMediaType(), rule.getOperation());
+            log.info("Watching: {} (rule='{}', discoveryMode={}, mediaType={}, operation={})",
+                    dir, rule.getName(), rule.getDiscoveryMode(), rule.getMediaType(), rule.getOperation());
         } catch (IOException e) {
             log.error("Failed to register watch directory: {}", dir, e);
         }
@@ -304,14 +350,14 @@ public class FileWatcherService {
 
     private void startWatchLoop() {
         running = true;
-        Thread.ofVirtual().name("file-watcher-loop").start(() -> {
-            log.info("FileWatcher event loop started");
+        Thread.ofVirtual().name("file-discovery-watch-loop").start(() -> {
+            log.info("FileDiscovery watch event loop started");
             while (running) {
                 WatchKey key;
                 try {
                     key = watchService.take();
                 } catch (InterruptedException | ClosedWatchServiceException e) {
-                    log.info("FileWatcher event loop stopped");
+                    log.info("FileDiscovery watch event loop stopped");
                     break;
                 }
 
@@ -354,20 +400,25 @@ public class FileWatcherService {
             log.debug("File event: kind={}, path={}, rule={}", kind.name(), fullPath, rule.getName());
         }
 
+        if (!isInsideSourceDir(fullPath, rule)) {
+            log.warn("Discovered path is outside sourceDir, ignored: path={}, sourceDir={}",
+                    fullPath, rule.getSourceDir());
+            return;
+        }
+
         if (isIgnored(fullPath, rule)) {
             log.debug("Ignoring path by WatchRule ignoredFilePatterns: {}", fullPath);
             return;
         }
 
-        // 运行期间若收到新目录创建事件，立即递归注册，确保后续子文件可被检测。
         if (kind == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(fullPath)) {
-            log.info("New directory detected, registering recursively: {} (rule='{}')",
+            log.info("New directory detected, registering recursively and scanning once: {} (rule='{}')",
                     fullPath, rule.getName());
             registerDirectoryTree(fullPath, rule);
+            startScan(rule, fullPath, "new directory scan", false);
             return;
         }
 
-        // 目录事件只用于递归注册，不进入 pipeline。
         if (Files.isDirectory(fullPath)) {
             return;
         }
@@ -398,7 +449,7 @@ public class FileWatcherService {
         }
 
         long debounceSeconds = getDebounceSeconds();
-        ScheduledFuture<?> future = debounceExecutor.schedule(
+        ScheduledFuture<?> future = discoveryExecutor.schedule(
                 () -> processAfterStabilityCheck(file, rule),
                 debounceSeconds,
                 TimeUnit.SECONDS
@@ -463,11 +514,10 @@ public class FileWatcherService {
         }
 
         try {
-            log.info("Stable video file detected: {} (rule='{}')", file, rule.getName());
+            log.info("Stable video file discovered: {} (rule='{}')", file, rule.getName());
             pipeline.process(file, rule);
             return true;
         } catch (Exception e) {
-            // Pipeline 仍有未实现步骤，不能让异常杀死防抖线程或 WatchService。
             log.error("Pipeline execution failed for file: {}", file, e);
             return false;
         }
@@ -505,6 +555,33 @@ public class FileWatcherService {
             log.warn("Invalid watcher.debounce-seconds='{}', fallback to 3", value);
             return 3;
         }
+    }
+
+    private int normalizeScanIntervalMinutes(Integer value) {
+        return Math.max(value != null ? value : 10, MIN_SCAN_INTERVAL_MINUTES);
+    }
+
+    private boolean usesWatchEvents(WatchRule rule) {
+        WatchRule.DiscoveryMode mode = rule.getDiscoveryMode() != null
+                ? rule.getDiscoveryMode()
+                : WatchRule.DiscoveryMode.HYBRID;
+        return mode == WatchRule.DiscoveryMode.WATCH_EVENT || mode == WatchRule.DiscoveryMode.HYBRID;
+    }
+
+    private boolean usesPeriodicScan(WatchRule rule) {
+        WatchRule.DiscoveryMode mode = rule.getDiscoveryMode() != null
+                ? rule.getDiscoveryMode()
+                : WatchRule.DiscoveryMode.HYBRID;
+        return mode == WatchRule.DiscoveryMode.PERIODIC_SCAN || mode == WatchRule.DiscoveryMode.HYBRID;
+    }
+
+    private String scanKey(WatchRule rule) {
+        return rule.getId() != null ? "rule:" + rule.getId() : "source:" + rule.getSourceDir();
+    }
+
+    private boolean isInsideSourceDir(Path path, WatchRule rule) {
+        Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
+        return path.toAbsolutePath().normalize().startsWith(root);
     }
 
     private boolean isVideoFile(Path path) {

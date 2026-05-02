@@ -9,7 +9,7 @@ import java.util.List;
 @Repository
 public interface WatchRuleRepository extends JpaRepository<WatchRule, Long> {
 
-    /** 查询所有启用的规则（FileWatcherService 启动时调用） */
+    /** 查询所有启用的规则（FileDiscoveryService 启动时调用） */
     List<WatchRule> findByEnabledTrue();
 
     /** 根据源目录查询规则（文件事件触发时，用于找到对应规则） */

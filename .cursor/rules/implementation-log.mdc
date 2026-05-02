@@ -1466,3 +1466,55 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 当前变量说明和样例由后端固定中文内容返回；如后续要求帮助内容随前端语言切换，需要增加 locale 入参或返回多语言字段。
+
+---
+
+## [ADR-013 文件发现核心层] 2026-05-02
+
+### 已完成
+- `WatchRule` 新增 ADR-013 发现相关字段：
+  - `discoveryMode`：`WATCH_EVENT` / `PERIODIC_SCAN` / `HYBRID`，默认 `HYBRID`
+  - `scanIntervalMinutes`：周期补扫间隔，默认 10，保存时最小 5
+  - `webhookEnabled`：Webhook 预留开关，当前默认 `false`
+- 将 `FileWatcherService` 升级为 `FileDiscoveryService`
+  - 迁移递归监听、防抖、稳定性检测、忽略规则、文件分类、数据库查重、手动扫描逻辑
+  - `reload()` 按 `discoveryMode` 分流注册实时监听和周期扫描
+  - `WATCH_EVENT` 只注册 WatchService
+  - `PERIODIC_SCAN` 只调度周期扫描
+  - `HYBRID` 同时启用实时监听与周期补扫
+- 周期扫描与手动扫描共用统一发现链路
+  - 同一 WatchRule 同一时间只允许一个扫描任务运行
+  - 扫描仍依赖数据库查重避免重复入库
+- 新目录创建事件现在会先递归注册目录，再立即对该目录执行一次轻量扫描
+- `WatchRuleController` 改为调用 `FileDiscoveryService`
+- 路径设置页新增“文件发现模式”配置区
+  - 支持实时监听、定时扫描、混合模式
+  - 定时扫描 / 混合模式下展示扫描间隔输入
+  - 规则卡片展示发现模式摘要
+- 同步更新 API 契约
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/WatchRule.java`
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/java/com/mediamarshal/service/watcher/FileWatcherService.java`（删除）
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/repository/WatchRuleRepository.java`
+- `frontend/src/api/watchRule.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `WatchRule` / `RuleRequest` 新增 `discoveryMode`、`scanIntervalMinutes`、`webhookEnabled`
+- `POST /api/watch-rules/{id}/scan` 行为保持不变，但后端实现改为通过 `FileDiscoveryService.triggerFullScan()`
+- 本轮未新增 `POST /api/discovery/notify` Webhook 接口；`webhookEnabled` 仅作为后续预留字段
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- ADR-013 包含 Webhook 触发扫描设计；本轮按确认后的分阶段实施口径暂不开放 Webhook 接口和 token 鉴权。
+
+### 遗留问题 / 需 PM 决策
+- Webhook 通知接口、token 配置来源和前端开关需后续单独实现。

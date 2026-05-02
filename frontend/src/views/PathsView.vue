@@ -58,6 +58,9 @@
           <el-tag v-if="!rule.enabled" size="small" type="warning">
             {{ t('watchRule.disabled') }}
           </el-tag>
+          <el-tag size="small" type="success">
+            {{ t(`watchRule.discoveryModeOptions.${effectiveDiscoveryMode(rule)}`) }}
+          </el-tag>
         </div>
 
         <!-- 路径模板摘要 -->
@@ -262,6 +265,32 @@
           <section class="form-panel">
             <div class="form-panel-title">{{ t('watchRule.advancedSettings') }}</div>
 
+            <el-form-item :label="t('watchRule.discoverySettings')">
+              <div class="discovery-options">
+                <el-select v-model="form.discoveryMode" style="width: 100%">
+                  <el-option
+                    v-for="opt in discoveryModeOptions"
+                    :key="opt.value"
+                    :label="t(`watchRule.discoveryModeOptions.${opt.value}`)"
+                    :value="opt.value"
+                  />
+                </el-select>
+                <div class="discovery-help">
+                  {{ t(`watchRule.discoveryModeHelp.${form.discoveryMode}`) }}
+                </div>
+                <div v-if="showScanInterval" class="discovery-interval">
+                  <span>{{ t('watchRule.scanIntervalMinutes') }}</span>
+                  <el-input-number
+                    v-model="form.scanIntervalMinutes"
+                    :min="5"
+                    :step="5"
+                    controls-position="right"
+                    style="width: 140px"
+                  />
+                </div>
+              </div>
+            </el-form-item>
+
             <el-form-item :label="t('watchRule.fileHandling')">
               <div class="file-handling-options">
                 <div class="switch-row">
@@ -421,7 +450,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { watchRuleApi, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
+import { watchRuleApi, type DiscoveryMode, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
 import { templateVariablesApi } from '@/api/templateVariables'
 import type { TemplateVariableGroup, TemplateVariableStatus } from '@/types'
 import DirBrowserDialog from '@/components/DirBrowserDialog.vue'
@@ -516,6 +545,7 @@ const templateStates = reactive<Record<TemplateKind, {
 
 const showMovieTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'MOVIE')
 const showTvTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'TV_SHOW')
+const showScanInterval = computed(() => form.discoveryMode === 'PERIODIC_SCAN' || form.discoveryMode === 'HYBRID')
 
 function templateOptions(kind: TemplateKind) {
   return PRESET_TEMPLATES.filter(tpl => tpl.kind === kind)
@@ -588,6 +618,9 @@ const defaultForm = (): WatchRuleRequest => ({
   cleanupEmptyDirs: false,
   generateNfo: false,
   ignoredFilePatterns: null,
+  discoveryMode: 'HYBRID',
+  scanIntervalMinutes: 10,
+  webhookEnabled: false,
 })
 
 const form = reactive<WatchRuleRequest>(defaultForm())
@@ -602,6 +635,11 @@ const formRules: FormRules = {
 
 const mediaTypeOptions = [{ value: 'AUTO' }, { value: 'MOVIE' }, { value: 'TV_SHOW' }]
 const operationOptions = [{ value: 'MOVE' }]
+const discoveryModeOptions: Array<{ value: DiscoveryMode }> = [
+  { value: 'WATCH_EVENT' },
+  { value: 'PERIODIC_SCAN' },
+  { value: 'HYBRID' },
+]
 const defaultIgnoredPatterns = ['.DS_Store', 'Thumbs.db', 'desktop.ini', '*.part', '*.tmp', '*.crdownload', '*.lock', '~$*', '.*', '__MACOSX/', '@eaDir/']
 
 const effectiveIgnoredPatterns = computed(() => form.ignoredFilePatterns ?? defaultIgnoredPatterns)
@@ -643,6 +681,9 @@ function openDialog(rule?: WatchRule) {
   editingRule.value = rule ?? null
   Object.assign(form, defaultForm(), rule ? { ...rule } : {})
   form.operation = 'MOVE'
+  form.discoveryMode = form.discoveryMode || 'HYBRID'
+  form.scanIntervalMinutes = Math.max(form.scanIntervalMinutes || 10, 5)
+  form.webhookEnabled = false
 
   // 初始化模板状态
   resetTemplateState('movie', rule?.moviePathTemplate)
@@ -660,6 +701,7 @@ async function handleSave() {
 
   saving.value = true
   try {
+    form.scanIntervalMinutes = Math.max(form.scanIntervalMinutes || 10, 5)
     const payload: WatchRuleRequest = {
       ...form,
       moviePathTemplate: showMovieTemplate.value ? effectiveTemplate('movie') : undefined,
@@ -761,6 +803,10 @@ function restoreDefaultIgnoredPatterns() {
 
 function mediaTypeTagType(type: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined {
   return type === 'AUTO' ? 'info' : type === 'MOVIE' ? 'primary' : 'success'
+}
+
+function effectiveDiscoveryMode(rule: WatchRule): DiscoveryMode {
+  return rule.discoveryMode || 'HYBRID'
 }
 
 function templateVariableStatusType(status: TemplateVariableStatus): 'success' | 'info' {
@@ -1036,6 +1082,34 @@ h2 {
   border-color: #b3e19d;
   box-shadow: 0 2px 8px rgba(103, 194, 58, 0.18);
   transform: translateY(-1px);
+}
+
+.discovery-options {
+  width: 100%;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+}
+
+.discovery-help {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.discovery-interval {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f5;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .file-handling-options {

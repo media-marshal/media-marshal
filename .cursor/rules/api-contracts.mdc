@@ -171,8 +171,9 @@ interface UpdateRequest {
 | PATCH | `/api/watch-rules/{id}/toggle` | 启用/禁用规则 | — | `WatchRule` |
 | POST | `/api/watch-rules/{id}/scan` | 异步触发该规则源目录全量扫描 | — | — |
 
-> 规则变更后后端自动触发 `FileWatcherService.reload()`，无需前端额外操作。
+> 规则变更后后端自动触发 `FileDiscoveryService.reload()`，无需前端额外操作。
 > 全量扫描会递归遍历 `sourceDir` 下已有视频文件，并复用数据库查重；接口返回时仅表示扫描任务已开始。同一路径已有扫描未结束时，接口返回 `success=false`，提示稍后再试。
+> ADR-013 第一阶段暂不开放 `POST /api/discovery/notify` Webhook 接口；`webhookEnabled` 为后续预留字段，当前保存为 `false`。
 
 ### WatchRule 字段
 ```typescript
@@ -190,6 +191,9 @@ interface WatchRule {
   cleanupEmptyDirs: boolean
   generateNfo: boolean
   ignoredFilePatterns: string[] | null  // 可编辑忽略规则；null = 使用系统默认，[] = 不启用任何忽略规则
+  discoveryMode: 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
+  scanIntervalMinutes: number      // 周期补扫间隔分钟，仅 PERIODIC_SCAN / HYBRID 生效，最小 5
+  webhookEnabled: boolean          // Webhook 预留开关，当前接口未开放
   userId: number | null            // v1 始终为 null，多用户版本启用
   createdAt: string
   updatedAt: string
@@ -211,6 +215,9 @@ interface RuleRequest {
   cleanupEmptyDirs?: boolean       // 不填默认 false
   generateNfo?: boolean            // 不填默认 false
   ignoredFilePatterns?: string[] | null // 完整忽略规则列表；传 null = 恢复系统默认，传 [] = 不启用任何忽略规则
+  discoveryMode?: 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID' // 不填默认 HYBRID
+  scanIntervalMinutes?: number     // 不填默认 10；保存时小于 5 会按 5 处理
+  webhookEnabled?: boolean         // Webhook 预留开关；当前前端不暴露，默认 false
 }
 ```
 

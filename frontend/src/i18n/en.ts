@@ -149,6 +149,18 @@ export default {
     fullScanStarted: 'Full scan started',
     basicSettings: 'Basic Settings',
     advancedSettings: 'Advanced Settings',
+    discoverySettings: 'File Discovery Mode',
+    scanIntervalMinutes: 'Scan Interval (minutes)',
+    discoveryModeOptions: {
+      WATCH_EVENT: 'Watch Events',
+      PERIODIC_SCAN: 'Periodic Scan',
+      HYBRID: 'Hybrid Mode',
+    },
+    discoveryModeHelp: {
+      WATCH_EVENT: 'Best for local disks with reliable real-time file events. NAS, Docker volumes, or network mounts may miss events.',
+      PERIODIC_SCAN: 'Does not rely on file events. Best for NAS or unreliable event environments. Freshness depends on the scan interval.',
+      HYBRID: 'Recommended: combines real-time watching with periodic backfill scans for both responsiveness and reliability.',
+    },
     fileHandling: 'File Handling',
     moveAssociatedFiles: 'Move Associated Files',
     moveAssociatedFilesHelp: 'Automatically move same-name subtitles, NFO files, and cover images',

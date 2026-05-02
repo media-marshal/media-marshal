@@ -3,7 +3,7 @@ package com.mediamarshal.controller;
 import com.mediamarshal.model.dto.ApiResponse;
 import com.mediamarshal.model.entity.WatchRule;
 import com.mediamarshal.repository.WatchRuleRepository;
-import com.mediamarshal.service.watcher.FileWatcherService;
+import com.mediamarshal.service.discovery.FileDiscoveryService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -25,7 +25,7 @@ import java.util.Objects;
  * PATCH  /api/watch-rules/{id}/toggle  启用/禁用规则
  * POST   /api/watch-rules/{id}/scan    触发规则源目录全量扫描
  *
- * 规则变更后自动触发 FileWatcherService 重新加载监控目录。
+ * 规则变更后自动触发 FileDiscoveryService 重新加载发现配置。
  */
 @Slf4j
 @RestController
@@ -34,7 +34,7 @@ import java.util.Objects;
 public class WatchRuleController {
 
     private final WatchRuleRepository watchRuleRepository;
-    private final FileWatcherService fileWatcherService;
+    private final FileDiscoveryService fileDiscoveryService;
 
     @GetMapping
     public ApiResponse<List<WatchRule>> listRules() {
@@ -46,7 +46,7 @@ public class WatchRuleController {
         WatchRule rule = buildRule(new WatchRule(), request);
         WatchRule saved = watchRuleRepository.save(Objects.requireNonNull(rule));
         log.info("WatchRule created: id={}, name={}, sourceDir={}", saved.getId(), saved.getName(), saved.getSourceDir());
-        fileWatcherService.reload();
+        fileDiscoveryService.reload();
         return ApiResponse.ok(saved);
     }
 
@@ -60,7 +60,7 @@ public class WatchRuleController {
         buildRule(rule, request);
         WatchRule saved = watchRuleRepository.save(Objects.requireNonNull(rule));
         log.info("WatchRule updated: id={}, name={}", saved.getId(), saved.getName());
-        fileWatcherService.reload();
+        fileDiscoveryService.reload();
         return ApiResponse.ok(saved);
     }
 
@@ -68,7 +68,7 @@ public class WatchRuleController {
     public ApiResponse<Void> deleteRule(@PathVariable Long id) {
         watchRuleRepository.deleteById(Objects.requireNonNull(id));
         log.info("WatchRule deleted: id={}", id);
-        fileWatcherService.reload();
+        fileDiscoveryService.reload();
         return ApiResponse.ok();
     }
 
@@ -81,7 +81,7 @@ public class WatchRuleController {
         rule.setEnabled(!rule.getEnabled());
         WatchRule saved = watchRuleRepository.save(rule);
         log.info("WatchRule toggled: id={}, enabled={}", id, saved.getEnabled());
-        fileWatcherService.reload();
+        fileDiscoveryService.reload();
         return ApiResponse.ok(saved);
     }
 
@@ -93,7 +93,7 @@ public class WatchRuleController {
         }
 
         try {
-            fileWatcherService.triggerFullScan(rule);
+            fileDiscoveryService.triggerFullScan(rule);
             log.info("WatchRule full scan requested: id={}, sourceDir={}", id, rule.getSourceDir());
             return ApiResponse.ok();
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -115,7 +115,14 @@ public class WatchRuleController {
         rule.setCleanupEmptyDirs(req.getCleanupEmptyDirs() != null ? req.getCleanupEmptyDirs() : false);
         rule.setGenerateNfo(req.getGenerateNfo() != null ? req.getGenerateNfo() : false);
         rule.setIgnoredFilePatterns(req.getIgnoredFilePatterns());
+        rule.setDiscoveryMode(req.getDiscoveryMode() != null ? req.getDiscoveryMode() : WatchRule.DiscoveryMode.HYBRID);
+        rule.setScanIntervalMinutes(normalizeScanIntervalMinutes(req.getScanIntervalMinutes()));
+        rule.setWebhookEnabled(req.getWebhookEnabled() != null ? req.getWebhookEnabled() : false);
         return rule;
+    }
+
+    private int normalizeScanIntervalMinutes(Integer value) {
+        return Math.max(value != null ? value : 10, 5);
     }
 
     @Data
@@ -150,5 +157,11 @@ public class WatchRuleController {
         private Boolean generateNfo;
 
         private List<String> ignoredFilePatterns;
+
+        private WatchRule.DiscoveryMode discoveryMode;
+
+        private Integer scanIntervalMinutes;
+
+        private Boolean webhookEnabled;
     }
 }

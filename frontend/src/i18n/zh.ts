@@ -149,6 +149,18 @@ export default {
     fullScanStarted: '全量扫描已开始',
     basicSettings: '基本设置',
     advancedSettings: '高级设置',
+    discoverySettings: '文件发现模式',
+    scanIntervalMinutes: '扫描间隔（分钟）',
+    discoveryModeOptions: {
+      WATCH_EVENT: '实时监听',
+      PERIODIC_SCAN: '定时扫描',
+      HYBRID: '混合模式',
+    },
+    discoveryModeHelp: {
+      WATCH_EVENT: '适合本地磁盘，实时性好，但 NAS、Docker volume 或网络挂载上可能漏事件。',
+      PERIODIC_SCAN: '不依赖文件事件，适合 NAS 或事件不可靠环境，实时性取决于扫描间隔。',
+      HYBRID: '推荐模式：实时监听加定时补扫，兼顾实时性和可靠性。',
+    },
     fileHandling: '文件处理策略',
     moveAssociatedFiles: '自动移动附属文件',
     moveAssociatedFilesHelp: '自动移动同名字幕、NFO、封面图片',

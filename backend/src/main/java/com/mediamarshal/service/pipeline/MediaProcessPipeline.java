@@ -67,7 +67,7 @@ public class MediaProcessPipeline {
     private final EmailNotificationService emailNotificationService;
 
     /**
-     * 处理一个新发现的媒体文件（由 FileWatcherService 调用）
+     * 处理一个新发现的媒体文件（由 FileDiscoveryService 调用）
      *
      * @param file 媒体文件绝对路径
      * @param rule 触发此次处理的监控规则

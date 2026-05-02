@@ -63,7 +63,7 @@ public class WatchRule {
     @Column(nullable = false, length = 20)
     private FileOperationStrategy.OperationType operation = FileOperationStrategy.OperationType.MOVE;
 
-    /** 是否启用，禁用后 FileWatcherService 不注册此目录 */
+    /** 是否启用，禁用后 FileDiscoveryService 不注册、不调度此规则 */
     @Column(nullable = false)
     private Boolean enabled = true;
 
@@ -82,6 +82,19 @@ public class WatchRule {
     /** ADR-011：NULL 表示使用系统默认忽略规则，空字符串表示不启用任何忽略规则。 */
     @Column(columnDefinition = "TEXT")
     private String ignoredFilePatterns;
+
+    /** ADR-013：文件发现模式，默认混合模式。 */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DiscoveryMode discoveryMode = DiscoveryMode.HYBRID;
+
+    /** ADR-013：周期补扫间隔，仅 PERIODIC_SCAN / HYBRID 生效。 */
+    @Column(nullable = false)
+    private Integer scanIntervalMinutes = 10;
+
+    /** ADR-013：Webhook 入口预留开关，本轮暂不开放接口。 */
+    @Column(nullable = false)
+    private Boolean webhookEnabled = false;
 
     /** 多用户预留字段，v1 始终为 null */
     private Long userId;
@@ -110,6 +123,12 @@ public class WatchRule {
         MOVIE,
         TV_SHOW,
         AUTO
+    }
+
+    public enum DiscoveryMode {
+        WATCH_EVENT,
+        PERIODIC_SCAN,
+        HYBRID
     }
 
     public List<String> getIgnoredFilePatterns() {
