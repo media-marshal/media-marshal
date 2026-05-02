@@ -77,6 +77,32 @@ class TmdbConfidenceScorerTest {
         assertThat(score.structureBonus()).isZero();
     }
 
+    @Test
+    void boostsConfidenceWhenEnglishAliasUniquelyFindsChineseMovieCandidate() {
+        ParseResult parseResult = parse("movie", "The Flowers of War", 2011, null, null);
+        MatchResult candidate = candidate("金陵十三钗", "金陵十三钗", 2011, "MOVIE");
+        TitleSearchQuery query = new TitleSearchQuery("The Flowers of War", TitleSearchQueryType.ORIGINAL, 0.95);
+        TitleSearchPlan plan = new TitleSearchPlan(null, "The Flowers of War", "The Flowers of War", List.of(query));
+
+        TmdbScore score = scorer.score(parseResult, candidate, plan, query, 1);
+
+        assertThat(score.titleScore()).isGreaterThan(0.70);
+        assertThat(score.confidence()).isGreaterThan(0.70);
+    }
+
+    @Test
+    void boostsConfidenceWhenEnglishAliasUniquelyFindsChineseSeriesCandidate() {
+        ParseResult parseResult = parse("episode", "For the Sake of the Republic", 2003, 1, 1);
+        MatchResult candidate = candidate("走向共和", "走向共和", 2003, "TV_SHOW");
+        TitleSearchQuery query = new TitleSearchQuery("For the Sake of the Republic", TitleSearchQueryType.ORIGINAL, 0.95);
+        TitleSearchPlan plan = new TitleSearchPlan(null, "For the Sake of the Republic", "For the Sake of the Republic", List.of(query));
+
+        TmdbScore score = scorer.score(parseResult, candidate, plan, query, 1);
+
+        assertThat(score.titleScore()).isGreaterThan(0.70);
+        assertThat(score.confidence()).isGreaterThan(0.70);
+    }
+
     private ParseResult parse(String type, String title, Integer year, Integer season, Integer episode) {
         ParseResult parseResult = new ParseResult();
         parseResult.setType(type);

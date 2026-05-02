@@ -66,7 +66,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                     if (result == null || confidenceScorer.isStrongMediaTypeMismatch(parseResult, result)) {
                         continue;
                     }
-                    TmdbScore score = confidenceScorer.score(parseResult, result, plan, query);
+                    TmdbScore score = confidenceScorer.score(parseResult, result, plan, query, items.size());
                     result.setConfidence(score.confidence());
                     String key = result.getMediaType() + "|" + result.getSourceId();
                     ScoredMatch current = merged.get(key);

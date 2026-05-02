@@ -58,6 +58,8 @@ media-marshal:
     confidence-threshold: ${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:0.8}
     # ADR-005：文件事件防抖窗口，防止处理正在拷贝中的大文件
     debounce-seconds: ${MEDIA_MARSHAL_WATCHER_DEBOUNCE_SECONDS:3}
+    # 源文件缺失轻量巡检间隔，用于弥补 NAS / Docker volume / 网络盘删除事件漏发
+    missing-source-check-seconds: ${MEDIA_MARSHAL_WATCHER_MISSING_SOURCE_CHECK_SECONDS:60}
 
   watch-rule:
     preflight:

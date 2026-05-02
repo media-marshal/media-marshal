@@ -95,6 +95,9 @@ public class FileDiscoveryService {
     /** WatchRule ID → 周期扫描任务；reload 时整体重建。 */
     private final Map<Long, ScheduledFuture<?>> periodicScanFutures = new ConcurrentHashMap<>();
 
+    /** WatchRule ID → 源文件缺失巡检任务；用于弥补删除事件漏发。 */
+    private final Map<Long, ScheduledFuture<?>> missingSourceInspectionFutures = new ConcurrentHashMap<>();
+
     /** 正在扫描的规则集合，确保同一 WatchRule 同一时间只跑一个扫描。 */
     private final Set<String> activeScanKeys = ConcurrentHashMap.newKeySet();
 
@@ -111,6 +114,7 @@ public class FileDiscoveryService {
         running = false;
         cancelDebounceTasks();
         cancelPeriodicScans();
+        cancelMissingSourceInspections();
         discoveryExecutor.shutdownNow();
         if (watchService != null) {
             watchService.close();
@@ -127,6 +131,7 @@ public class FileDiscoveryService {
     public synchronized void reload() {
         rebuildWatchService();
         cancelPeriodicScans();
+        cancelMissingSourceInspections();
 
         List<WatchRule> rules = watchRuleRepository.findByEnabledTrue();
         if (rules.isEmpty()) {
@@ -146,6 +151,7 @@ public class FileDiscoveryService {
                 schedulePeriodicScan(rule);
                 periodicRuleCount++;
             }
+            scheduleMissingSourceInspection(rule);
         }
 
         log.info("FileDiscovery reloaded: {} rules active, {} watch rules, {} periodic rules, {} directories registered",
@@ -180,6 +186,36 @@ public class FileDiscoveryService {
         periodicScanFutures.put(rule.getId(), future);
         log.info("Periodic scan scheduled: ruleId={}, rule='{}', interval={}m",
                 rule.getId(), rule.getName(), intervalMinutes);
+    }
+
+    private void scheduleMissingSourceInspection(WatchRule rule) {
+        if (rule.getId() == null) {
+            return;
+        }
+        long intervalSeconds = getMissingSourceCheckSeconds();
+        ScheduledFuture<?> future = discoveryExecutor.scheduleWithFixedDelay(
+                () -> runMissingSourceInspection(rule),
+                intervalSeconds,
+                intervalSeconds,
+                TimeUnit.SECONDS
+        );
+        missingSourceInspectionFutures.put(rule.getId(), future);
+        log.info("Missing source inspection scheduled: ruleId={}, rule='{}', interval={}s",
+                rule.getId(), rule.getName(), intervalSeconds);
+    }
+
+    private void runMissingSourceInspection(WatchRule rule) {
+        try {
+            ScanCounter counter = new ScanCounter();
+            failMissingPendingTasks(rule, counter);
+            if (counter.missingFailed > 0) {
+                log.info("Missing source inspection completed: ruleId={}, missingFailed={}",
+                        rule.getId(), counter.missingFailed);
+            }
+        } catch (Exception e) {
+            log.warn("Missing source inspection failed: ruleId={}, rule='{}'",
+                    rule.getId(), rule.getName(), e);
+        }
     }
 
     private void runPeriodicScan(WatchRule rule) {
@@ -308,6 +344,11 @@ public class FileDiscoveryService {
         periodicScanFutures.clear();
     }
 
+    private void cancelMissingSourceInspections() {
+        missingSourceInspectionFutures.values().forEach(future -> future.cancel(false));
+        missingSourceInspectionFutures.clear();
+    }
+
     /**
      * 递归注册目录树。启动和 reload 时用于注册已存在目录；运行中发现新目录时也复用此方法。
      */
@@ -433,7 +474,7 @@ public class FileDiscoveryService {
 
         if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
             cancelDebouncedProcessing(fullPath);
-            failTaskIfSourceMissing(fullPath);
+            scheduleMissingSourceCheck(fullPath);
             return;
         }
 
@@ -479,6 +520,14 @@ public class FileDiscoveryService {
         if (oldFuture != null) {
             oldFuture.cancel(false);
         }
+    }
+
+    private void scheduleMissingSourceCheck(Path file) {
+        discoveryExecutor.schedule(
+                () -> failTaskIfSourceMissing(file),
+                getDebounceSeconds(),
+                TimeUnit.SECONDS
+        );
     }
 
     /**
@@ -616,6 +665,17 @@ public class FileDiscoveryService {
         } catch (NumberFormatException e) {
             log.warn("Invalid watcher.debounce-seconds='{}', fallback to 3", value);
             return 3;
+        }
+    }
+
+    private long getMissingSourceCheckSeconds() {
+        String value = settingsService.get("watcher.missing-source-check-seconds", "60");
+        try {
+            long seconds = Long.parseLong(value);
+            return Math.max(seconds, 10);
+        } catch (NumberFormatException e) {
+            log.warn("Invalid watcher.missing-source-check-seconds='{}', fallback to 60", value);
+            return 60;
         }
     }
 

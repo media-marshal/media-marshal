@@ -12,7 +12,12 @@ import java.util.Locale;
 class TmdbConfidenceScorer {
 
     TmdbScore score(ParseResult parseResult, MatchResult candidate, TitleSearchPlan plan, TitleSearchQuery matchedQuery) {
-        TitleScore titleScore = titleScore(candidate, plan.queries());
+        return score(parseResult, candidate, plan, matchedQuery, 0);
+    }
+
+    TmdbScore score(ParseResult parseResult, MatchResult candidate, TitleSearchPlan plan,
+                    TitleSearchQuery matchedQuery, int searchResultCount) {
+        TitleScore titleScore = titleScore(candidate, plan.queries(), matchedQuery, searchResultCount);
         double yearScore = yearScore(parseResult.getYear(), candidate.getYear());
         double mediaTypeScore = mediaTypeScore(parseResult, candidate);
         double structureBonus = structureBonus(candidate, plan);
@@ -24,7 +29,8 @@ class TmdbConfidenceScorer {
                 titleScore.score(), yearScore, mediaTypeScore, structureBonus);
     }
 
-    private TitleScore titleScore(MatchResult candidate, List<TitleSearchQuery> queries) {
+    private TitleScore titleScore(MatchResult candidate, List<TitleSearchQuery> queries,
+                                  TitleSearchQuery matchedQuery, int searchResultCount) {
         TitleScore best = new TitleScore(null, null, 0.0);
         for (TitleSearchQuery query : queries) {
             double rawScore = Math.max(
@@ -35,7 +41,36 @@ class TmdbConfidenceScorer {
                 best = new TitleScore(query.query(), query.type(), weighted);
             }
         }
+        TitleScore aliasEvidence = aliasSearchEvidenceScore(candidate, matchedQuery, searchResultCount);
+        if (aliasEvidence.score() > best.score()) {
+            return aliasEvidence;
+        }
         return best;
+    }
+
+    private TitleScore aliasSearchEvidenceScore(MatchResult candidate, TitleSearchQuery matchedQuery, int searchResultCount) {
+        if (matchedQuery == null || searchResultCount <= 0 || isTitleDirectlyComparable(candidate)) {
+            return new TitleScore(null, null, 0.0);
+        }
+        if (matchedQuery.type() != TitleSearchQueryType.ORIGINAL && matchedQuery.type() != TitleSearchQueryType.GUESSIT) {
+            return new TitleScore(null, null, 0.0);
+        }
+
+        /*
+         * TMDB 可以用英文别名召回中文条目，但 search API 返回的 title/originalTitle
+         * 未必包含该英文别名。若英文 query 只召回极少候选，就把“搜索命中本身”
+         * 作为弱标题证据，避免正确中文候选因标题字段不可比而固定落到 30%。
+         */
+        double evidence = searchResultCount == 1 ? 0.75 : (searchResultCount <= 3 ? 0.55 : 0.0);
+        return new TitleScore(matchedQuery.query(), matchedQuery.type(), evidence * matchedQuery.weight());
+    }
+
+    private boolean isTitleDirectlyComparable(MatchResult candidate) {
+        return hasAscii(candidate.getTitle()) || hasAscii(candidate.getOriginalTitle());
+    }
+
+    private boolean hasAscii(String value) {
+        return value != null && value.chars().anyMatch(ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
     }
 
     private double yearScore(Integer parsedYear, Integer candidateYear) {

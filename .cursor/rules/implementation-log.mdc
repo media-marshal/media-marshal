@@ -294,6 +294,37 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
+---
+
+## [英文别名命中评分与源文件缺失巡检优化] 2026-05-03
+
+### 已完成
+- 优化英文别名命中文中标题候选的置信度评分
+  - 当 TMDB 通过英文 `ORIGINAL` / `GUESSIT` query 召回中文标题候选，但候选 `title/originalTitle` 不含英文别名时，不再把标题分固定视为 0
+  - 若该英文 query 仅召回 1 个候选，将“搜索唯一命中”作为弱标题证据，显著提升正确中文候选置信度
+  - 若该英文 query 召回 2-3 个候选，给予较低的弱标题证据；结果更多时不加分
+  - 补充单元测试覆盖 `The Flowers of War -> 金陵十三钗`、`For the Sake of the Republic -> 走向共和` 类场景
+- 优化删除源文件后的自动失败检测
+  - 删除事件不再只做即时检查，改为按 `watcher.debounce-seconds` 延迟复核，避免事件顺序和文件系统延迟造成误判
+  - 为每条启用 WatchRule 增加轻量源文件缺失巡检，只检查数据库中 `PENDING` / `AWAITING_CONFIRMATION` 任务的 `sourcePath` 是否存在，不执行全量目录扫描
+  - 新增配置 `watcher.missing-source-check-seconds`，默认 60 秒，最小 10 秒，用于弥补 NAS / Docker volume / 网络盘删除事件漏发
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbConfidenceScorer.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/matcher/TmdbConfidenceScorerTest.java`
+
+### 接口变更
+- 无新增接口或前端可见字段
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- `Shameless.U.S...` 这类国家/版本缩写仍未作为通用规则处理；如需要支持，应单独设计英文标题后缀规范化策略，例如同时搜索 `Shameless` 与 `Shameless U.S`
+
 ## [ADR-015 模板变量帮助与路径预览] 2026-05-02
 
 ### 已完成
