@@ -31,6 +31,12 @@ docker compose up -d
 open http://localhost:3000
 ```
 
+### Documentation
+
+- [User Guide](docs/user-guide.md)
+- [Deployment Guide](docs/deployment.md)
+- [FAQ](docs/faq.md)
+
 ### Environment Variables
 
 | Variable | Description | Default | Required |
@@ -97,6 +103,12 @@ docker compose up -d
 # 3. 打开 Web UI，并在系统设置中填写 TMDB API Key
 open http://localhost:3000
 ```
+
+### 使用文档
+
+- [用户手册](docs/user-guide.md)
+- [部署指南](docs/deployment.md)
+- [常见问题](docs/faq.md)
 
 ### 本地开发
 

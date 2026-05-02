@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
  * 支持的占位符格式：
  *   {varname}        → 直接 toString，如 {title} → "The Dark Knight"
  *   {varname:02d}    → 数值格式化，如 {season:02d} → "03"（对应 String.format("%02d", value)）
+ *   [[ ... ]]        → 可选片段；片段内任意变量缺失时移除整个片段
  *
  * Null 值处理：占位符保持原样（不替换）。
  * 这样用户能从路径中看出哪个变量未被填充，便于调试。
@@ -32,10 +33,13 @@ public class TemplateRenderer {
      */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+)(?::([^}]+))?}");
 
+    /** 匹配 ADR-017 的一层可选片段 [[ ... ]]，v1 不支持嵌套。 */
+    private static final Pattern OPTIONAL_SEGMENT = Pattern.compile("\\[\\[(.*?)]\\]");
+
     /**
      * 渲染模板字符串
      *
-     * @param template  模板字符串，如 "{title} ({year})/{title} ({year}) - {resolution}{ext}"
+     * @param template  模板字符串，如 "{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}"
      * @param variables 变量袋
      * @return 渲染后的路径字符串（不含目标根目录）
      */
@@ -43,13 +47,45 @@ public class TemplateRenderer {
         Map<String, Object> varMap = buildVarMap(variables);
         log.debug("Rendering template='{}' with vars={}", template, varMap);
 
+        String withOptionalSegments = renderOptionalSegments(template, varMap);
+        String output = renderPlaceholders(withOptionalSegments, varMap);
+        log.debug("Template rendered: '{}'", output);
+        return output;
+    }
+
+    private String renderOptionalSegments(String template, Map<String, Object> varMap) {
+        Matcher matcher = OPTIONAL_SEGMENT.matcher(template);
+        StringBuilder result = new StringBuilder();
+
+        while (matcher.find()) {
+            String segment = matcher.group(1);
+            String replacement = canRenderAllPlaceholders(segment, varMap)
+                    ? renderPlaceholders(segment, varMap)
+                    : "";
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private boolean canRenderAllPlaceholders(String segment, Map<String, Object> varMap) {
+        Matcher matcher = PLACEHOLDER.matcher(segment);
+        while (matcher.find()) {
+            if (varMap.get(matcher.group(1)) == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String renderPlaceholders(String template, Map<String, Object> varMap) {
         Matcher matcher = PLACEHOLDER.matcher(template);
         StringBuilder result = new StringBuilder();
 
         while (matcher.find()) {
             String varName = matcher.group(1);
-            String format  = matcher.group(2);   // null if no format specifier
-            Object value   = varMap.get(varName);
+            String format = matcher.group(2);   // null if no format specifier
+            Object value = varMap.get(varName);
 
             if (value == null) {
                 // 变量未填充，保持占位符原样
@@ -62,10 +98,7 @@ public class TemplateRenderer {
             matcher.appendReplacement(result, Matcher.quoteReplacement(rendered));
         }
         matcher.appendTail(result);
-
-        String output = result.toString();
-        log.debug("Template rendered: '{}'", output);
-        return output;
+        return result.toString();
     }
 
     /**

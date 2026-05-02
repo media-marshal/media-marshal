@@ -4,7 +4,9 @@ import com.mediamarshal.model.entity.MediaTask;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface MediaTaskRepository extends JpaRepository<MediaTask, Long> {
@@ -20,4 +22,8 @@ public interface MediaTaskRepository extends JpaRepository<MediaTask, Long> {
      * 同一路径如果已有非 FAILED 任务，说明正在处理或已成功处理，应跳过，避免重复入库。
      */
     boolean existsBySourcePathAndStatusNot(String sourcePath, MediaTask.TaskStatus status);
+
+    Optional<MediaTask> findBySourcePath(String sourcePath);
+
+    List<MediaTask> findByRuleIdAndStatusIn(Long ruleId, Collection<MediaTask.TaskStatus> statuses);
 }

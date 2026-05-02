@@ -197,6 +197,8 @@ export default {
   templateVariables: {
     title: '可用变量',
     description: '这些变量可以写入路径模板中，整理文件时会自动替换为对应的媒体信息。',
+    optionalSegmentTitle: '可选片段',
+    optionalSegmentDescription: '使用 [[ ... ]] 包裹可选片段；片段内任意变量缺失时，整个片段会被移除。',
     empty: '暂无可用变量',
     copySuccess: '变量已复制',
     type: '类型',

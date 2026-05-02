@@ -3,6 +3,8 @@ package com.mediamarshal.service.watchrule;
 import com.mediamarshal.controller.WatchRuleController;
 import com.mediamarshal.model.dto.WatchRuleValidationResult;
 import com.mediamarshal.service.rename.FileOperationStrategy;
+import com.mediamarshal.service.settings.SettingsService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -21,9 +23,17 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class WatchRulePreflightService {
 
+    private final SettingsService settingsService;
+
     public WatchRuleValidationResult validate(WatchRuleController.RuleRequest request) {
+        if (!isPreflightEnabled()) {
+            log.warn("WatchRule preflight validation is disabled by configuration");
+            return WatchRuleValidationResult.ok();
+        }
+
         List<String> details = new ArrayList<>();
         Path sourceDir = Paths.get(request.getSourceDir()).toAbsolutePath().normalize();
         Path targetDir = Paths.get(request.getTargetDir()).toAbsolutePath().normalize();
@@ -45,15 +55,19 @@ public class WatchRulePreflightService {
         return WatchRuleValidationResult.fail("WatchRule 校验失败", details);
     }
 
+    private boolean isPreflightEnabled() {
+        return Boolean.parseBoolean(settingsService.get("watch-rule.preflight.enabled", "true"));
+    }
+
     private void validateSourceDirectory(Path sourceDir, FileOperationStrategy.OperationType operation, List<String> details) {
         if (!Files.isDirectory(sourceDir)) {
             details.add("源目录不存在或不是目录: " + sourceDir);
             return;
         }
-        if (!Files.isReadable(sourceDir)) {
+        if (!canReadDirectory(sourceDir)) {
             details.add("源目录不可读: " + sourceDir);
         }
-        if (operation == FileOperationStrategy.OperationType.MOVE && !Files.isWritable(sourceDir)) {
+        if (operation == FileOperationStrategy.OperationType.MOVE && !canWriteProbe(sourceDir, "source-write-test")) {
             details.add("移动模式要求源目录可写: " + sourceDir);
         }
     }
@@ -69,16 +83,29 @@ public class WatchRulePreflightService {
             details.add("目标路径不是目录: " + targetDir);
             return;
         }
-        if (!Files.isWritable(targetDir)) {
-            details.add("目标目录不可写: " + targetDir);
-            return;
-        }
 
-        Path probe = targetDir.resolve(".media-marshal-write-test-" + UUID.randomUUID());
+        if (!canWriteProbe(targetDir, "target-write-test")) {
+            details.add("目标目录不可写: " + targetDir);
+        }
+    }
+
+    private boolean canReadDirectory(Path dir) {
+        try (var ignored = Files.list(dir)) {
+            return true;
+        } catch (IOException | SecurityException e) {
+            log.debug("Directory read probe failed: dir={}, error={}", dir, e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean canWriteProbe(Path dir, String probeName) {
+        Path probe = dir.resolve(".media-marshal-" + probeName + "-" + UUID.randomUUID());
         try {
             Files.writeString(probe, "ok");
+            return true;
         } catch (IOException e) {
-            details.add("目标目录写入测试失败: " + targetDir + "，原因: " + e.getMessage());
+            log.debug("Directory write probe failed: dir={}, error={}", dir, e.getMessage());
+            return false;
         } finally {
             deleteIfExists(probe);
         }

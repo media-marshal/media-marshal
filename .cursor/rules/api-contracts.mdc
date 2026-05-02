@@ -60,8 +60,8 @@ interface MediaTask {
 | GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务 | — | `MediaTask[]` |
 | GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
 | GET | `/api/queue/{id}/search?q={keyword}` | 用户手动重新搜索 TMDB（不写入候选表）；纯数字先按 TMDB ID 查询再按关键词搜索，非数字仅按关键词搜索 | — | `MatchResult[]` |
-| POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理 | `ConfirmRequest` | — |
-| POST | `/api/queue/batch-confirm` | 批量人工确认；逐条提交后台整理，单条提交失败不回滚整个批次 | `BatchConfirmRequest` | `BatchConfirmResponse` |
+| POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理；源文件不存在时任务转为 FAILED 并返回失败信息 | `ConfirmRequest` | — |
+| POST | `/api/queue/batch-confirm` | 批量人工确认；逐条提交后台整理，源文件缺失或单条提交失败不回滚整个批次 | `BatchConfirmRequest` | `BatchConfirmResponse` |
 | POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 SKIPPED，写入 `skipReason`） | — | — |
 
 ### ConfirmRequest
@@ -89,12 +89,13 @@ interface BatchConfirmResponse {
   results: Array<{
     taskId: number
     success: boolean              // true 表示已接收并进入后台整理，不表示文件整理已完成
-    message: string | null         // success=false 时返回提交失败原因
+    message: string | null         // success=false 时返回提交失败原因；源文件缺失时为“源文件不存在，无法继续处理”
   }>
 }
 ```
 
 > 人工单条确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_SINGLE`；批量确认接口会快速返回提交结果，成功提交的任务先进入 `PROCESSING`，后台整理完成后最终状态仍为 `DONE`，`confirmationSource=MANUAL_BATCH`。系统高置信度自动采纳时 `confirmationSource=AUTO_MATCH`。
+> 后台删除事件监听、周期扫描巡检和确认前最终校验都会将源文件缺失的 `PENDING` / `AWAITING_CONFIRMATION` 任务标记为 `FAILED`，固定失败信息为：`源文件不存在，无法继续处理`。v1 不自动失败 `PROCESSING` 任务，避免误伤正在执行的文件操作。
 
 ### TaskCandidate
 ```typescript
@@ -222,7 +223,7 @@ interface RuleRequest {
 }
 ```
 
-> v0.2.x 前端路径设置页开放 `MOVE`、`COPY`、`HARD_LINK`、`SYMBOLIC_LINK`。保存规则前必须先调用 `POST /api/watch-rules/validate`，校验失败时不得保存。
+> v0.2.x 前端路径设置页开放 `MOVE`、`COPY`、`HARD_LINK`、`SYMBOLIC_LINK`。保存规则前必须先调用 `POST /api/watch-rules/validate`，校验失败时不得保存。后端可通过配置 `watch-rule.preflight.enabled=false`（环境变量 `MEDIA_MARSHAL_WATCH_RULE_PREFLIGHT_ENABLED=false`）关闭保存前校验；关闭后该接口直接返回 `valid=true`。
 > 忽略规则支持文件名、通配符和目录规则（如 `sample/`）；命中规则的文件或目录会被静默忽略，不生成 `SKIPPED` 任务。
 
 ### WatchRuleValidationResult
@@ -235,8 +236,8 @@ interface WatchRuleValidationResult {
 ```
 
 校验规则：
-- `MOVE`：`sourceDir` 必须存在且可读写；`targetDir` 必须可创建 / 可写。
-- `COPY`：`sourceDir` 必须存在且可读；`targetDir` 必须可创建 / 可写。
+- `MOVE`：`sourceDir` 必须存在且可读写；`targetDir` 必须可创建 / 可写。目录写权限以真实临时文件写入/删除探测为准，避免 Windows 网络盘下 `Files.isWritable()` 误判。
+- `COPY`：`sourceDir` 必须存在且可读；`targetDir` 必须可创建 / 可写。目录写权限以真实临时文件写入/删除探测为准。
 - `HARD_LINK`：除基础读写校验外，后端会创建临时文件并真实尝试创建硬链接；失败时返回明确原因。
 - `SYMBOLIC_LINK`：除基础读写校验外，后端会创建临时文件并真实尝试创建符号链接；失败时返回明确原因。
 - 校验使用随机临时文件名，完成后清理临时文件和链接，不覆盖用户已有文件。
@@ -274,6 +275,7 @@ interface TemplateVariableItem {
 
 > 变量名来源以 `TemplateVariables` 上的 `@TemplateVar` 注解为准；格式化变量目前按 ADR-001 暴露 `{season:02d}`、`{season:04d}`、`{episode:02d}`、`{episode:04d}`。
 > 前端帮助面板仅展示 `AVAILABLE` 和 `DEPRECATED` 变量；`DEPRECATED` 变量需展示废弃提示，`RESERVED` / `UNAVAILABLE` 不展示。
+> 路径模板支持可选片段语法 `[[ ... ]]`：片段内所有变量都可填充时渲染片段，任意变量缺失时移除整个片段。可选片段外的缺失变量仍保留占位符原样。例如 `{title} ({year})[[ - {resolution}]]{ext}` 在分辨率缺失时渲染为 `{title} ({year}){ext}` 的替换结果。
 
 ---
 

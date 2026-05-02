@@ -42,6 +42,8 @@ media-marshal:
     base-url: https://api.themoviedb.org/3
     # 返回语言，zh-CN 优先，fallback 到 en-US
     language: zh-CN
+    timeout-seconds: ${MEDIA_MARSHAL_TMDB_TIMEOUT_SECONDS:30}
+    confirm-retry-attempts: ${MEDIA_MARSHAL_TMDB_CONFIRM_RETRY_ATTEMPTS:3}
 
   parser:
     url: ${MEDIA_MARSHAL_PARSER_URL:http://parser:8000}
@@ -53,12 +55,18 @@ media-marshal:
     # ADR-005：文件事件防抖窗口，防止处理正在拷贝中的大文件
     debounce-seconds: ${MEDIA_MARSHAL_WATCHER_DEBOUNCE_SECONDS:3}
 
+  watch-rule:
+    preflight:
+      # 保存 WatchRule 前是否校验源目录/目标目录和文件操作能力。
+      # Windows 网络盘 / SMB 映射路径可能出现 Java 权限探测误判，可通过环境变量关闭。
+      enabled: ${MEDIA_MARSHAL_WATCH_RULE_PREFLIGHT_ENABLED:true}
+
   # ─── 命名模板（ADR-001）────────────────────────────────────────
   # WatchRule 的 moviePathTemplate / tvPathTemplate 不为空时优先使用规则模板，此处为全局 fallback 默认值
   rename:
     template:
-      movie: ${MEDIA_MARSHAL_TEMPLATE_MOVIE:{title} ({year})/{title} ({year}) - {resolution}{ext}}
-      tv: ${MEDIA_MARSHAL_TEMPLATE_TV:{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}}
+      movie: ${MEDIA_MARSHAL_TEMPLATE_MOVIE:{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}}
+      tv: ${MEDIA_MARSHAL_TEMPLATE_TV:{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}}
 
   # ─── 废弃配置项（ADR-002，不再生效）────────────────────────────
   # watcher.watch-dirs / output.*-dir / operation.strategy

@@ -88,7 +88,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                         .build(endpoint, sourceId))
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .block(Duration.ofSeconds(10));
+                .block(Duration.ofSeconds(getTimeoutSeconds()));
 
         if (root == null || root.isMissingNode()) {
             throw new IllegalStateException("TMDB detail response is empty: id=" + sourceId);
@@ -147,7 +147,17 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                 })
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .block(Duration.ofSeconds(10));
+                .block(Duration.ofSeconds(getTimeoutSeconds()));
+    }
+
+    private long getTimeoutSeconds() {
+        String value = settingsService.get("tmdb.timeout-seconds", "30");
+        try {
+            return Math.max(Long.parseLong(value), 1);
+        } catch (NumberFormatException e) {
+            log.warn("Invalid tmdb.timeout-seconds='{}', fallback to 30", value);
+            return 30;
+        }
     }
 
     private MatchResult mapSearchItem(JsonNode item, String endpoint, ParseResult parseResult) {

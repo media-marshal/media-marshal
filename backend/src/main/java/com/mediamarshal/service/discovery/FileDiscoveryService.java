@@ -6,6 +6,7 @@ import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.pipeline.MediaProcessPipeline;
 import com.mediamarshal.service.settings.SettingsService;
+import com.mediamarshal.websocket.EventPublisher;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -80,6 +81,7 @@ public class FileDiscoveryService {
     private final MediaTaskRepository mediaTaskRepository;
     private final MediaProcessPipeline pipeline;
     private final SettingsService settingsService;
+    private final EventPublisher eventPublisher;
 
     private WatchService watchService;
     private volatile boolean running = false;
@@ -164,7 +166,7 @@ public class FileDiscoveryService {
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("WatchRule sourceDir is not a directory: " + rule.getSourceDir());
         }
-        startScan(rule, root, "manual full scan", true);
+        startScan(rule, root, "manual full scan", true, true);
     }
 
     private void schedulePeriodicScan(WatchRule rule) {
@@ -187,10 +189,16 @@ public class FileDiscoveryService {
                     rule.getId(), root);
             return;
         }
-        startScan(rule, root, "periodic scan", false);
+        startScan(rule, root, "periodic scan", false, true);
     }
 
-    private void startScan(WatchRule rule, Path root, String label, boolean rejectWhenRunning) {
+    private void startScan(
+            WatchRule rule,
+            Path root,
+            String label,
+            boolean rejectWhenRunning,
+            boolean inspectMissingSources
+    ) {
         String scanKey = scanKey(rule);
         if (!activeScanKeys.add(scanKey)) {
             String message = "Scan is already running for this rule. Please try again later.";
@@ -203,18 +211,21 @@ public class FileDiscoveryService {
 
         Thread.ofVirtual()
                 .name("file-discovery-scan-" + rule.getId())
-                .start(() -> runScan(root, rule, scanKey, label));
+                .start(() -> runScan(root, rule, scanKey, label, inspectMissingSources));
     }
 
-    private void runScan(Path root, WatchRule rule, String scanKey, String label) {
+    private void runScan(Path root, WatchRule rule, String scanKey, String label, boolean inspectMissingSources) {
         log.info("{} started: ruleId={}, rule='{}', root={}",
                 label, rule.getId(), rule.getName(), root);
 
         ScanCounter counter = new ScanCounter();
         try {
             discoverTree(root, rule, counter);
-            log.info("{} completed: ruleId={}, scanned={}, queued={}, skipped={}",
-                    label, rule.getId(), counter.scanned, counter.queued, counter.skipped);
+            if (inspectMissingSources) {
+                failMissingPendingTasks(rule, counter);
+            }
+            log.info("{} completed: ruleId={}, scanned={}, queued={}, skipped={}, missingFailed={}",
+                    label, rule.getId(), counter.scanned, counter.queued, counter.skipped, counter.missingFailed);
         } catch (IOException e) {
             log.error("{} failed: ruleId={}, root={}", label, rule.getId(), root, e);
         } finally {
@@ -339,7 +350,8 @@ public class FileDiscoveryService {
         try {
             dir.register(watchService,
                     StandardWatchEventKinds.ENTRY_CREATE,
-                    StandardWatchEventKinds.ENTRY_MODIFY);
+                    StandardWatchEventKinds.ENTRY_MODIFY,
+                    StandardWatchEventKinds.ENTRY_DELETE);
             dirRuleMap.put(dir, rule);
             log.info("Watching: {} (rule='{}', discoveryMode={}, mediaType={}, operation={})",
                     dir, rule.getName(), rule.getDiscoveryMode(), rule.getMediaType(), rule.getOperation());
@@ -415,7 +427,13 @@ public class FileDiscoveryService {
             log.info("New directory detected, registering recursively and scanning once: {} (rule='{}')",
                     fullPath, rule.getName());
             registerDirectoryTree(fullPath, rule);
-            startScan(rule, fullPath, "new directory scan", false);
+            startScan(rule, fullPath, "new directory scan", false, false);
+            return;
+        }
+
+        if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+            cancelDebouncedProcessing(fullPath);
+            failTaskIfSourceMissing(fullPath);
             return;
         }
 
@@ -443,10 +461,7 @@ public class FileDiscoveryService {
      */
     private void scheduleDebouncedProcessing(Path file, WatchRule rule) {
         String key = file.toString();
-        ScheduledFuture<?> oldFuture = debounceMap.remove(key);
-        if (oldFuture != null) {
-            oldFuture.cancel(false);
-        }
+        cancelDebouncedProcessing(file);
 
         long debounceSeconds = getDebounceSeconds();
         ScheduledFuture<?> future = discoveryExecutor.schedule(
@@ -457,6 +472,13 @@ public class FileDiscoveryService {
         debounceMap.put(key, future);
 
         log.debug("Debounced video file event: path={}, delay={}s", file, debounceSeconds);
+    }
+
+    private void cancelDebouncedProcessing(Path file) {
+        ScheduledFuture<?> oldFuture = debounceMap.remove(file.toString());
+        if (oldFuture != null) {
+            oldFuture.cancel(false);
+        }
     }
 
     /**
@@ -544,6 +566,46 @@ public class FileDiscoveryService {
         mediaTaskRepository.save(task);
         log.info("Non-video file skipped: path={}, rule='{}'", file, rule.getName());
         return true;
+    }
+
+    private void failMissingPendingTasks(WatchRule rule, ScanCounter counter) {
+        if (rule.getId() == null) {
+            return;
+        }
+        List<MediaTask> pendingTasks = mediaTaskRepository.findByRuleIdAndStatusIn(
+                rule.getId(),
+                List.of(MediaTask.TaskStatus.PENDING, MediaTask.TaskStatus.AWAITING_CONFIRMATION)
+        );
+        for (MediaTask task : pendingTasks) {
+            Path sourcePath = Paths.get(task.getSourcePath()).toAbsolutePath().normalize();
+            if (!Files.exists(sourcePath)) {
+                markMissingSourceFailed(task);
+                counter.missingFailed++;
+            }
+        }
+    }
+
+    private void failTaskIfSourceMissing(Path sourcePath) {
+        String normalizedSourcePath = sourcePath.toAbsolutePath().normalize().toString();
+        mediaTaskRepository.findBySourcePath(normalizedSourcePath).ifPresent(task -> {
+            if (isMissingSourceFailureCandidate(task)) {
+                markMissingSourceFailed(task);
+            }
+        });
+    }
+
+    private boolean isMissingSourceFailureCandidate(MediaTask task) {
+        return MediaTask.TaskStatus.PENDING.equals(task.getStatus())
+                || MediaTask.TaskStatus.AWAITING_CONFIRMATION.equals(task.getStatus());
+    }
+
+    private void markMissingSourceFailed(MediaTask task) {
+        task.setStatus(MediaTask.TaskStatus.FAILED);
+        task.setErrorMessage(MediaProcessPipeline.SOURCE_MISSING_ERROR_MESSAGE);
+        mediaTaskRepository.save(task);
+        eventPublisher.publishTaskFailed(task);
+        log.info("Task failed because source file is missing: taskId={}, sourcePath={}",
+                task.getId(), task.getSourcePath());
     }
 
     private long getDebounceSeconds() {
@@ -709,6 +771,7 @@ public class FileDiscoveryService {
         private int scanned;
         private int queued;
         private int skipped;
+        private int missingFailed;
     }
 
     private enum FileCategory {

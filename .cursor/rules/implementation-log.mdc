@@ -294,8 +294,6 @@ alwaysApply: false
 ### 遗留问题 / 需 PM 决策
 - 无
 
----
-
 ## [ADR-015 模板变量帮助与路径预览] 2026-05-02
 
 ### 已完成
@@ -1355,8 +1353,8 @@ alwaysApply: false
 ### 已完成
 - 删除前端路径设置页原有电影/剧集预设模板，替换为新的 4 个电影模板和 4 个剧集模板
 - 更新后端全局 fallback 默认模板：
-  - 电影：`{title} ({year})/{title} ({year}) - {resolution}{ext}`
-  - 剧集：`{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}`
+  - 电影：`{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}`
+  - 剧集：`{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}`
 - 自然语言变量映射：
   - 影片名 → `{title}`
   - 年份 → `{year}`
@@ -1766,6 +1764,170 @@ alwaysApply: false
 - 新增 `POST /api/watch-rules/validate`
 - `WatchRule.operation` / `RuleRequest.operation` 四种值均为前端可选
 - 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [路径模板默认预设改为可选分辨率片段] 2026-05-02
+
+### 已完成
+- 按用户提供的 Markdown 模板更新系统自带路径模板
+- 电影 4 个预设全部改为 `[[ - {resolution}]]` 可选分辨率片段
+- 剧集 4 个预设全部改为 `[[ - {resolution}]]` 可选分辨率片段
+- 后端全局 fallback 默认模板同步更新：
+  - 电影：`{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}`
+  - 剧集：`{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}`
+- `application.yml` 中 `MEDIA_MARSHAL_TEMPLATE_MOVIE` / `MEDIA_MARSHAL_TEMPLATE_TV` 未配置时的默认值同步更新
+- 保持 `{ext}` 直接拼接，不额外加点，因为 `{ext}` 已包含扩展名前缀点
+- 模板中使用 `[[ - {resolution}]]`，不保留 `]]` 前的空格，避免渲染出 `1080p .mkv`
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+- `frontend/src/views/PathsView.vue`
+- `.cursor/rules/design-decisions.mdc`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [批量确认后台 TMDB 详情超时优化] 2026-05-03
+
+### 已完成
+- 排查 `Timeout on blocking read for 10000000000 NANOSECONDS` 根因
+  - 该错误来自 `TmdbMetadataMatcher.getById()` 中硬编码的 `block(Duration.ofSeconds(10))`
+  - 批量确认后台处理时，即使用户选择的候选已经存在于 `task_candidate`，仍会逐条再次调用 TMDB 详情接口
+  - 大批量确认时会产生大量不必要的远程请求，任意一次 10 秒读超时都会导致单个任务进入 `FAILED`
+- 优化人工确认元数据来源
+  - 单条确认和批量后台确认优先使用已保存的 `TaskCandidate` 快照继续 pipeline
+  - 已保存候选包含标题、原始标题、年份、简介、海报和置信度，满足当前重命名与 NFO 生成所需字段
+  - 只有用户确认的 TMDB ID 不在候选表中时，才调用 `getById()` 创建手动候选
+- 为必要的手动候选详情获取增加重试
+  - 新增 `tmdb.confirm-retry-attempts`，默认 3 次
+  - 环境变量：`MEDIA_MARSHAL_TMDB_CONFIRM_RETRY_ATTEMPTS`
+- 将 TMDB 请求超时改为可配置
+  - 新增 `tmdb.timeout-seconds`，默认 30 秒
+  - 环境变量：`MEDIA_MARSHAL_TMDB_TIMEOUT_SECONDS`
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/resources/application.yml`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- ADR-006 原描述为确认时调用 `TMDB getById()` 获取完整元数据；本次基于当前实现已保存候选字段足够支撑重命名和 NFO 生成，改为优先复用候选快照，仅候选不存在时再请求 TMDB。
+
+### 遗留问题 / 需 PM 决策
+- 后续如果 NFO 需要演员、分类、制片国家等更完整字段，可考虑在入队保存候选时扩展 `task_candidate` 字段，或设计独立的详情补全任务，避免批量确认路径直接依赖实时 TMDB 详情请求
+
+---
+
+## [WatchRule 保存前校验网络盘兼容优化] 2026-05-03
+
+### 已完成
+- 排查 Windows 网络盘目标目录误报不可写问题
+  - 原实现先调用 `Files.isWritable(targetDir)`，该 API 在 Windows 映射网络盘 / SMB 路径下可能返回误判
+  - 误判时直接返回“目标目录不可写”，导致真实写入探测没有机会执行
+- 优化保存前校验策略
+  - 目标目录写权限改为以真实创建 / 删除临时文件为准
+  - `MOVE` 模式下源目录可写校验也改为真实临时文件写入 / 删除探测
+  - 源目录可读校验改为实际 `Files.list()` 探测，减少单纯权限 API 的误判
+- 新增配置开关：`watch-rule.preflight.enabled`
+  - 默认 `true`
+  - 可通过环境变量 `MEDIA_MARSHAL_WATCH_RULE_PREFLIGHT_ENABLED=false` 关闭保存前校验
+  - 关闭后 `/api/watch-rules/validate` 直接返回 `valid=true`
+- 同步更新 API 契约
+- 补充单元测试覆盖校验开关关闭场景
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/watchrule/WatchRulePreflightService.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/watchrule/WatchRulePreflightServiceTest.java`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `POST /api/watch-rules/validate` 响应结构不变
+- 语义补充：当 `watch-rule.preflight.enabled=false` 时直接返回校验通过
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [ADR-016 源文件缺失检测与待处理任务自动失败] 2026-05-02
+
+### 已完成
+- 文件发现层 WatchService 注册 `ENTRY_DELETE` 删除事件
+- 删除事件命中已有 `PENDING` / `AWAITING_CONFIRMATION` 任务时，自动标记为 `FAILED`
+- 周期扫描和手动全量扫描结束后巡检当前 WatchRule 下 `PENDING` / `AWAITING_CONFIRMATION` 任务的源文件存在性
+- 源文件缺失时统一写入失败原因：`源文件不存在，无法继续处理`
+- 自动失败后推送 `task.failed` WebSocket 事件
+- 单条确认前增加源文件最终校验，缺失时不调用 TMDB 详情、不继续 pipeline，并返回失败信息
+- 批量确认提交前逐条校验源文件，缺失条目返回失败，其他条目继续提交后台整理
+- v1 不自动失败 `PROCESSING` 任务，避免误伤正在执行的文件操作
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/repository/MediaTaskRepository.java`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `POST /api/queue/{id}/confirm` 语义补充：源文件不存在时返回 `success=false`，任务转为 `FAILED`
+- `POST /api/queue/batch-confirm` 语义补充：源文件不存在的条目返回失败结果，其他条目不回滚
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [ADR-017 命名模板可选片段语法] 2026-05-02
+
+### 已完成
+- `TemplateRenderer.render()` 支持 `[[ ... ]]` 可选片段语法
+- 可选片段内所有变量都可填充时渲染片段；任意变量缺失时移除整个片段
+- 可选片段内复用现有占位符替换和 `{season:02d}` / `{episode:02d}` 格式化逻辑
+- 可选片段外缺失变量仍保持占位符原样，兼容旧模板调试行为
+- 新增 `TemplateRendererTest` 覆盖完整变量、缺失变量、多变量缺失、片段外缺失和格式化变量场景
+- 路径设置页自定义模板预览同步支持可选片段语法
+- 模板变量帮助面板新增可选片段说明和示例
+- 同步更新 API 契约中的模板语法说明
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateRenderer.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/TemplateRendererTest.java`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 无新增字段或接口
+- 已在 `api-contracts.mdc` 补充模板可选片段语法说明
 
 ### 偏离设计的地方
 - 无

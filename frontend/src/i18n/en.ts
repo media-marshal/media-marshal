@@ -197,6 +197,8 @@ export default {
   templateVariables: {
     title: 'Available Variables',
     description: 'Use these variables in path templates. Media Marshal replaces them with media metadata when organizing files.',
+    optionalSegmentTitle: 'Optional Segment',
+    optionalSegmentDescription: 'Wrap optional text with [[ ... ]]. If any variable inside is missing, the whole segment is removed.',
     empty: 'No variables available',
     copySuccess: 'Variable copied',
     type: 'Type',

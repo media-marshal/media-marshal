@@ -32,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 媒体处理流水线（核心业务协调层）
@@ -59,6 +60,8 @@ import java.util.concurrent.Executors;
 @Service
 @RequiredArgsConstructor
 public class MediaProcessPipeline {
+
+    public static final String SOURCE_MISSING_ERROR_MESSAGE = "源文件不存在，无法继续处理";
 
     private final GuessitParserClient parserClient;
     private final MetadataMatcher metadataMatcher;
@@ -167,7 +170,8 @@ public class MediaProcessPipeline {
      *   2. 判断用户选择的 tmdbId 是否已存在于 task_candidate：
      *      - 若存在：将该候选 selected=true
      *      - 若不存在：说明来自用户重新搜索，新增一条 task_candidate 并 selected=true
-     *   3. 调用 MetadataMatcher.getById(tmdbId, mediaType) 获取完整元数据
+     *   3. 优先使用已保存的 TaskCandidate 快照作为确认元数据
+     *      - 只有用户确认的 TMDB ID 不在候选表中时，才调用 MetadataMatcher.getById() 创建手动候选
      *   4. 更新 MediaTask 的 tmdbId、mediaType、confirmedTitle、confirmedYear 等字段
      *   5. 继续执行 Step 6-8：重命名 -> 生成 NFO -> DONE + WebSocket 通知
      *
@@ -188,6 +192,7 @@ public class MediaProcessPipeline {
         if (!MediaTask.TaskStatus.AWAITING_CONFIRMATION.equals(task.getStatus())) {
             throw new IllegalStateException("Task is not awaiting confirmation: " + taskId);
         }
+        ensureSourceFileExists(task);
 
         MediaTask.MediaType confirmedType = MediaTask.MediaType.valueOf(mediaType);
         TaskCandidate selectedCandidate = candidateRepository
@@ -196,7 +201,7 @@ public class MediaProcessPipeline {
 
         markCandidateSelected(taskId, selectedCandidate);
 
-        MatchResult match = metadataMatcher.getById(String.valueOf(tmdbId), confirmedType.name());
+        MatchResult match = toMatchResult(selectedCandidate);
         applyMatchToTask(task, match);
         task.setConfirmationSource(confirmationSource);
         taskRepository.save(task);
@@ -215,6 +220,7 @@ public class MediaProcessPipeline {
         if (!MediaTask.TaskStatus.AWAITING_CONFIRMATION.equals(task.getStatus())) {
             throw new IllegalStateException("Task is not awaiting confirmation: " + taskId);
         }
+        ensureSourceFileExists(task);
 
         MediaTask.MediaType.valueOf(mediaType);
         task.setStatus(MediaTask.TaskStatus.PROCESSING);
@@ -235,6 +241,7 @@ public class MediaProcessPipeline {
         try {
             MediaTask task = taskRepository.findById(taskId)
                     .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+            ensureSourceFileExists(task);
             MediaTask.MediaType confirmedType = MediaTask.MediaType.valueOf(mediaType);
             TaskCandidate selectedCandidate = candidateRepository
                     .findByTask_IdAndTmdbIdAndMediaType(taskId, tmdbId, confirmedType)
@@ -242,7 +249,7 @@ public class MediaProcessPipeline {
 
             markCandidateSelected(taskId, selectedCandidate);
 
-            MatchResult match = metadataMatcher.getById(String.valueOf(tmdbId), confirmedType.name());
+            MatchResult match = toMatchResult(selectedCandidate);
             applyMatchToTask(task, match);
             task.setConfirmationSource(confirmationSource);
             taskRepository.save(task);
@@ -257,6 +264,26 @@ public class MediaProcessPipeline {
                 emailNotificationService.notifyTaskFailed(task);
             });
         }
+    }
+
+    private void ensureSourceFileExists(MediaTask task) {
+        Path sourcePath = Paths.get(task.getSourcePath()).toAbsolutePath().normalize();
+        if (Files.exists(sourcePath)) {
+            return;
+        }
+
+        failTaskBecauseSourceMissing(task);
+        throw new IllegalStateException(SOURCE_MISSING_ERROR_MESSAGE);
+    }
+
+    private void failTaskBecauseSourceMissing(MediaTask task) {
+        task.setStatus(MediaTask.TaskStatus.FAILED);
+        task.setErrorMessage(SOURCE_MISSING_ERROR_MESSAGE);
+        taskRepository.save(task);
+        eventPublisher.publishTaskFailed(task);
+        emailNotificationService.notifyTaskFailed(task);
+        log.info("Task failed because source file is missing: taskId={}, sourcePath={}",
+                task.getId(), task.getSourcePath());
     }
 
     private void fillParsedFields(MediaTask task, ParseResult parseResult) {
@@ -520,7 +547,7 @@ public class MediaProcessPipeline {
     }
 
     private TaskCandidate createManualCandidate(MediaTask task, Long tmdbId, MediaTask.MediaType mediaType) {
-        MatchResult match = metadataMatcher.getById(String.valueOf(tmdbId), mediaType.name());
+        MatchResult match = getByIdWithRetry(tmdbId, mediaType);
         int nextRank = candidateRepository.findByTask_IdOrderByRankAsc(task.getId()).size() + 1;
 
         TaskCandidate candidate = new TaskCandidate();
@@ -536,6 +563,44 @@ public class MediaProcessPipeline {
         candidate.setRank(nextRank);
         candidate.setSelected(true);
         return candidateRepository.save(candidate);
+    }
+
+    private MatchResult getByIdWithRetry(Long tmdbId, MediaTask.MediaType mediaType) {
+        int attempts = getConfirmMetadataRetryAttempts();
+        RuntimeException lastError = null;
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                return metadataMatcher.getById(String.valueOf(tmdbId), mediaType.name());
+            } catch (RuntimeException e) {
+                lastError = e;
+                if (attempt >= attempts) {
+                    break;
+                }
+                log.warn("TMDB detail lookup failed, will retry: tmdbId={}, mediaType={}, attempt={}/{}, error={}",
+                        tmdbId, mediaType, attempt, attempts, e.getMessage());
+                sleepBeforeRetry(attempt);
+            }
+        }
+        throw lastError != null ? lastError : new IllegalStateException("TMDB detail lookup failed: " + tmdbId);
+    }
+
+    private int getConfirmMetadataRetryAttempts() {
+        String value = settingsService.get("tmdb.confirm-retry-attempts", "3");
+        try {
+            return Math.max(Integer.parseInt(value), 1);
+        } catch (NumberFormatException e) {
+            log.warn("Invalid tmdb.confirm-retry-attempts='{}', fallback to 3", value);
+            return 3;
+        }
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(300L * attempt);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting to retry TMDB detail lookup", e);
+        }
     }
 
     @SuppressWarnings("null")

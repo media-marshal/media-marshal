@@ -8,13 +8,20 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class WatchRulePreflightServiceTest {
 
     @TempDir
     Path tempDir;
 
-    private final WatchRulePreflightService service = new WatchRulePreflightService();
+    private final com.mediamarshal.service.settings.SettingsService settingsService = mock(com.mediamarshal.service.settings.SettingsService.class);
+    private final WatchRulePreflightService service = new WatchRulePreflightService(settingsService);
+
+    WatchRulePreflightServiceTest() {
+        when(settingsService.get("watch-rule.preflight.enabled", "true")).thenReturn("true");
+    }
 
     @Test
     void validateFailsWhenSourceDirectoryDoesNotExist() {
@@ -30,6 +37,17 @@ class WatchRulePreflightServiceTest {
     @Test
     void validateCopySucceedsForReadableSourceAndWritableTarget() {
         WatchRuleController.RuleRequest request = request(FileOperationStrategy.OperationType.COPY);
+
+        var result = service.validate(request);
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    @Test
+    void validateCanBeDisabledByConfiguration() {
+        when(settingsService.get("watch-rule.preflight.enabled", "true")).thenReturn("false");
+        WatchRuleController.RuleRequest request = request(FileOperationStrategy.OperationType.COPY);
+        request.setSourceDir(tempDir.resolve("missing").toString());
 
         var result = service.validate(request);
 

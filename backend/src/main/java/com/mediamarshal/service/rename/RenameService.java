@@ -28,8 +28,8 @@ import java.util.Objects;
  *   6. 委托对应的 FileOperationStrategy 执行文件操作
  *
  * 全局默认模板配置键（AppSetting / application.yml）：
- *   rename.template.movie → {title} ({year})/{title} ({year}) - {resolution}{ext}
- *   rename.template.tv    → {title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}
+ *   rename.template.movie → {title} ({year})/{title} ({year})[[ - {resolution}]]{ext}
+ *   rename.template.tv    → {title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}
  */
 @Slf4j
 @Service
@@ -38,11 +38,11 @@ public class RenameService {
 
     /** 全局默认电影模板 */
     private static final String DEFAULT_MOVIE_TEMPLATE =
-            "{title} ({year})/{title} ({year}) - {resolution}{ext}";
+            "{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}";
 
     /** 全局默认剧集模板 */
     private static final String DEFAULT_TV_TEMPLATE =
-            "{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}";
+            "{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}";
 
     private static final Charset GBK = Charset.forName("GBK");
     private static final int[] GB2312_AREA_CODES = {

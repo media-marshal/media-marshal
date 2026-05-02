@@ -48,8 +48,13 @@ public class QueueController {
 
     @PostMapping("/{id}/confirm")
     public ApiResponse<Void> confirm(@PathVariable Long id, @RequestBody ConfirmRequest request) {
-        pipeline.confirm(id, request.getTmdbId(), request.getMediaType());
-        return ApiResponse.ok();
+        try {
+            pipeline.confirm(id, request.getTmdbId(), request.getMediaType());
+            return ApiResponse.ok();
+        } catch (Exception e) {
+            log.warn("Confirm failed: taskId={}, error={}", id, e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
     }
 
     @PostMapping("/batch-confirm")

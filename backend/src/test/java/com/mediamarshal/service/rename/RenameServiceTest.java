@@ -48,7 +48,7 @@ class RenameServiceTest {
     @Test
     void resolveTemplateFallsBackToGlobalMovieTemplate() {
         WatchRule rule = new WatchRule();
-        when(settingsService.get("rename.template.movie", "{title} ({year})/{title} ({year}) - {resolution}{ext}"))
+        when(settingsService.get("rename.template.movie", "{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}"))
                 .thenReturn("global-movie/{title}{ext}");
 
         String template = renameService.resolveTemplate(rule, MediaTask.MediaType.MOVIE);
@@ -59,7 +59,7 @@ class RenameServiceTest {
     @Test
     void resolveTemplateFallsBackToGlobalTvTemplate() {
         WatchRule rule = new WatchRule();
-        when(settingsService.get("rename.template.tv", "{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}"))
+        when(settingsService.get("rename.template.tv", "{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}"))
                 .thenReturn("global-tv/{title}{ext}");
 
         String template = renameService.resolveTemplate(rule, MediaTask.MediaType.TV_SHOW);

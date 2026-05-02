@@ -407,6 +407,11 @@
 
         <div class="variable-help">
           <p class="variable-help-desc">{{ t('templateVariables.description') }}</p>
+          <div class="optional-segment-help">
+            <div class="optional-segment-title">{{ t('templateVariables.optionalSegmentTitle') }}</div>
+            <p>{{ t('templateVariables.optionalSegmentDescription') }}</p>
+            <code>{title} ({year})[[ - {resolution}]]{ext}</code>
+          </div>
 
           <div v-loading="templateVariablesLoading" class="variable-category-list">
             <el-empty
@@ -515,49 +520,49 @@ const PRESET_TEMPLATES = [
   {
     kind: 'movie',
     labelKey: 'watchRule.presetTemplates.movieDefault',
-    value: '{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    value: '{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}',
     hint: 'The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
     kind: 'movie',
     labelKey: 'watchRule.presetTemplates.movieByYear',
-    value: '{year}/{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    value: '{year}/{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}',
     hint: '2008/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
     kind: 'movie',
     labelKey: 'watchRule.presetTemplates.movieByTypeYear',
-    value: '{media_type}/{year}/{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    value: '{media_type}/{year}/{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}',
     hint: 'MOVIE/2008/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
     kind: 'movie',
     labelKey: 'watchRule.presetTemplates.movieByTypeInitial',
-    value: '{media_type}/{title_initial}/{title} ({year})/{title} ({year}) - {resolution}{ext}',
+    value: '{media_type}/{title_initial}/{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}',
     hint: 'MOVIE/T/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvDefault',
-    value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
     hint: 'Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvByYear',
-    value: '{year}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    value: '{year}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
     hint: '2008/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvByTypeYear',
-    value: '{media_type}/{year}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    value: '{media_type}/{year}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
     hint: 'TV_SHOW/2008/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
   {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvByTypeInitial',
-    value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d} - {resolution}{ext}',
+    value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
     hint: 'TV_SHOW/B/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
 ] satisfies Array<{ kind: TemplateKind, labelKey: string, value: string, hint: string }>
@@ -741,8 +746,28 @@ async function previewTemplate(kind: TemplateKind) {
     }
   }
 
+  const preview = renderTemplatePreview(template, exampleMap)
+  templatePreviewResults[kind] = preview.output
+
+  if (preview.hasUnavailableVariable) {
+    ElMessage.warning(t('watchRule.previewUnavailableVariables'))
+  }
+}
+
+function renderTemplatePreview(template: string, exampleMap: Map<string, string>) {
+  const placeholderPattern = /\{[^}]+}/g
   let hasUnavailableVariable = false
-  templatePreviewResults[kind] = template.replace(/\{[^}]+}/g, (placeholder) => {
+
+  const withOptionalSegments = template.replace(/\[\[(.*?)\]\]/g, (_match, segment: string) => {
+    const placeholders = segment.match(placeholderPattern) ?? []
+    const canRenderSegment = placeholders.every(placeholder => exampleMap.has(placeholder))
+    if (!canRenderSegment) {
+      return ''
+    }
+    return segment.replace(placeholderPattern, (placeholder: string) => exampleMap.get(placeholder) ?? placeholder)
+  })
+
+  const output = withOptionalSegments.replace(placeholderPattern, (placeholder) => {
     const example = exampleMap.get(placeholder)
     if (example == null) {
       hasUnavailableVariable = true
@@ -751,9 +776,7 @@ async function previewTemplate(kind: TemplateKind) {
     return example
   })
 
-  if (hasUnavailableVariable) {
-    ElMessage.warning(t('watchRule.previewUnavailableVariables'))
-  }
+  return { output, hasUnavailableVariable }
 }
 
 async function copyTemplateVariable(placeholder: string) {
@@ -1384,6 +1407,37 @@ h2 {
   color: #606266;
   font-size: 13px;
   line-height: 1.7;
+}
+
+.optional-segment-help {
+  padding: 12px 14px;
+  border: 1px solid #e1efff;
+  border-radius: 10px;
+  background: #f5faff;
+  color: #4e5969;
+}
+
+.optional-segment-title {
+  margin-bottom: 6px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.optional-segment-help p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.optional-segment-help code {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #eef6ff;
+  color: #165dff;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
 }
 
 .variable-category-list {
