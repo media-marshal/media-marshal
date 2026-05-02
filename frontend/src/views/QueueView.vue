@@ -36,9 +36,9 @@
         </el-text>
       </div>
 
-      <div v-if="recommendationGroups.length > 0" class="recommendation-groups">
+      <div v-if="candidateGroups.length > 0" class="candidate-groups">
         <el-alert
-          v-for="group in recommendationGroups"
+          v-for="group in candidateGroups"
           :key="group.key"
           type="info"
           show-icon
@@ -48,7 +48,7 @@
             <span>
               {{ t('queue.sameCandidateHint', { count: group.count, title: group.title }) }}
             </span>
-            <el-button size="small" link type="primary" @click="selectRecommendationGroup(group.key)">
+            <el-button size="small" link type="primary" @click="selectCandidateGroup(group.key)">
               {{ t('queue.selectThisGroup') }}
             </el-button>
           </template>
@@ -262,21 +262,24 @@ const canSelectCurrentPageRecommended = computed(() => {
     && displayedTasks.value.some((task) => Boolean(getRecommendedOption(task.id)))
 })
 
-const recommendationGroups = computed(() => {
+const candidateGroups = computed(() => {
   const groups = new Map<string, { key: string, title: string, count: number }>()
   for (const task of displayedTasks.value) {
-    const recommended = getRecommendedOption(task.id)
-    if (!recommended) continue
+    const seenInTask = new Set<string>()
+    for (const option of getTaskOptions(task.id)) {
+      if (seenInTask.has(option.key)) continue
+      seenInTask.add(option.key)
 
-    const group = groups.get(recommended.key)
-    if (group) {
-      group.count++
-    } else {
-      groups.set(recommended.key, {
-        key: recommended.key,
-        title: displayTitle(recommended),
-        count: 1,
-      })
+      const group = groups.get(option.key)
+      if (group) {
+        group.count++
+      } else {
+        groups.set(option.key, {
+          key: option.key,
+          title: displayTitle(option),
+          count: 1,
+        })
+      }
     }
   }
 
@@ -384,12 +387,12 @@ function selectCurrentPageRecommended() {
   }
 }
 
-function selectRecommendationGroup(groupKey: string) {
+function selectCandidateGroup(groupKey: string) {
   for (const task of displayedTasks.value) {
     if (manualSelectedTaskIds.has(task.id)) continue
-    const recommended = getRecommendedOption(task.id)
-    if (recommended?.key === groupKey) {
-      selectedOptionByTask[task.id] = recommended.key
+    const option = getTaskOptions(task.id).find((item) => item.key === groupKey)
+    if (option) {
+      selectedOptionByTask[task.id] = option.key
     }
   }
 }
@@ -579,13 +582,13 @@ h2 {
 }
 
 .batch-actions,
-.recommendation-groups {
+.candidate-groups {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.recommendation-groups {
+.candidate-groups {
   flex-direction: column;
 }
 
