@@ -84,6 +84,8 @@ class RenameServiceTest {
     @Test
     void resolveTitleInitialReturnsPinyinInitialForChineseTitle() {
         assertThat(renameService.resolveTitleInitial("黑袍纠察队")).isEqualTo("H");
+        assertThat(renameService.resolveTitleInitial("巅峰猎杀")).isEqualTo("D");
+        assertThat(renameService.resolveTitleInitial("逍遥")).isEqualTo("X");
     }
 
     @Test

@@ -1838,6 +1838,39 @@ alwaysApply: false
 
 ---
 
+## [中文标题首字母解析修复] 2026-05-03
+
+### 已完成
+- 排查 `{title_initial}` 中文首字母错误问题
+  - 原实现基于 GB2312 区位码范围近似判断拼音首字母
+  - `巅`、`逍` 等 GBK 扩展字或不在 GB2312 主区间内的汉字会落到最后区间，错误返回 `Z`
+- 引入 `com.belerweb:pinyin4j:2.5.1` 用于中文拼音首字母解析
+- `RenameService.resolveTitleInitial()` 改为：
+  - 数字开头返回 `#`
+  - 英文开头返回大写首字母
+  - 中文开头通过 pinyin4j 获取拼音首字母
+  - 特殊字符或无法解析时返回 `#`
+- 补充测试覆盖：
+  - `黑袍纠察队` → `H`
+  - `巅峰猎杀` → `D`
+  - `逍遥` → `X`
+
+### 关键文件
+- `backend/pom.xml`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 多音字目前采用 pinyin4j 返回的第一个读音；如后续需要针对片名上下文处理多音字，需要单独设计词级别拼音解析或维护例外词典
+
+---
+
 ## [WatchRule 保存前校验网络盘兼容优化] 2026-05-03
 
 ### 已完成

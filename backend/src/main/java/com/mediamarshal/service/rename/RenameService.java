@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -43,17 +43,6 @@ public class RenameService {
     /** 全局默认剧集模板 */
     private static final String DEFAULT_TV_TEMPLATE =
             "{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}";
-
-    private static final Charset GBK = Charset.forName("GBK");
-    private static final int[] GB2312_AREA_CODES = {
-            -20319, -20283, -19775, -19218, -18710, -18526, -18239, -17922,
-            -17417, -16474, -16212, -15640, -15165, -14922, -14914, -14630,
-            -14149, -14090, -13318, -12838, -12556, -11847, -11055
-    };
-    private static final String[] PINYIN_INITIALS = {
-            "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M",
-            "N", "O", "P", "Q", "R", "S", "T", "W", "X", "Y", "Z"
-    };
 
     private final Map<String, FileOperationStrategy> strategies;
     private final WatchRuleRepository watchRuleRepository;
@@ -196,22 +185,33 @@ public class RenameService {
     }
 
     private String resolveChineseInitial(int codePoint) {
-        String character = new String(Character.toChars(codePoint));
-        byte[] bytes = character.getBytes(GBK);
-        if (bytes.length < 2) {
+        if (codePoint > Character.MAX_VALUE) {
             return "#";
         }
 
-        int code = (bytes[0] & 0xff) * 256 + (bytes[1] & 0xff) - 65536;
-        for (int i = 0; i < GB2312_AREA_CODES.length - 1; i++) {
-            if (code >= GB2312_AREA_CODES[i] && code < GB2312_AREA_CODES[i + 1]) {
-                return PINYIN_INITIALS[i];
-            }
+        String[] pinyinArray = toHanyuPinyinStringArray((char) codePoint);
+        if (pinyinArray == null || pinyinArray.length == 0 || pinyinArray[0].isBlank()) {
+            return "#";
         }
-        if (code >= GB2312_AREA_CODES[GB2312_AREA_CODES.length - 1]) {
-            return PINYIN_INITIALS[PINYIN_INITIALS.length - 1];
+
+        char initial = Character.toUpperCase(pinyinArray[0].charAt(0));
+        return initial >= 'A' && initial <= 'Z' ? String.valueOf(initial) : "#";
+    }
+
+    private String[] toHanyuPinyinStringArray(char character) {
+        try {
+            Class<?> helperClass = Class.forName("net.sourceforge.pinyin4j.PinyinHelper");
+            Object result = helperClass
+                    .getMethod("toHanyuPinyinStringArray", char.class)
+                    .invoke(null, character);
+            return result instanceof String[] pinyinArray ? pinyinArray : null;
+        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
+            log.warn("pinyin4j is unavailable, title_initial falls back to #: {}", e.getMessage());
+            return null;
+        } catch (InvocationTargetException e) {
+            log.warn("Failed to resolve Chinese title initial: {}", e.getTargetException().getMessage());
+            return null;
         }
-        return "#";
     }
 
     private FileOperationStrategy resolveStrategy(String type) {
