@@ -296,6 +296,50 @@ alwaysApply: false
 
 ---
 
+## [ADR-015 模板变量帮助与路径预览] 2026-05-02
+
+### 已完成
+- 补齐模板变量生命周期状态模型
+  - 后端 `TemplateVariableStatus` 扩展为 `AVAILABLE` / `RESERVED` / `DEPRECATED` / `UNAVAILABLE`
+  - 前端 `TemplateVariableStatus` 类型同步扩展
+  - API 契约同步记录完整状态枚举
+- 优化变量帮助面板展示规则
+  - 仅展示 `AVAILABLE` 和 `DEPRECATED` 变量
+  - 过滤隐藏 `RESERVED` 和 `UNAVAILABLE`
+  - `DEPRECATED` 支持展示“即将废弃”标签
+  - 点击变量占位符可复制，复制成功后给轻提示
+- 为自定义路径模板增加预览能力
+  - 电影 / 剧集自定义模板输入框右侧拼接图标预览按钮，鼠标悬停显示“预览”
+  - 预览基于 `GET /api/template-variables` 返回的 `example` 字段替换变量
+  - 预览结果展示在输入框下方，使用等宽字体
+  - 未识别或未展示变量保持原样，并给轻提示
+  - 空模板预览时提示用户先输入模板
+- 同步新增中英文 i18n 文案
+- 已运行 `npm run type-check`，通过
+- 已运行 `mvn test`，通过
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/dto/TemplateVariableGroup.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariableCatalogService.java`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `TemplateVariableItem.status` 状态枚举扩展为 `AVAILABLE` / `RESERVED` / `DEPRECATED` / `UNAVAILABLE`
+- 前端帮助面板展示规则：仅展示 `AVAILABLE` 和 `DEPRECATED`
+- 已同步更新 `api-contracts.mdc`
+
+### 偏离设计的地方
+- 帮助内容国际化仍按 ADR-015 约定暂不处理，继续原样展示后端返回的说明和示例
+
+### 遗留问题 / 需 PM 决策
+- 如后续要求预览与后端渲染器完全一致，可新增 `POST /api/template-variables/preview` 接口替代前端本地示例替换
+
+---
+
 ## 2026-05-02 Queue 当前页任意候选批量选择
 
 ### 背景
@@ -323,6 +367,42 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 批量手动搜索暂未实现，按本次需求延期
+
+---
+
+## 2026-05-02 Queue 批量确认异步提交优化
+
+### 背景
+- 用户批量确认 20 个待确认任务时，前端出现 `timeout of 100000ms exceeded`
+- 原因是 `POST /api/queue/batch-confirm` 在同一个 HTTP 请求中逐条同步执行完整 `pipeline.confirm()`
+- 单条确认会包含 TMDB 详情获取、文件操作、附属文件处理、NFO 生成等耗时步骤，20 条串行处理容易超过前端超时时间
+
+### 完成内容
+- 新增 `MediaProcessPipeline.submitConfirm()`，用于批量确认的快速提交
+- 批量确认接口只做任务存在性、状态和媒体类型校验
+- 校验通过后立即将任务切换为 `PROCESSING`，设置 `confirmationSource=MANUAL_BATCH`，并发布处理中的 WebSocket 事件
+- 后续 TMDB 详情获取、候选标记、重命名、NFO/附属文件处理改为后台执行
+- 后台确认使用固定 4 并发的虚拟线程池，减少 HTTP 等待时间，同时避免一次性并发过高压垮 SQLite 或文件系统
+- 后台处理失败时任务进入 `FAILED`，写入 `errorMessage`，并沿用失败通知逻辑
+- 前端批量确认成功提示改为“已提交 / 进入整理”，避免误解为全部文件已整理完成
+- 同步更新 API 契约，说明 `BatchConfirmResult.success=true` 表示已接收并进入后台整理
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `POST /api/queue/batch-confirm` 响应结构不变
+- 语义调整：`success=true` 表示提交后台整理成功，不再表示该任务文件整理已经完成
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 暂未新增后台批量确认进度查询接口；当前通过任务状态刷新和 WebSocket 追踪最终结果
 
 ## [ADR-012 Queue 批量确认流程] 2026-04-30
 

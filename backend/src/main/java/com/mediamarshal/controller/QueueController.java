@@ -57,7 +57,7 @@ public class QueueController {
         List<BatchConfirmResult> results = new ArrayList<>();
         for (ConfirmItem item : request.getItems()) {
             try {
-                pipeline.confirm(
+                pipeline.submitConfirm(
                         item.getTaskId(),
                         item.getTmdbId(),
                         item.getMediaType(),

@@ -215,10 +215,20 @@
                   v-model="templateStates.movie.custom"
                   style="flex: 1"
                   :placeholder="t('watchRule.customTemplatePlaceholder')"
-                />
+                >
+                  <template #append>
+                    <el-tooltip :content="t('watchRule.previewTemplate')" placement="top">
+                      <el-button :icon="View" @click="previewTemplate('movie')" />
+                    </el-tooltip>
+                  </template>
+                </el-input>
                 <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
                   <el-button :icon="ArrowLeft" @click="switchToPreset('movie')" />
                 </el-tooltip>
+              </div>
+              <div v-if="templatePreviewResults.movie" class="template-preview">
+                <span>{{ t('watchRule.previewResult') }}</span>
+                <code>{{ templatePreviewResults.movie }}</code>
               </div>
             </el-form-item>
 
@@ -257,10 +267,20 @@
                   v-model="templateStates.tv.custom"
                   style="flex: 1"
                   :placeholder="t('watchRule.customTemplatePlaceholder')"
-                />
+                >
+                  <template #append>
+                    <el-tooltip :content="t('watchRule.previewTemplate')" placement="top">
+                      <el-button :icon="View" @click="previewTemplate('tv')" />
+                    </el-tooltip>
+                  </template>
+                </el-input>
                 <el-tooltip :content="t('watchRule.backToPreset')" placement="top">
                   <el-button :icon="ArrowLeft" @click="switchToPreset('tv')" />
                 </el-tooltip>
+              </div>
+              <div v-if="templatePreviewResults.tv" class="template-preview">
+                <span>{{ t('watchRule.previewResult') }}</span>
+                <code>{{ templatePreviewResults.tv }}</code>
               </div>
             </el-form-item>
           </section>
@@ -390,12 +410,12 @@
 
           <div v-loading="templateVariablesLoading" class="variable-category-list">
             <el-empty
-              v-if="!templateVariablesLoading && templateVariableGroups.length === 0"
+              v-if="!templateVariablesLoading && visibleTemplateVariableGroups.length === 0"
               :description="t('templateVariables.empty')"
             />
 
             <div
-              v-for="group in templateVariableGroups"
+              v-for="group in visibleTemplateVariableGroups"
               :key="group.category"
               class="variable-category"
             >
@@ -406,7 +426,9 @@
                 class="variable-card"
               >
                 <div class="variable-card-header">
-                  <code class="variable-name">{{ variable.placeholder }}</code>
+                  <button class="variable-name" type="button" @click="copyTemplateVariable(variable.placeholder)">
+                    {{ variable.placeholder }}
+                  </button>
                   <el-tag size="small" :type="templateVariableStatusType(variable.status)">
                     {{ t(`templateVariables.status.${variable.status}`) }}
                   </el-tag>
@@ -451,7 +473,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search, View } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { watchRuleApi, type DiscoveryMode, type FileOperationType, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
 import { templateVariablesApi } from '@/api/templateVariables'
@@ -476,6 +498,10 @@ const ignoredPatternInput = ref('')
 const variableDrawerVisible = ref(false)
 const templateVariablesLoading = ref(false)
 const templateVariableGroups = ref<TemplateVariableGroup[]>([])
+const templatePreviewResults = reactive<Record<TemplateKind, string>>({
+  movie: '',
+  tv: '',
+})
 
 // ─── 目录浏览器 ──────────────────────────────────────────────────
 const dirBrowserVisible = ref(false)
@@ -549,6 +575,14 @@ const templateStates = reactive<Record<TemplateKind, {
 const showMovieTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'MOVIE')
 const showTvTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'TV_SHOW')
 const showScanInterval = computed(() => form.discoveryMode === 'PERIODIC_SCAN' || form.discoveryMode === 'HYBRID')
+const visibleTemplateVariableGroups = computed(() =>
+  templateVariableGroups.value
+    .map(group => ({
+      ...group,
+      variables: group.variables.filter(variable => variable.status === 'AVAILABLE' || variable.status === 'DEPRECATED'),
+    }))
+    .filter(group => group.variables.length > 0),
+)
 
 function templateOptions(kind: TemplateKind) {
   return PRESET_TEMPLATES.filter(tpl => tpl.kind === kind)
@@ -564,11 +598,13 @@ function switchToCustom(kind: TemplateKind) {
   // 将当前预设值填入自定义输入框，方便用户在预设基础上修改
   templateStates[kind].custom = templateStates[kind].selected
   templateStates[kind].customMode = true
+  templatePreviewResults[kind] = ''
 }
 
 function switchToPreset(kind: TemplateKind) {
   templateStates[kind].customMode = false
   templateStates[kind].selected = ''
+  templatePreviewResults[kind] = ''
 }
 
 function resetTemplateState(kind: TemplateKind, value?: string | null) {
@@ -586,6 +622,7 @@ function resetTemplateState(kind: TemplateKind, value?: string | null) {
     state.customMode = true
     state.custom = value
   }
+  templatePreviewResults[kind] = ''
 }
 
 function templateSummaries(rule: WatchRule) {
@@ -683,6 +720,56 @@ async function toggleVariableDrawer() {
   if (variableDrawerVisible.value) {
     await fetchTemplateVariables()
   }
+}
+
+async function previewTemplate(kind: TemplateKind) {
+  const template = templateStates[kind].custom.trim()
+  if (!template) {
+    ElMessage.warning(t('watchRule.previewEmpty'))
+    return
+  }
+
+  await fetchTemplateVariables()
+
+  const mediaType = kind === 'movie' ? 'MOVIE' : 'TV_SHOW'
+  const exampleMap = new Map<string, string>()
+  for (const group of visibleTemplateVariableGroups.value) {
+    for (const variable of group.variables) {
+      if (variable.mediaTypes.includes(mediaType)) {
+        exampleMap.set(variable.placeholder, variable.example)
+      }
+    }
+  }
+
+  let hasUnavailableVariable = false
+  templatePreviewResults[kind] = template.replace(/\{[^}]+}/g, (placeholder) => {
+    const example = exampleMap.get(placeholder)
+    if (example == null) {
+      hasUnavailableVariable = true
+      return placeholder
+    }
+    return example
+  })
+
+  if (hasUnavailableVariable) {
+    ElMessage.warning(t('watchRule.previewUnavailableVariables'))
+  }
+}
+
+async function copyTemplateVariable(placeholder: string) {
+  try {
+    await navigator.clipboard.writeText(placeholder)
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = placeholder
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+  ElMessage.success(t('templateVariables.copySuccess'))
 }
 
 function openDialog(rule?: WatchRule) {
@@ -828,8 +915,14 @@ function effectiveDiscoveryMode(rule: WatchRule): DiscoveryMode {
   return rule.discoveryMode || 'HYBRID'
 }
 
-function templateVariableStatusType(status: TemplateVariableStatus): 'success' | 'info' {
-  return status === 'AVAILABLE' ? 'success' : 'info'
+function templateVariableStatusType(status: TemplateVariableStatus): 'success' | 'warning' | 'info' | 'danger' {
+  const map: Record<TemplateVariableStatus, 'success' | 'warning' | 'info' | 'danger'> = {
+    AVAILABLE: 'success',
+    RESERVED: 'info',
+    DEPRECATED: 'warning',
+    UNAVAILABLE: 'danger',
+  }
+  return map[status]
 }
 </script>
 
@@ -1048,6 +1141,26 @@ h2 {
   display: flex;
   gap: 8px;
   width: 100%;
+}
+
+.template-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e1f3d8;
+  border-radius: 8px;
+  background: #f8fcf5;
+  color: #67c23a;
+  font-size: 12px;
+}
+
+.template-preview code {
+  color: #303133;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  line-height: 1.6;
+  word-break: break-all;
 }
 
 .template-label {
@@ -1311,11 +1424,22 @@ h2 {
 
 .variable-name {
   padding: 4px 8px;
+  border: none;
   border-radius: 8px;
   background: #f0f9eb;
   color: #529b2e;
+  cursor: pointer;
+  font-family: monospace;
   font-size: 13px;
   font-weight: 600;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.variable-name:hover {
+  background: #e1f3d8;
+  color: #3d7d20;
 }
 
 .variable-desc {

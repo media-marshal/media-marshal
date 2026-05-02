@@ -13,6 +13,12 @@ public record TemplateVariableGroup(
         String categoryName,
         List<TemplateVariableItem> variables
 ) {
+    public enum TemplateVariableStatus {
+        AVAILABLE,
+        RESERVED,
+        DEPRECATED,
+        UNAVAILABLE
+    }
 
     public record TemplateVariableItem(
             String name,
@@ -22,7 +28,7 @@ public record TemplateVariableGroup(
             String description,
             String example,
             List<String> mediaTypes,
-            String status
+            TemplateVariableStatus status
     ) {
     }
 }

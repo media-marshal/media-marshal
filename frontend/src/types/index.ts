@@ -96,7 +96,7 @@ export interface BatchConfirmResponse {
 }
 
 // ─── 模板变量帮助 ──────────────────────────────────────────────────
-export type TemplateVariableStatus = 'AVAILABLE' | 'RESERVED'
+export type TemplateVariableStatus = 'AVAILABLE' | 'RESERVED' | 'DEPRECATED' | 'UNAVAILABLE'
 
 export interface TemplateVariableItem {
   name: string

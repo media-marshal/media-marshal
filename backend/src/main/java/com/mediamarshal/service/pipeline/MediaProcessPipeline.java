@@ -19,6 +19,7 @@ import com.mediamarshal.websocket.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import jakarta.annotation.PreDestroy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 媒体处理流水线（核心业务协调层）
@@ -68,6 +71,15 @@ public class MediaProcessPipeline {
     private final EventPublisher eventPublisher;
     private final EmailNotificationService emailNotificationService;
     private final Map<String, FileOperationStrategy> fileOperationStrategies;
+    private final ExecutorService manualConfirmationExecutor = Executors.newFixedThreadPool(
+            4,
+            Thread.ofVirtual().name("manual-confirm-", 0).factory()
+    );
+
+    @PreDestroy
+    public void shutdownManualConfirmationExecutor() {
+        manualConfirmationExecutor.shutdown();
+    }
 
     /**
      * 处理一个新发现的媒体文件（由 FileDiscoveryService 调用）
@@ -189,6 +201,62 @@ public class MediaProcessPipeline {
         task.setConfirmationSource(confirmationSource);
         taskRepository.save(task);
         continueAfterMetadataConfirmed(task, match);
+    }
+
+    /**
+     * 批量确认使用异步整理，避免一个 HTTP 请求等待多条任务的 TMDB 详情、文件操作和 NFO 生成。
+     * 该方法只负责接收确认并把任务移出待确认队列；后续完成/失败通过任务状态和 WebSocket 体现。
+     */
+    @SuppressWarnings("null")
+    public void submitConfirm(Long taskId, Long tmdbId, String mediaType, MediaTask.ConfirmationSource confirmationSource) {
+        MediaTask task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+
+        if (!MediaTask.TaskStatus.AWAITING_CONFIRMATION.equals(task.getStatus())) {
+            throw new IllegalStateException("Task is not awaiting confirmation: " + taskId);
+        }
+
+        MediaTask.MediaType.valueOf(mediaType);
+        task.setStatus(MediaTask.TaskStatus.PROCESSING);
+        task.setConfirmationSource(confirmationSource);
+        taskRepository.save(task);
+        eventPublisher.publishTaskProcessing(task);
+
+        manualConfirmationExecutor.submit(() -> completeSubmittedConfirm(taskId, tmdbId, mediaType, confirmationSource));
+    }
+
+    @SuppressWarnings("null")
+    private void completeSubmittedConfirm(
+            Long taskId,
+            Long tmdbId,
+            String mediaType,
+            MediaTask.ConfirmationSource confirmationSource
+    ) {
+        try {
+            MediaTask task = taskRepository.findById(taskId)
+                    .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+            MediaTask.MediaType confirmedType = MediaTask.MediaType.valueOf(mediaType);
+            TaskCandidate selectedCandidate = candidateRepository
+                    .findByTask_IdAndTmdbIdAndMediaType(taskId, tmdbId, confirmedType)
+                    .orElseGet(() -> createManualCandidate(task, tmdbId, confirmedType));
+
+            markCandidateSelected(taskId, selectedCandidate);
+
+            MatchResult match = metadataMatcher.getById(String.valueOf(tmdbId), confirmedType.name());
+            applyMatchToTask(task, match);
+            task.setConfirmationSource(confirmationSource);
+            taskRepository.save(task);
+            continueAfterMetadataConfirmed(task, match);
+        } catch (Exception e) {
+            log.error("Submitted manual confirmation failed: taskId={}", taskId, e);
+            taskRepository.findById(taskId).ifPresent(task -> {
+                task.setStatus(MediaTask.TaskStatus.FAILED);
+                task.setErrorMessage(e.getMessage());
+                taskRepository.save(task);
+                eventPublisher.publishTaskFailed(task);
+                emailNotificationService.notifyTaskFailed(task);
+            });
+        }
     }
 
     private void fillParsedFields(MediaTask task, ParseResult parseResult) {
