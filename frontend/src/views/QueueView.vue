@@ -127,6 +127,20 @@
               </el-icon>
             </el-tooltip>
           </el-button>
+          <el-button
+            size="small"
+            type="warning"
+            :loading="batchSkipping"
+            :disabled="currentPageSelectedTaskIds.length === 0"
+            @click="handleBatchSkip"
+          >
+            {{ t('queue.batchSkip', { count: currentPageSelectedTaskIds.length }) }}
+            <el-tooltip :content="t('queue.batchSkipHelp')" placement="top">
+              <el-icon class="button-help-icon" @click.stop.prevent>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
+          </el-button>
         </div>
         <el-text size="small" type="info">
           {{ t('queue.pageSelectionHint') }}
@@ -329,6 +343,7 @@ const selectedTaskIds = reactive(new Set<number>())
 const currentPage = ref(1)
 const pageSize = ref(20)
 const batchConfirming = ref(false)
+const batchSkipping = ref(false)
 const globalSearchKeyword = ref('')
 const globalSearchMediaType = ref<MediaType>('TV_SHOW')
 const globalSearchLoading = ref(false)
@@ -357,6 +372,12 @@ const currentPageBatchItems = computed<BatchConfirmItem[]>(() => {
         : null
     })
     .filter((item): item is BatchConfirmItem => item !== null)
+})
+
+const currentPageSelectedTaskIds = computed(() => {
+  return displayedTasks.value
+    .filter((task) => selectedTaskIds.has(task.id))
+    .map((task) => task.id)
 })
 
 const canApplyCurrentCandidate = computed(() => {
@@ -640,6 +661,48 @@ async function handleBatchConfirm() {
     await loadQueue()
   } finally {
     batchConfirming.value = false
+  }
+}
+
+async function handleBatchSkip() {
+  const taskIds = currentPageSelectedTaskIds.value
+  if (taskIds.length === 0) return
+
+  try {
+    await ElMessageBox.confirm(
+      t('queue.batchSkipConfirm', { count: taskIds.length }),
+      t('queue.batchSkipTitle'),
+      {
+        confirmButtonText: t('queue.batchSkipAction'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  batchSkipping.value = true
+  try {
+    let successCount = 0
+    let failedCount = 0
+    for (const taskId of taskIds) {
+      try {
+        await mediaStore.skipTask(taskId)
+        selectedTaskIds.delete(taskId)
+        selectedOptionByTask[taskId] = ''
+        manualSelectedTaskIds.delete(taskId)
+        successCount++
+      } catch (error) {
+        failedCount++
+        batchErrorByTask[taskId] = error instanceof Error ? error.message : t('queue.batchSkipUnknownError')
+      }
+    }
+
+    ElMessage.success(t('queue.batchSkipResult', { success: successCount, failed: failedCount }))
+    await loadQueue()
+  } finally {
+    batchSkipping.value = false
   }
 }
 
