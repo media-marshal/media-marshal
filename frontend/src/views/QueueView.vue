@@ -13,13 +13,105 @@
     <el-empty v-if="!loading && queueTasks.length === 0" :description="t('queue.empty')" />
 
     <div v-else class="queue-list" v-loading="loading">
+      <div class="global-search-panel">
+        <div class="panel-header">
+          <div>
+            <h3>{{ t('queue.globalSearchTitle') }}</h3>
+            <p>{{ currentCandidateSummary }}</p>
+          </div>
+          <el-button link type="primary" @click="searchPanelExpanded = !searchPanelExpanded">
+            {{ searchPanelExpanded ? t('queue.collapseSearch') : t('queue.expandSearch') }}
+          </el-button>
+        </div>
+
+        <div v-if="searchPanelExpanded" class="global-search-body">
+          <div class="global-search-row">
+            <el-select v-model="globalSearchMediaType" class="media-type-select">
+              <el-option :label="t('task.mediaType.MOVIE')" value="MOVIE" />
+              <el-option :label="t('task.mediaType.TV_SHOW')" value="TV_SHOW" />
+            </el-select>
+            <el-input
+              v-model="globalSearchKeyword"
+              :placeholder="t('queue.globalSearchPlaceholder')"
+              clearable
+              @keyup.enter="handleGlobalSearch"
+            />
+            <el-button
+              type="primary"
+              :loading="globalSearchLoading"
+              :disabled="!globalSearchKeyword.trim()"
+              @click="handleGlobalSearch"
+            >
+              {{ t('queue.search') }}
+            </el-button>
+          </div>
+
+          <el-empty
+            v-if="globalSearchPerformed && !globalSearchLoading && globalSearchResults.length === 0"
+            :description="t('queue.noSearchResults')"
+            :image-size="80"
+          />
+
+          <div v-if="globalSearchResults.length > 0" class="global-result-list">
+            <button
+              v-for="option in globalSearchResults"
+              :key="option.key"
+              class="global-result-card"
+              :class="{ 'is-selected': currentCandidate?.key === option.key }"
+              type="button"
+              @click="setCurrentCandidate(option)"
+            >
+              <el-image
+                v-if="option.posterUrl"
+                class="poster"
+                :src="option.posterUrl"
+                :alt="displayTitle(option)"
+                fit="cover"
+                lazy
+              />
+              <div v-else class="poster poster--empty">
+                {{ t('queue.noPoster') }}
+              </div>
+              <div class="candidate-info">
+                <div class="candidate-title">{{ displayTitle(option) }}</div>
+                <div class="candidate-meta">
+                  <span>{{ option.year ?? t('queue.unknown') }}</span>
+                  <span>{{ t(`task.mediaType.${option.mediaType}`) }}</span>
+                  <span>{{ t('queue.confidence') }} {{ formatConfidence(option.confidence) }}</span>
+                </div>
+                <p class="overview">{{ option.overview || t('queue.noOverview') }}</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="batch-toolbar">
         <div class="batch-actions">
-          <el-button size="small" :disabled="!canSelectCurrentPageRecommended" @click="selectCurrentPageRecommended">
-            {{ t('queue.selectPageRecommended') }}
+          <el-button size="small" @click="selectCurrentPageTasks">
+            {{ t('queue.selectCurrentPageTasks') }}
+            <el-tooltip :content="t('queue.selectCurrentPageTasksHelp')" placement="top">
+              <el-icon class="button-help-icon" @click.stop.prevent>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
           </el-button>
           <el-button size="small" @click="clearCurrentPageSelection">
             {{ t('queue.clearPageSelection') }}
+            <el-tooltip :content="t('queue.clearPageSelectionHelp')" placement="top">
+              <el-icon class="button-help-icon" @click.stop.prevent>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
+          </el-button>
+          <el-divider direction="vertical" class="batch-divider" />
+          <el-button size="small" :disabled="!canApplyCurrentCandidate" @click="applyCurrentCandidateToSelectedTasks">
+            {{ t('queue.applyCurrentCandidate') }}
+            <el-tooltip :content="t('queue.applyCurrentCandidateHelp')" placement="top">
+              <el-icon class="button-help-icon" @click.stop.prevent>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
           </el-button>
           <el-button
             size="small"
@@ -29,6 +121,11 @@
             @click="handleBatchConfirm"
           >
             {{ t('queue.batchConfirm', { count: currentPageBatchItems.length }) }}
+            <el-tooltip :content="t('queue.batchConfirmHelp')" placement="top">
+              <el-icon class="button-help-icon" @click.stop.prevent>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
           </el-button>
         </div>
         <el-text size="small" type="info">
@@ -36,9 +133,9 @@
         </el-text>
       </div>
 
-      <div v-if="candidateGroups.length > 0" class="candidate-groups">
+      <div v-if="visibleCandidateGroups.length > 0" class="candidate-groups">
         <el-alert
-          v-for="group in candidateGroups"
+          v-for="group in visibleCandidateGroups"
           :key="group.key"
           type="info"
           show-icon
@@ -48,18 +145,36 @@
             <span>
               {{ t('queue.sameCandidateHint', { count: group.count, title: group.title }) }}
             </span>
-            <el-button size="small" link type="primary" @click="selectCandidateGroup(group.key)">
-              {{ t('queue.selectThisGroup') }}
+            <el-button size="small" link type="primary" @click="quickSelectCandidateGroup(group.key)">
+              {{ t('queue.quickSelect') }}
             </el-button>
           </template>
         </el-alert>
+        <el-button
+          v-if="candidateGroups.length > 3"
+          size="small"
+          link
+          type="primary"
+          @click="recommendationExpanded = !recommendationExpanded"
+        >
+          {{ recommendationExpanded
+            ? t('queue.collapseRecommendations')
+            : t('queue.expandRecommendations', { count: candidateGroups.length - 3 }) }}
+        </el-button>
       </div>
 
       <el-card v-for="task in displayedTasks" :key="task.id" class="queue-card" shadow="never">
         <template #header>
           <div class="card-header">
+            <el-checkbox
+              :model-value="selectedTaskIds.has(task.id)"
+              @change="(checked) => toggleTaskSelection(task.id, Boolean(checked))"
+            />
             <div class="file-path" :title="task.sourcePath">{{ task.sourcePath }}</div>
             <div class="header-tags">
+              <el-tag :type="selectedTaskIds.has(task.id) ? (selectedOptionByTask[task.id] ? 'success' : 'info') : 'info'" size="small">
+                {{ taskSelectionStatus(task.id) }}
+              </el-tag>
               <el-tag type="warning" size="small">
                 {{ t('queue.confidence') }}: {{ formatConfidence(task.matchConfidence) }}
               </el-tag>
@@ -79,23 +194,6 @@
             {{ formatSeasonEpisode(task) }}
           </el-descriptions-item>
         </el-descriptions>
-
-        <div class="search-row">
-          <el-input
-            v-model="searchKeywordByTask[task.id]"
-            :placeholder="t('queue.searchPlaceholder')"
-            clearable
-            @keyup.enter="handleSearch(task.id)"
-          />
-          <el-button
-            type="primary"
-            :loading="searchLoadingByTask[task.id]"
-            :disabled="!hasSearchKeyword(task.id)"
-            @click="handleSearch(task.id)"
-          >
-            {{ t('queue.search') }}
-          </el-button>
-        </div>
 
         <div class="candidate-section">
           <div class="section-title">
@@ -223,15 +321,22 @@ interface QueueOption {
 const candidateOptionsByTask = reactive<Record<number, QueueOption[]>>({})
 const searchOptionsByTask = reactive<Record<number, QueueOption[]>>({})
 const selectedOptionByTask = reactive<Record<number, string>>({})
-const searchKeywordByTask = reactive<Record<number, string>>({})
 const candidateLoadingByTask = reactive<Record<number, boolean>>({})
-const searchLoadingByTask = reactive<Record<number, boolean>>({})
 const actionLoadingByTask = reactive<Record<number, boolean>>({})
 const batchErrorByTask = reactive<Record<number, string>>({})
 const manualSelectedTaskIds = reactive(new Set<number>())
+const selectedTaskIds = reactive(new Set<number>())
 const currentPage = ref(1)
 const pageSize = ref(20)
 const batchConfirming = ref(false)
+const globalSearchKeyword = ref('')
+const globalSearchMediaType = ref<MediaType>('TV_SHOW')
+const globalSearchLoading = ref(false)
+const globalSearchPerformed = ref(false)
+const globalSearchResults = ref<QueueOption[]>([])
+const currentCandidate = ref<QueueOption | null>(null)
+const searchPanelExpanded = ref(true)
+const recommendationExpanded = ref(false)
 
 const sortedQueueTasks = computed(() => {
   return [...queueTasks.value].sort((a, b) => taskTime(b) - taskTime(a))
@@ -245,6 +350,7 @@ const displayedTasks = computed(() => {
 const currentPageBatchItems = computed<BatchConfirmItem[]>(() => {
   return displayedTasks.value
     .map((task) => {
+      if (!selectedTaskIds.has(task.id)) return null
       const selected = getSelectedOption(task.id)
       return selected
         ? { taskId: task.id, tmdbId: selected.tmdbId, mediaType: selected.mediaType }
@@ -253,37 +359,59 @@ const currentPageBatchItems = computed<BatchConfirmItem[]>(() => {
     .filter((item): item is BatchConfirmItem => item !== null)
 })
 
-const isCurrentPageCandidateLoading = computed(() => {
-  return displayedTasks.value.some((task) => candidateLoadingByTask[task.id])
-})
-
-const canSelectCurrentPageRecommended = computed(() => {
-  return !isCurrentPageCandidateLoading.value
-    && displayedTasks.value.some((task) => Boolean(getRecommendedOption(task.id)))
+const canApplyCurrentCandidate = computed(() => {
+  return Boolean(currentCandidate.value) && displayedTasks.value.some((task) => selectedTaskIds.has(task.id))
 })
 
 const candidateGroups = computed(() => {
-  const groups = new Map<string, { key: string, title: string, count: number }>()
+  const groups = new Map<string, { key: string, title: string, count: number, totalConfidence: number, option: QueueOption, firstIndex: number }>()
+  let index = 0
   for (const task of displayedTasks.value) {
     const seenInTask = new Set<string>()
-    for (const option of getTaskOptions(task.id)) {
+    for (const option of candidateOptionsByTask[task.id] ?? []) {
       if (seenInTask.has(option.key)) continue
       seenInTask.add(option.key)
 
       const group = groups.get(option.key)
       if (group) {
         group.count++
+        group.totalConfidence += option.confidence ?? 0
       } else {
         groups.set(option.key, {
           key: option.key,
           title: displayTitle(option),
           count: 1,
+          totalConfidence: option.confidence ?? 0,
+          option,
+          firstIndex: index++,
         })
       }
     }
   }
 
-  return [...groups.values()].filter((group) => group.count > 1)
+  return [...groups.values()]
+    .filter((group) => group.count > 1)
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count
+      const confidenceDiff = (b.totalConfidence / b.count) - (a.totalConfidence / a.count)
+      if (confidenceDiff !== 0) return confidenceDiff
+      return a.firstIndex - b.firstIndex
+    })
+})
+
+const visibleCandidateGroups = computed(() => {
+  return recommendationExpanded.value ? candidateGroups.value : candidateGroups.value.slice(0, 3)
+})
+
+const currentCandidateSummary = computed(() => {
+  if (!currentCandidate.value) {
+    return t('queue.noCurrentCandidate')
+  }
+  return t('queue.currentCandidateSummary', {
+    title: displayTitle(currentCandidate.value),
+    year: currentCandidate.value.year ?? t('queue.unknown'),
+    mediaType: t(`task.mediaType.${currentCandidate.value.mediaType}`),
+  })
 })
 
 onMounted(loadQueue)
@@ -329,18 +457,24 @@ async function loadCandidates(taskId: number) {
   }
 }
 
-async function handleSearch(taskId: number) {
-  const keyword = searchKeywordByTask[taskId]?.trim()
+async function handleGlobalSearch() {
+  const keyword = globalSearchKeyword.value.trim()
   if (!keyword) return
 
-  searchLoadingByTask[taskId] = true
+  globalSearchLoading.value = true
+  globalSearchPerformed.value = true
   try {
-    const res = await mediaApi.searchQueue(taskId, keyword)
-    searchOptionsByTask[taskId] = res.data.data
+    const res = await mediaApi.searchMetadata(keyword, globalSearchMediaType.value)
+    globalSearchResults.value = res.data.data
       .map(mapSearchResultToOption)
       .filter((option): option is QueueOption => option !== null)
+    if (globalSearchResults.value.length > 0) {
+      setCurrentCandidate(globalSearchResults.value[0])
+    }
+  } catch {
+    ElMessage.error(t('queue.searchFailed'))
   } finally {
-    searchLoadingByTask[taskId] = false
+    globalSearchLoading.value = false
   }
 }
 
@@ -377,36 +511,92 @@ async function handleSkip(taskId: number) {
   }
 }
 
-function selectCurrentPageRecommended() {
+function selectCurrentPageTasks() {
   for (const task of displayedTasks.value) {
-    const recommended = getRecommendedOption(task.id)
-    if (recommended) {
-      selectedOptionByTask[task.id] = recommended.key
-      manualSelectedTaskIds.delete(task.id)
+    selectedTaskIds.add(task.id)
+  }
+}
+
+function quickSelectCandidateGroup(groupKey: string) {
+  for (const task of displayedTasks.value) {
+    const option = (candidateOptionsByTask[task.id] ?? []).find((item) => item.key === groupKey)
+    if (option) {
+      selectedTaskIds.add(task.id)
+      selectedOptionByTask[task.id] = option.key
+      manualSelectedTaskIds.add(task.id)
+      delete batchErrorByTask[task.id]
     }
   }
 }
 
-function selectCandidateGroup(groupKey: string) {
-  for (const task of displayedTasks.value) {
-    if (manualSelectedTaskIds.has(task.id)) continue
-    const option = getTaskOptions(task.id).find((item) => item.key === groupKey)
-    if (option) {
-      selectedOptionByTask[task.id] = option.key
+function setCurrentCandidate(option: QueueOption) {
+  currentCandidate.value = option
+}
+
+async function applyCurrentCandidateToSelectedTasks() {
+  const candidate = currentCandidate.value
+  if (!candidate) {
+    ElMessage.warning(t('queue.selectCandidateFirst'))
+    return
+  }
+
+  const selectedTasks = displayedTasks.value.filter((task) => selectedTaskIds.has(task.id))
+  if (selectedTasks.length === 0) {
+    ElMessage.warning(t('queue.selectTasksFirst'))
+    return
+  }
+
+  const mismatched = selectedTasks.filter((task) => task.mediaType && task.mediaType !== candidate.mediaType)
+  if (mismatched.length > 0) {
+    ElMessage.warning(t('queue.mediaTypeMismatch'))
+    return
+  }
+
+  const overwriteCount = selectedTasks.filter((task) => Boolean(selectedOptionByTask[task.id])).length
+  if (overwriteCount > 0) {
+    try {
+      await ElMessageBox.confirm(
+        t('queue.overwriteCandidateConfirm', { count: overwriteCount }),
+        t('queue.overwriteCandidateTitle'),
+        {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          type: 'warning',
+        },
+      )
+    } catch {
+      return
     }
+  }
+
+  for (const task of selectedTasks) {
+    ensureSearchOptionForTask(task.id, candidate)
+    selectedOptionByTask[task.id] = candidate.key
+    manualSelectedTaskIds.add(task.id)
+    delete batchErrorByTask[task.id]
   }
 }
 
 function clearCurrentPageSelection() {
   for (const task of displayedTasks.value) {
+    selectedTaskIds.delete(task.id)
     selectedOptionByTask[task.id] = ''
     manualSelectedTaskIds.delete(task.id)
   }
 }
 
 function markManualSelection(taskId: number) {
+  selectedTaskIds.add(taskId)
   manualSelectedTaskIds.add(taskId)
   delete batchErrorByTask[taskId]
+}
+
+function toggleTaskSelection(taskId: number, checked: boolean) {
+  if (checked) {
+    selectedTaskIds.add(taskId)
+  } else {
+    selectedTaskIds.delete(taskId)
+  }
 }
 
 async function handleBatchConfirm() {
@@ -460,16 +650,33 @@ function getTaskOptions(taskId: number) {
   return [...candidates, ...searches.filter((option) => !seen.has(option.key))]
 }
 
-function getRecommendedOption(taskId: number) {
-  return (candidateOptionsByTask[taskId] ?? []).find((option) => option.rank === 1)
-}
-
 function getSelectedOption(taskId: number) {
   return getTaskOptions(taskId).find((option) => option.key === selectedOptionByTask[taskId])
 }
 
-function hasSearchKeyword(taskId: number) {
-  return Boolean(searchKeywordByTask[taskId]?.trim())
+function ensureSearchOptionForTask(taskId: number, option: QueueOption) {
+  const existing = getTaskOptions(taskId).some((item) => item.key === option.key)
+  if (existing) return
+
+  const taskSearchOptions = searchOptionsByTask[taskId] ?? []
+  searchOptionsByTask[taskId] = [
+    ...taskSearchOptions,
+    {
+      ...option,
+      origin: 'search',
+      rank: null,
+    },
+  ]
+}
+
+function taskSelectionStatus(taskId: number) {
+  if (!selectedTaskIds.has(taskId)) {
+    return t('queue.taskNotSelected')
+  }
+  if (selectedOptionByTask[taskId]) {
+    return t('queue.taskSelectedWithCandidate')
+  }
+  return t('queue.taskSelectedWithoutCandidate')
 }
 
 function mapCandidateToOption(candidate: TaskCandidate): QueueOption {
@@ -570,6 +777,70 @@ h2 {
   min-height: 160px;
 }
 
+.global-search-panel {
+  padding: 16px;
+  border: 1px solid #d9ecff;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.panel-header h3 {
+  margin: 0 0 6px;
+  color: #303133;
+  font-size: 16px;
+}
+
+.panel-header p {
+  margin: 0;
+  color: #606266;
+  font-size: 13px;
+}
+
+.global-search-body {
+  margin-top: 14px;
+}
+
+.global-search-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.media-type-select {
+  width: 160px;
+}
+
+.global-result-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.global-result-card {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.global-result-card.is-selected {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.14);
+}
+
 .batch-toolbar {
   display: flex;
   align-items: center;
@@ -588,8 +859,27 @@ h2 {
   gap: 8px;
 }
 
+.batch-actions :deep(.el-button + .el-button),
+.candidate-groups :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.batch-divider {
+  height: 24px;
+  margin: 0 4px;
+}
+
+.button-help-icon {
+  margin-left: 6px;
+  font-size: 14px;
+}
+
 .candidate-groups {
   flex-direction: column;
+}
+
+.candidate-groups :deep(.el-alert__title span) {
+  margin-right: 8px;
 }
 
 .queue-card {
@@ -764,6 +1054,7 @@ h2 {
   word-break: break-word;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
 .actions {
@@ -783,10 +1074,18 @@ h2 {
 @media (max-width: 760px) {
   .page-header,
   .card-header,
-  .search-row,
+  .global-search-row,
   .batch-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .global-search-row {
+    display: flex;
+  }
+
+  .media-type-select {
+    width: 100%;
   }
 
   .header-tags {
@@ -795,12 +1094,14 @@ h2 {
 }
 
 @media (max-width: 1100px) {
+  .global-result-list,
   .candidate-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 760px) {
+  .global-result-list,
   .candidate-list {
     grid-template-columns: 1fr;
   }

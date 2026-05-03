@@ -25,9 +25,9 @@ export const mediaApi = {
     return http.get<ApiResponse<TaskCandidate[]>>(`/api/queue/${id}/candidates`)
   },
 
-  searchQueue(id: number, keyword: string) {
-    return http.get<ApiResponse<MatchResult[]>>(`/api/queue/${id}/search`, {
-      params: { q: keyword },
+  searchMetadata(keyword: string, mediaType: MediaType) {
+    return http.get<ApiResponse<MatchResult[]>>('/api/metadata/search', {
+      params: { q: keyword, mediaType },
     })
   },
 

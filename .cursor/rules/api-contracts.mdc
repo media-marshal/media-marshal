@@ -59,7 +59,7 @@ interface MediaTask {
 |---|---|---|---|---|
 | GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务 | — | `MediaTask[]` |
 | GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
-| GET | `/api/queue/{id}/search?q={keyword}` | 用户手动重新搜索 TMDB（不写入候选表）；纯数字先按 TMDB ID 查询再按关键词搜索，非数字仅按关键词搜索 | — | `MatchResult[]` |
+| GET | `/api/queue/{id}/search?q={keyword}` | **Deprecated**：旧任务绑定搜索接口，前端新功能不再使用；保留兼容，结果不写入候选表 | — | `MatchResult[]` |
 | POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理；源文件不存在时任务转为 FAILED 并返回失败信息 | `ConfirmRequest` | — |
 | POST | `/api/queue/batch-confirm` | 批量人工确认；逐条提交后台整理，源文件缺失或单条提交失败不回滚整个批次 | `BatchConfirmRequest` | `BatchConfirmResponse` |
 | POST | `/api/queue/{id}/skip` | 跳过此任务（标记为 SKIPPED，写入 `skipReason`） | — | — |
@@ -95,6 +95,7 @@ interface BatchConfirmResponse {
 ```
 
 > 人工单条确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_SINGLE`；批量确认接口会快速返回提交结果，成功提交的任务先进入 `PROCESSING`，后台整理完成后最终状态仍为 `DONE`，`confirmationSource=MANUAL_BATCH`。系统高置信度自动采纳时 `confirmationSource=AUTO_MATCH`。
+> `POST /api/queue/batch-confirm` 支持来自全局手动搜索的候选：若 `tmdbId + mediaType` 不在该任务 `task_candidate` 中，后端确认时会新建候选记录并标记为 `selected=true`。
 > 后台删除事件监听、周期扫描巡检和确认前最终校验都会将源文件缺失的 `PENDING` / `AWAITING_CONFIRMATION` 任务标记为 `FAILED`，固定失败信息为：`源文件不存在，无法继续处理`。v1 不自动失败 `PROCESSING` 任务，避免误伤正在执行的文件操作。
 
 ### TaskCandidate
@@ -131,7 +132,25 @@ interface MatchResult {
 }
 ```
 
-> ADR-018 仅升级后端内部匹配策略，不新增前端可见字段：`GET /api/queue/{id}/search` 和自动匹配仍返回 `MatchResult[]`。后端会基于原始文件名与 guessit 标题生成多 query，使用进程内 TMDB 搜索 / 详情缓存与 in-flight 去重，并按标题、年份、媒体类型、文件结构综合评分；评分解释仅在 `media-marshal.debug=true` 时写入后端日志。
+> ADR-018 仅升级后端内部匹配策略，不新增前端可见字段：全局 metadata 搜索和自动匹配仍返回 `MatchResult[]`。后端会基于原始文件名与 guessit 标题生成多 query，使用进程内 TMDB 搜索 / 详情缓存与 in-flight 去重，并按标题、年份、媒体类型、文件结构综合评分；评分解释仅在 `media-marshal.debug=true` 时写入后端日志。
+
+---
+
+## 元数据搜索 `/api/metadata`
+
+| 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
+|---|---|---|---|---|
+| GET | `/api/metadata/search?q={keyword}&mediaType={mediaType}` | Queue 页全局手动搜索候选；结果只作为前端临时候选，不立即写入 `task_candidate` | — | `MatchResult[]` |
+
+### Metadata Search 参数
+```typescript
+interface MetadataSearchQuery {
+  q: string
+  mediaType: 'MOVIE' | 'TV_SHOW'
+}
+```
+
+> `q` 支持关键词或纯数字 TMDB ID。纯数字会先按 `mediaType` 查询 TMDB ID，再合并关键词搜索结果。用户点击批量确认后，候选才按任务维度写入 `task_candidate`。
 
 ---
 

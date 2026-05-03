@@ -83,6 +83,7 @@ public class QueueController {
     }
 
     @SuppressWarnings("null")
+    @Deprecated
     @GetMapping("/{id}/search")
     public ApiResponse<List<MatchResult>> search(@PathVariable Long id, @RequestParam String q) {
         MediaTask task = taskRepository.findById(id)

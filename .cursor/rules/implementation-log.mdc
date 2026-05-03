@@ -296,6 +296,54 @@ alwaysApply: false
 
 ---
 
+## [ADR-019 Queue 全局手动搜索候选与任务关联] 2026-05-03
+
+### 已完成
+- 新增全局元数据搜索接口 `GET /api/metadata/search?q=&mediaType=`
+  - 搜索语义不再依赖具体任务 ID
+  - 支持关键词搜索和纯数字 TMDB ID 查询
+  - 搜索结果复用 `MatchResult[]`，不立即写入 `task_candidate`
+- 保留旧 `GET /api/queue/{id}/search?q=` 兼容接口，并在 API 契约中标记为 Deprecated
+- Queue 页改造为“当前候选 + 当前页已选任务 + 任务已关联候选”的批量确认模型
+  - 用户可先搜索候选再选择任务，也可先选择任务再搜索候选
+  - 当前页任务即使没有系统候选，也可以被选中
+  - `应用当前候选到已选任务` 会把当前候选关联到当前页已选任务
+  - 已选任务媒体类型与当前候选不一致时阻止应用
+  - 覆盖已有候选选择前弹出二次确认
+  - `批量确认（N）` 只统计当前页“已选任务，已选择候选”的任务
+- Queue 页顶部新增全局手动搜索面板
+  - 默认展开，可折叠 / 展开
+  - 折叠后仍展示当前候选摘要
+  - 搜索结果作为前端临时候选，应用到任务后再通过批量确认提交
+- 系统推荐快捷面板压缩展示
+  - 默认只展示前 3 个推荐分组
+  - 可展开全部 / 收起
+  - 分组按覆盖任务数、平均置信度、稳定顺序排序
+  - 每个分组支持选择该推荐任务、设为当前候选、应用到已选任务
+- 前端 API、中文 / 英文 i18n 和 API 契约已同步更新
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/controller/MetadataController.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `frontend/src/api/media.ts`
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- 新增 `GET /api/metadata/search?q={keyword}&mediaType={MOVIE|TV_SHOW}`，返回 `MatchResult[]`
+- `GET /api/queue/{id}/search?q={keyword}` 标记为 Deprecated，前端新流程不再使用
+- `POST /api/queue/batch-confirm` 契约补充：支持确认来自全局手动搜索、不在任务候选表中的候选
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [英文别名命中评分与源文件缺失巡检优化] 2026-05-03
 
 ### 已完成
