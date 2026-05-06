@@ -26,8 +26,9 @@ alwaysApply: false
 ```typescript
 interface MediaTask {
   id: number
-  sourcePath: string
-  targetPath: string | null
+  sourcePath: string                  // 源媒体资产路径；普通视频/ISO 为文件路径，蓝光原盘为外层根目录
+  targetPath: string | null           // 目标媒体资产路径；目录型资产表示目标根目录
+  assetType: 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
   status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED'
   mediaType: 'MOVIE' | 'TV_SHOW' | null
   parsedTitle: string | null
@@ -50,6 +51,7 @@ interface MediaTask {
 ```
 
 > 前端任务列表“详情”列组合展示：`FAILED` 读取 `errorMessage`，`SKIPPED` 读取 `skipReason`。
+> `assetType` 文案：`VIDEO_FILE`=普通视频，`ISO_IMAGE`=ISO 镜像，`BLURAY_DIRECTORY`=蓝光原盘。v0.2.x 当前仅完整支持 `VIDEO_FILE` 和电影蓝光原盘；扫描到 ISO、裸 `sourceDir/BDMV`、剧集蓝光原盘时会记录为 `SKIPPED`，并通过 `skipReason` 返回原因。
 
 ---
 

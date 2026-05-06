@@ -15,6 +15,7 @@ export type TaskStatus =
   | 'SKIPPED'
 
 export type MediaType = 'MOVIE' | 'TV_SHOW'
+export type MediaAssetType = 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
 export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH'
 export type DiscoveryMode = 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
 
@@ -22,6 +23,7 @@ export interface MediaTask {
   id: number
   sourcePath: string
   targetPath: string | null
+  assetType: MediaAssetType
   status: TaskStatus
   mediaType: MediaType | null
   parsedTitle: string | null

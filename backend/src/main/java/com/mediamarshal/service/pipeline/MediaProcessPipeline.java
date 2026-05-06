@@ -2,6 +2,7 @@ package com.mediamarshal.service.pipeline;
 
 import com.mediamarshal.model.dto.MatchResult;
 import com.mediamarshal.model.dto.ParseResult;
+import com.mediamarshal.model.entity.MediaAssetType;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.TaskCandidate;
 import com.mediamarshal.model.entity.WatchRule;
@@ -9,11 +10,12 @@ import com.mediamarshal.notification.EmailNotificationService;
 import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.TaskCandidateRepository;
 import com.mediamarshal.repository.WatchRuleRepository;
+import com.mediamarshal.service.discovery.asset.MediaAsset;
 import com.mediamarshal.service.matcher.MetadataMatcher;
 import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
+import com.mediamarshal.service.rename.AssetOrganizerService;
 import com.mediamarshal.service.rename.FileOperationStrategy;
-import com.mediamarshal.service.rename.RenameService;
 import com.mediamarshal.service.settings.SettingsService;
 import com.mediamarshal.websocket.EventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -65,7 +67,7 @@ public class MediaProcessPipeline {
 
     private final GuessitParserClient parserClient;
     private final MetadataMatcher metadataMatcher;
-    private final RenameService renameService;
+    private final AssetOrganizerService assetOrganizerService;
     private final NfoGeneratorService nfoGeneratorService;
     private final MediaTaskRepository taskRepository;
     private final TaskCandidateRepository candidateRepository;
@@ -91,13 +93,27 @@ public class MediaProcessPipeline {
      * @param rule 触发此次处理的监控规则
      */
     public void process(Path file, WatchRule rule) {
-        log.info("Pipeline started: file={}, rule='{}'", file, rule.getName());
+        process(new MediaAsset(
+                file.toAbsolutePath().normalize(),
+                MediaAssetType.VIDEO_FILE,
+                file.getFileName().toString(),
+                false
+        ), rule);
+    }
+
+    /**
+     * 处理一个新发现的媒体资产（由 FileDiscoveryService 调用）。
+     */
+    public void process(MediaAsset asset, WatchRule rule) {
+        log.info("Pipeline started: asset={}, type={}, rule='{}'",
+                asset.rootPath(), asset.type(), rule.getName());
 
         boolean isDebug = Boolean.parseBoolean(settingsService.get("debug", "false"));
 
         // Step 1: 入库，记录触发规则
         MediaTask task = new MediaTask();
-        task.setSourcePath(file.toAbsolutePath().toString());
+        task.setSourcePath(asset.rootPath().toAbsolutePath().normalize().toString());
+        task.setAssetType(asset.type());
         task.setRuleId(rule.getId());
         task.setOperationType(rule.getOperation().name());
         task.setStatus(MediaTask.TaskStatus.PENDING);
@@ -105,7 +121,8 @@ public class MediaProcessPipeline {
         eventPublisher.publishTaskCreated(task);
 
         if (isDebug) {
-            log.debug("Task created: id={}, ruleId={}, sourceDir={}", task.getId(), rule.getId(), file);
+            log.debug("Task created: id={}, ruleId={}, sourcePath={}, assetType={}",
+                    task.getId(), rule.getId(), task.getSourcePath(), task.getAssetType());
         }
 
         try {
@@ -114,11 +131,11 @@ public class MediaProcessPipeline {
             eventPublisher.publishTaskProcessing(task);
 
             // Step 2: guessit 解析文件名
-            ParseResult parseResult = parserClient.parse(file.getFileName().toString());
+            ParseResult parseResult = parserClient.parse(asset.displayName());
             fillParsedFields(task, parseResult);
 
             // Step 3: 确定媒体类型
-            Optional<MediaTask.MediaType> mediaType = resolveMediaType(rule, parseResult);
+            Optional<MediaTask.MediaType> mediaType = resolveMediaType(rule, parseResult, task.getAssetType());
             if (mediaType.isEmpty()) {
                 moveToAwaitingConfirmation(task, "Unable to detect media type from filename");
                 return;
@@ -153,7 +170,7 @@ public class MediaProcessPipeline {
             continueAfterMetadataConfirmed(task, topMatch);
 
         } catch (Exception e) {
-            log.error("Pipeline failed: file={}, taskId={}", file, task.getId(), e);
+            log.error("Pipeline failed: asset={}, taskId={}", asset.rootPath(), task.getId(), e);
             task.setStatus(MediaTask.TaskStatus.FAILED);
             task.setErrorMessage(e.getMessage());
             taskRepository.save(task);
@@ -295,7 +312,18 @@ public class MediaProcessPipeline {
         taskRepository.save(task);
     }
 
-    private Optional<MediaTask.MediaType> resolveMediaType(WatchRule rule, ParseResult parseResult) {
+    private Optional<MediaTask.MediaType> resolveMediaType(
+            WatchRule rule,
+            ParseResult parseResult,
+            MediaAssetType assetType
+    ) {
+        if (MediaAssetType.BLURAY_DIRECTORY.equals(assetType)) {
+            if (WatchRule.RuleMediaType.TV_SHOW.equals(rule.getMediaType())) {
+                throw new IllegalStateException("当前版本暂不支持剧集蓝光原盘");
+            }
+            return Optional.of(MediaTask.MediaType.MOVIE);
+        }
+
         if (WatchRule.RuleMediaType.MOVIE.equals(rule.getMediaType())) {
             return Optional.of(MediaTask.MediaType.MOVIE);
         }
@@ -386,7 +414,7 @@ public class MediaProcessPipeline {
             WatchRule rule = loadRule(task);
             Path sourceFile = Paths.get(task.getSourcePath()).toAbsolutePath().normalize();
             Path sourceParent = sourceFile.getParent();
-            Path target = renameService.rename(task);
+            Path target = assetOrganizerService.organize(task);
             task.setTargetPath(target.toString());
             taskRepository.save(task);
 
@@ -421,6 +449,9 @@ public class MediaProcessPipeline {
     }
 
     private boolean moveAssociatedFiles(MediaTask task, WatchRule rule, Path targetFile) {
+        if (MediaAssetType.BLURAY_DIRECTORY.equals(task.getAssetType())) {
+            return false;
+        }
         if (!Boolean.TRUE.equals(rule.getMoveAssociatedFiles())) {
             return false;
         }

@@ -68,6 +68,13 @@
       >
         <el-table-column type="selection" width="42" />
         <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="assetType" :label="t('dashboard.assetType')" width="110">
+          <template #default="{ row }">
+            <el-tag :type="assetTypeTagType(row.assetType)" size="small">
+              {{ t(`task.assetType.${row.assetType || 'VIDEO_FILE'}`) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="mediaType" :label="t('dashboard.mediaType')" width="80">
           <template #default="{ row }">
             {{ row.mediaType ? t(`task.mediaType.${row.mediaType}`) : '-' }}
@@ -141,7 +148,7 @@ import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { MediaTask, TaskStatus } from '@/types'
+import type { MediaAssetType, MediaTask, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
 const mediaStore = useMediaStore()
@@ -205,6 +212,15 @@ function statusTagType(status: TaskStatus): TagType | undefined {
     SKIPPED: 'info',
   }
   return map[status] ?? 'info'
+}
+
+function assetTypeTagType(assetType: MediaAssetType | null | undefined): TagType | undefined {
+  const map: Record<MediaAssetType, TagType | undefined> = {
+    VIDEO_FILE: 'info',
+    ISO_IMAGE: 'warning',
+    BLURAY_DIRECTORY: 'primary',
+  }
+  return map[assetType || 'VIDEO_FILE'] ?? 'info'
 }
 
 function formatCreatedAt(value: string) {

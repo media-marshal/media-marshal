@@ -18,12 +18,17 @@ public class MediaTask {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 原始文件绝对路径 */
+    /** 源媒体资产绝对路径；普通视频/ISO 为文件路径，蓝光原盘为外层根目录路径。 */
     @Column(nullable = false)
     private String sourcePath;
 
-    /** 处理后文件路径（移动/复制完成后填写） */
+    /** 处理后资产路径；目录型资产表示目标根目录。 */
     private String targetPath;
+
+    /** 源媒体资产类型。 */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private MediaAssetType assetType = MediaAssetType.VIDEO_FILE;
 
     /** 任务状态 */
     @Enumerated(EnumType.STRING)

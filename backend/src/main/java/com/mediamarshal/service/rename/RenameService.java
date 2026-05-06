@@ -66,25 +66,15 @@ public class RenameService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "WatchRule not found: ruleId=" + ruleId));
 
-        // 2. 选取路径模板：规则模板 > 全局配置 > 内置默认值
-        String template = resolveTemplate(rule, task.getMediaType());
-
-        if (isDebug) {
-            log.debug("Template resolved: rule='{}', mediaType={}, template='{}'",
-                    rule.getName(), task.getMediaType(), template);
-        }
-
-        // 3. 构建变量袋
-        TemplateVariables variables = buildVariables(task);
+        // 2-4. 渲染相对路径
+        String relativePath = renderRelativePath(task, rule, null);
+        TemplateVariables variables = buildVariables(task, null);
 
         if (isDebug) {
             log.debug("TemplateVariables: title='{}', year={}, season={}, episode={}, resolution='{}', ext='{}'",
                     variables.getTitle(), variables.getYear(),
                     variables.getSeason(), variables.getEpisode(), variables.getResolution(), variables.getExt());
         }
-
-        // 4. 渲染相对路径
-        String relativePath = templateRenderer.render(template, variables);
 
         // 5. 拼接目标绝对路径
         Path target = Paths.get(rule.getTargetDir()).resolve(relativePath).normalize();
@@ -126,13 +116,25 @@ public class RenameService {
         throw new IllegalArgumentException("Media type is required before rendering target path");
     }
 
+    String renderRelativePath(MediaTask task, WatchRule rule, String extOverride) {
+        String template = resolveTemplate(rule, task.getMediaType());
+        boolean isDebug = Boolean.parseBoolean(settingsService.get("debug", "false"));
+        if (isDebug) {
+            log.debug("Template resolved: rule='{}', mediaType={}, template='{}'",
+                    rule.getName(), task.getMediaType(), template);
+        }
+        return templateRenderer.render(template, buildVariables(task, extOverride));
+    }
+
     /**
      * 从 MediaTask 构建 TemplateVariables 变量袋
      * task 中的字段在 Pipeline Step 4 完成后应已全部填充
      */
-    private TemplateVariables buildVariables(MediaTask task) {
+    TemplateVariables buildVariables(MediaTask task, String extOverride) {
         String sourcePath = task.getSourcePath();
-        String ext = sourcePath.contains(".")
+        String ext = extOverride != null
+                ? extOverride
+                : sourcePath.contains(".")
                 ? sourcePath.substring(sourcePath.lastIndexOf('.'))
                 : "";
 

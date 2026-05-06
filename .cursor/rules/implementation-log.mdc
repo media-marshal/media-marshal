@@ -296,6 +296,77 @@ alwaysApply: false
 
 ---
 
+## [ADR-020 媒体资产识别与蓝光原盘目录支持] 2026-05-06
+
+### 已完成
+- 新增媒体资产类型 `MediaAssetType`：`VIDEO_FILE`、`ISO_IMAGE`、`BLURAY_DIRECTORY`
+- 新增媒体资产识别模块 `service/discovery/asset`
+  - `BluRayDirectoryAssetDetector` 支持标准蓝光目录强特征识别和内部路径向上归一化
+  - `IsoImageAssetDetector` 可识别 ISO，并按本版本范围记录为跳过
+  - `VideoFileAssetDetector` 承接普通视频文件识别
+  - `MediaAssetDetectionService` 按蓝光目录 → ISO → 普通视频优先级聚合 detector
+- 文件发现层改为先识别媒体资产，再执行任务创建 / 查重 / 跳过记录
+  - 标准蓝光目录以外层根目录创建一个任务，并剪枝内部 `BDMV/**`、`CERTIFICATE/**`
+  - 内部 `.m2ts`、`.mpls`、`.clpi` 等不再生成普通视频或 `SKIPPED` 噪音
+  - 裸 `sourceDir/BDMV` 记录为 `SKIPPED`，原因：`非标解析失败：蓝光原盘缺少影片外层目录`
+  - ISO 记录为 `SKIPPED`，原因：`当前版本暂不支持 ISO 镜像`
+  - `TV_SHOW` 规则下的蓝光原盘记录为 `SKIPPED`，原因：`当前版本暂不支持剧集蓝光原盘`
+- `MediaTask` 新增 `assetType` 字段，历史兼容默认 `VIDEO_FILE`
+- Pipeline 支持以 `MediaAsset` 入参处理任务
+  - 蓝光目录使用外层目录名作为 guessit / TMDB 输入
+  - `AUTO` / `MOVIE` 规则下蓝光目录按电影处理
+- 新增资产整理分发层
+  - 普通视频复用现有 `RenameService`
+  - 蓝光原盘目录按电影模板渲染后取父目录作为目标根目录
+  - 模板无父目录时 fallback 到 `{title} ({year})`
+  - `{ext}` 在蓝光模板渲染时为空字符串
+  - `MOVE` 移动整个蓝光根目录
+  - `COPY` 递归复制目录结构
+  - `HARD_LINK` 递归创建目录并为普通文件创建硬链接
+  - `SYMBOLIC_LINK` 创建目录级符号链接
+  - 目标目录存在时失败，不覆盖、不合并、不自动改名
+- 蓝光目录不进入附属文件跟随逻辑；开启 NFO 时在目标根目录生成 `movie.nfo`
+- 前端 Queue / Dashboard 增加资产类型展示标签和中英文文案
+- 补充单元测试覆盖蓝光识别、内部路径归一化、裸 BDMV、ISO 跳过识别、蓝光目录目标路径和 fallback
+
+### 关键文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaAssetType.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/asset/MediaAsset.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/asset/MediaAssetDetectionService.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/asset/BluRayDirectoryAssetDetector.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/asset/IsoImageAssetDetector.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/asset/VideoFileAssetDetector.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/AssetOrganizerService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/BluRayDirectoryAssetOrganizer.java`
+- `backend/src/main/java/com/mediamarshal/service/nfo/NfoGeneratorService.java`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 接口变更
+- `MediaTask` 新增字段：`assetType: 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'`
+- `MediaTask.sourcePath` 语义调整为源媒体资产路径
+- `MediaTask.targetPath` 在目录型资产下表示目标根目录
+- 已在 `api-contracts.mdc` 同步说明资产类型文案和本版本跳过范围
+
+### 偏离设计的地方
+- 按当前需求确认，本版本暂不完整支持 ISO 整理；扫描到 ISO 仅记录 `SKIPPED`
+- 按当前需求确认，本版本暂不支持剧集蓝光原盘；扫描到 `TV_SHOW` 规则下蓝光原盘仅记录 `SKIPPED`
+- 裸 `sourceDir/BDMV` 不静默忽略，改为记录 `SKIPPED` 任务，便于用户在 Dashboard 看到非标原因
+
+### 遗留问题 / 需 PM 决策
+- 后续版本可继续补齐 ISO 镜像整理
+- 后续版本可扩展剧集蓝光原盘识别、季集语义和目录整理规则
+- 后续版本可评估蓝光根目录旁同名 poster / folder / nfo 等附属文件跟随策略
+
+---
+
 ## [Queue 当前页批量跳过] 2026-05-03
 
 ### 已完成

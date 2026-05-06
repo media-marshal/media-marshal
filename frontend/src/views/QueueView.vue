@@ -189,6 +189,9 @@
               <el-tag :type="selectedTaskIds.has(task.id) ? (selectedOptionByTask[task.id] ? 'success' : 'info') : 'info'" size="small">
                 {{ taskSelectionStatus(task.id) }}
               </el-tag>
+              <el-tag :type="assetTypeTagType(task.assetType)" size="small">
+                {{ t(`task.assetType.${task.assetType || 'VIDEO_FILE'}`) }}
+              </el-tag>
               <el-tag type="warning" size="small">
                 {{ t('queue.confidence') }}: {{ formatConfidence(task.matchConfidence) }}
               </el-tag>
@@ -310,7 +313,7 @@ import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mediaApi } from '@/api/media'
-import type { BatchConfirmItem, MatchResult, MediaTask, MediaType, TaskCandidate } from '@/types'
+import type { BatchConfirmItem, MatchResult, MediaAssetType, MediaTask, MediaType, TaskCandidate } from '@/types'
 
 const { t } = useI18n()
 const mediaStore = useMediaStore()
@@ -800,6 +803,15 @@ function formatSeasonEpisode(task: MediaTask) {
 
 function formatConfidence(confidence: number | null) {
   return confidence == null ? t('queue.unknown') : `${(confidence * 100).toFixed(0)}%`
+}
+
+function assetTypeTagType(assetType: MediaAssetType | null | undefined) {
+  const map: Record<MediaAssetType, 'primary' | 'warning' | 'info'> = {
+    VIDEO_FILE: 'info',
+    ISO_IMAGE: 'warning',
+    BLURAY_DIRECTORY: 'primary',
+  }
+  return map[assetType || 'VIDEO_FILE']
 }
 
 function taskTime(task: MediaTask) {

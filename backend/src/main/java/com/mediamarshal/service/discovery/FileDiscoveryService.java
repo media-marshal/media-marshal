@@ -1,9 +1,12 @@
 package com.mediamarshal.service.discovery;
 
+import com.mediamarshal.model.entity.MediaAssetType;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.WatchRule;
 import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.WatchRuleRepository;
+import com.mediamarshal.service.discovery.asset.MediaAsset;
+import com.mediamarshal.service.discovery.asset.MediaAssetDetectionService;
 import com.mediamarshal.service.pipeline.MediaProcessPipeline;
 import com.mediamarshal.service.settings.SettingsService;
 import com.mediamarshal.websocket.EventPublisher;
@@ -82,6 +85,7 @@ public class FileDiscoveryService {
     private final MediaProcessPipeline pipeline;
     private final SettingsService settingsService;
     private final EventPublisher eventPublisher;
+    private final MediaAssetDetectionService mediaAssetDetectionService;
 
     private WatchService watchService;
     private volatile boolean running = false;
@@ -280,33 +284,62 @@ public class FileDiscoveryService {
                     log.debug("Scan ignored directory subtree: {}", normalized);
                     return FileVisitResult.SKIP_SUBTREE;
                 }
+                if (!normalized.equals(normalizedRoot)) {
+                    counter.scanned++;
+                    var asset = mediaAssetDetectionService.detect(normalized, rule);
+                    if (asset.isPresent()) {
+                        boolean queued = processAssetIfNotDuplicated(asset.get(), rule);
+                        if (queued) {
+                            counter.queued++;
+                        } else {
+                            counter.skipped++;
+                        }
+                        return asset.get().shouldPruneChildren()
+                                ? FileVisitResult.SKIP_SUBTREE
+                                : FileVisitResult.CONTINUE;
+                    }
+                }
                 return FileVisitResult.CONTINUE;
             }
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                discoverFile(file.toAbsolutePath().normalize(), rule, counter);
+                discoverPath(file.toAbsolutePath().normalize(), rule, counter);
                 return FileVisitResult.CONTINUE;
             }
         });
     }
 
-    private void discoverFile(Path file, WatchRule rule, ScanCounter counter) {
+    private void discoverPath(Path path, WatchRule rule, ScanCounter counter) {
         counter.scanned++;
-        if (isIgnored(file, rule)) {
+        if (isIgnored(path, rule)) {
             counter.skipped++;
             return;
         }
 
-        FileCategory category = categorizeFile(file);
+        var asset = mediaAssetDetectionService.detect(path, rule);
+        if (asset.isPresent()) {
+            boolean queued = processAssetIfNotDuplicated(asset.get(), rule);
+            if (queued) {
+                counter.queued++;
+            } else {
+                counter.skipped++;
+            }
+            return;
+        }
+
+        FileCategory category = categorizeFile(path);
         if (category == FileCategory.ASSOCIATED) {
             counter.skipped++;
             return;
         }
 
-        boolean queued = category == FileCategory.VIDEO
-                ? processIfNotDuplicated(file, rule)
-                : recordSkippedIfNotDuplicated(file, rule, "非视频文件，已跳过处理");
+        boolean queued = recordSkippedIfNotDuplicated(
+                path,
+                rule,
+                MediaAssetType.VIDEO_FILE,
+                "非视频文件，已跳过处理"
+        );
         if (queued) {
             counter.queued++;
         } else {
@@ -478,6 +511,12 @@ public class FileDiscoveryService {
             return;
         }
 
+        var asset = mediaAssetDetectionService.detect(fullPath, rule);
+        if (asset.isPresent() && !MediaAssetType.VIDEO_FILE.equals(asset.get().type())) {
+            processAssetIfNotDuplicated(asset.get(), rule);
+            return;
+        }
+
         if (Files.isDirectory(fullPath)) {
             return;
         }
@@ -489,7 +528,12 @@ public class FileDiscoveryService {
         }
 
         if (category == FileCategory.MISC) {
-            recordSkippedIfNotDuplicated(fullPath, rule, "非视频文件，已跳过处理");
+            recordSkippedIfNotDuplicated(
+                    fullPath,
+                    rule,
+                    MediaAssetType.VIDEO_FILE,
+                    "非视频文件，已跳过处理"
+            );
             return;
         }
 
@@ -557,7 +601,7 @@ public class FileDiscoveryService {
                 return;
             }
 
-            processIfNotDuplicated(file, rule);
+            processDetectedPathIfNotDuplicated(file, rule);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.debug("Stability check interrupted: {}", file);
@@ -572,8 +616,18 @@ public class FileDiscoveryService {
      * ADR-005 第二层防护：数据库查重。
      * 同一路径存在非 FAILED 任务时跳过，避免重复入库。
      */
-    private boolean processIfNotDuplicated(Path file, WatchRule rule) {
-        String sourcePath = file.toString();
+    private boolean processDetectedPathIfNotDuplicated(Path path, WatchRule rule) {
+        var asset = mediaAssetDetectionService.detect(path, rule);
+        if (asset.isEmpty()) {
+            log.debug("No media asset detected after stability check, skipping: {}", path);
+            return false;
+        }
+        return processAssetIfNotDuplicated(asset.get(), rule);
+    }
+
+    private boolean processAssetIfNotDuplicated(MediaAsset asset, WatchRule rule) {
+        MediaAsset effectiveAsset = applyRuleSupportScope(asset, rule);
+        String sourcePath = effectiveAsset.rootPath().toString();
         boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
                 sourcePath,
                 MediaTask.TaskStatus.FAILED
@@ -584,18 +638,48 @@ public class FileDiscoveryService {
             return false;
         }
 
+        if (effectiveAsset.shouldSkip()) {
+            return recordSkippedIfNotDuplicated(
+                    effectiveAsset.rootPath(),
+                    rule,
+                    effectiveAsset.type(),
+                    effectiveAsset.skipReason()
+            );
+        }
+
         try {
-            log.info("Stable video file discovered: {} (rule='{}')", file, rule.getName());
-            pipeline.process(file, rule);
+            log.info("Stable media asset discovered: path={}, type={}, rule='{}'",
+                    effectiveAsset.rootPath(), effectiveAsset.type(), rule.getName());
+            pipeline.process(effectiveAsset, rule);
             return true;
         } catch (Exception e) {
-            log.error("Pipeline execution failed for file: {}", file, e);
+            log.error("Pipeline execution failed for media asset: {}", effectiveAsset.rootPath(), e);
             return false;
         }
     }
 
-    private boolean recordSkippedIfNotDuplicated(Path file, WatchRule rule, String skipReason) {
-        String sourcePath = file.toString();
+    private MediaAsset applyRuleSupportScope(MediaAsset asset, WatchRule rule) {
+        if (MediaAssetType.BLURAY_DIRECTORY.equals(asset.type())
+                && WatchRule.RuleMediaType.TV_SHOW.equals(rule.getMediaType())
+                && !asset.shouldSkip()) {
+            return new MediaAsset(
+                    asset.rootPath(),
+                    asset.type(),
+                    asset.displayName(),
+                    asset.shouldPruneChildren(),
+                    "当前版本暂不支持剧集蓝光原盘"
+            );
+        }
+        return asset;
+    }
+
+    private boolean recordSkippedIfNotDuplicated(
+            Path path,
+            WatchRule rule,
+            MediaAssetType assetType,
+            String skipReason
+    ) {
+        String sourcePath = path.toString();
         boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
                 sourcePath,
                 MediaTask.TaskStatus.FAILED
@@ -608,12 +692,14 @@ public class FileDiscoveryService {
 
         MediaTask task = new MediaTask();
         task.setSourcePath(sourcePath);
+        task.setAssetType(assetType);
         task.setRuleId(rule.getId());
         task.setOperationType(rule.getOperation().name());
         task.setStatus(MediaTask.TaskStatus.SKIPPED);
         task.setSkipReason(skipReason);
         mediaTaskRepository.save(task);
-        log.info("Non-video file skipped: path={}, rule='{}'", file, rule.getName());
+        log.info("Media asset skipped: path={}, type={}, rule='{}', reason={}",
+                path, assetType, rule.getName(), skipReason);
         return true;
     }
 

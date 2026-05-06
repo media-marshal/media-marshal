@@ -1,6 +1,7 @@
 package com.mediamarshal.service.nfo;
 
 import com.mediamarshal.model.dto.MatchResult;
+import com.mediamarshal.model.entity.MediaAssetType;
 import com.mediamarshal.model.entity.MediaTask;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,13 +37,13 @@ public class NfoGeneratorService {
      */
     public void generate(MediaTask task, MatchResult matchResult, Path mediaFile) throws IOException {
         if (MediaTask.MediaType.MOVIE.equals(task.getMediaType())) {
-            generateMovieNfo(matchResult, mediaFile);
+            generateMovieNfo(task, matchResult, mediaFile);
         } else {
             generateEpisodeNfo(task, matchResult, mediaFile);
         }
     }
 
-    private void generateMovieNfo(MatchResult match, Path mediaFile) throws IOException {
+    private void generateMovieNfo(MediaTask task, MatchResult match, Path mediaFile) throws IOException {
         String xml = """
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <movie>
@@ -61,7 +62,7 @@ public class NfoGeneratorService {
                 escape(match.getSourceId()),
                 escape(match.getPosterUrl())
         );
-        writeNfo(mediaFile, xml);
+        writeNfo(task, mediaFile, xml);
     }
 
     private void generateEpisodeNfo(MediaTask task, MatchResult match, Path mediaFile) throws IOException {
@@ -85,11 +86,13 @@ public class NfoGeneratorService {
                 escape(match.getSourceId()),
                 escape(match.getPosterUrl())
         );
-        writeNfo(mediaFile, xml);
+        writeNfo(task, mediaFile, xml);
     }
 
-    private void writeNfo(Path mediaFile, String xml) throws IOException {
-        Path nfoFile = replaceExtension(mediaFile, ".nfo");
+    private void writeNfo(MediaTask task, Path mediaFile, String xml) throws IOException {
+        Path nfoFile = MediaAssetType.BLURAY_DIRECTORY.equals(task.getAssetType())
+                ? mediaFile.resolve("movie.nfo")
+                : replaceExtension(mediaFile, ".nfo");
         Path parent = nfoFile.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
