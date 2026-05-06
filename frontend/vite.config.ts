@@ -3,9 +3,15 @@ import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
+const appVersion = readFileSync(resolve(__dirname, '../VERSION'), 'utf-8').trim()
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     vue(),
     AutoImport({

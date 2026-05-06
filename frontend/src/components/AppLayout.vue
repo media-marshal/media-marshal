@@ -43,12 +43,19 @@
         </el-sub-menu>
       </el-menu>
 
-      <!-- 语言切换 -->
-      <div class="locale-switcher">
-        <el-button-group>
-          <el-button size="small" :type="locale === 'zh' ? 'primary' : ''" @click="switchLocale('zh')">中</el-button>
-          <el-button size="small" :type="locale === 'en' ? 'primary' : ''" @click="switchLocale('en')">EN</el-button>
-        </el-button-group>
+      <div class="aside-footer">
+        <!-- 语言切换 -->
+        <div class="locale-switcher">
+          <el-button-group>
+            <el-button size="small" :type="locale === 'zh' ? 'primary' : ''" @click="switchLocale('zh')">
+              {{ t('locale.zhShort') }}
+            </el-button>
+            <el-button size="small" :type="locale === 'en' ? 'primary' : ''" @click="switchLocale('en')">
+              {{ t('locale.enShort') }}
+            </el-button>
+          </el-button-group>
+        </div>
+        <AppVersionInfo />
       </div>
     </el-aside>
 
@@ -65,6 +72,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { setLocale } from '@/i18n'
+import AppVersionInfo from '@/components/AppVersionInfo.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -172,11 +180,19 @@ function switchLocale(lang: 'zh' | 'en') {
   line-height: 18px;
 }
 
-.locale-switcher {
+.aside-footer {
   padding: 16px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   border-top: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+
+.locale-switcher {
+  display: flex;
+  justify-content: center;
   flex-shrink: 0;
 }
 

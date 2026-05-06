@@ -1,4 +1,19 @@
+import releaseNotes from './releaseNotes/zh'
+
 export default {
+  appVersion: {
+    title: '版本更新',
+    itemType: {
+      feature: '新增',
+      fix: '修复',
+      optimization: '优化',
+    },
+  },
+  releaseNotes,
+  locale: {
+    zhShort: '中',
+    enShort: 'EN',
+  },
   nav: {
     dashboard: '仪表盘',
     queue: '待确认队列',

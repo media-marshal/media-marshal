@@ -1,0 +1,16 @@
+import type { ReleaseNote } from '@/types'
+
+export const releaseNotes: ReleaseNote[] = [
+  {
+    version: 'v0.2.4',
+    date: '2026-05-06',
+    items: [
+      { type: 'feature', key: 'releaseNotes.v0_2_4.items.versionReleaseNotes' },
+      { type: 'feature', key: 'releaseNotes.v0_2_4.items.mediaAssetSupport' },
+      { type: 'feature', key: 'releaseNotes.v0_2_4.items.reviewQueueBatching' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_4.items.metadataMatching' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_4.items.pathTemplateWorkflow' },
+      { type: 'fix', key: 'releaseNotes.v0_2_4.items.sourceMissingGuard' },
+    ],
+  },
+]

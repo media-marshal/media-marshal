@@ -296,6 +296,50 @@ alwaysApply: false
 
 ---
 
+## [版本号底部展示与版本元数据同步脚本] 2026-05-06
+
+### 已完成
+- 将左上角标题恢复为纯 `Media Marshal`
+- 将版本号入口移动到侧边栏底部语言切换按钮下方，保留 hover ReleaseNote 气泡交互
+- 优化底部版本号样式为低干扰文本徽标
+- 全仓搜索并移除旧初始版本号 `v0.1.0` / `0.1.0`
+- 新增 `scripts/sync-version.mjs`
+  - 从根目录 `VERSION` 读取唯一版本号
+  - 自动同步 `frontend/package.json`
+  - 自动同步 `frontend/package-lock.json`
+  - 自动同步 `backend/pom.xml`
+  - 自动同步 parser fallback 版本
+- parser 启动版本改为优先读取同目录 `VERSION`
+- 调整 parser Docker 构建上下文，确保容器内也能读取根目录 `VERSION`
+- 同步更新 beta compose 构建上下文，匹配已调整的前后端与 parser Dockerfile
+- 更新前端规范：发布版本变化时只改 `VERSION`，再运行 `node scripts/sync-version.mjs`
+
+### 关键文件
+- `VERSION`
+- `scripts/sync-version.mjs`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `frontend/src/components/AppLayout.vue`
+- `frontend/src/components/AppVersionInfo.vue`
+- `backend/pom.xml`
+- `parser/main.py`
+- `parser/Dockerfile`
+- `docker-compose.yml`
+- `docker-compose.beta.yml`
+- `.cursor/rules/frontend-rules.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [ADR-020 媒体资产识别与蓝光原盘目录支持] 2026-05-06
 
 ### 已完成
@@ -2252,6 +2296,82 @@ alwaysApply: false
 
 ### 接口变更
 - 无新增接口或前端可见字段
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [前后端统一版本号与前端 ReleaseNote 悬停展示] 2026-05-06
+
+### 已完成
+- 新增仓库根目录 `VERSION`，作为前后端共用的应用版本号唯一来源
+- 前端 Vite 构建时读取根目录 `VERSION` 并注入 `__APP_VERSION__`
+- 新增页面标题旁版本号展示，鼠标悬停版本号时通过 `el-popover` 展示 ReleaseNote
+- ReleaseNote 采用结构化索引 + 中英文双语文案
+  - `frontend/src/meta/releaseNotes.ts` 维护版本、日期和条目 key
+  - `frontend/src/i18n/releaseNotes/zh.ts` 维护中文文案
+  - `frontend/src/i18n/releaseNotes/en.ts` 维护英文文案
+- 后端新增 `AppVersionProvider`，从 classpath `VERSION` 读取同一版本号
+- Maven 构建将仓库根目录 `VERSION` 复制到后端 classpath
+- 调整前后端 Dockerfile 与 `docker-compose.yml` 构建上下文，确保 Docker 构建也能读取根目录 `VERSION`
+- 在前端规范中新增 ReleaseNote 维护要求：新增功能、修复问题、优化功能或影响前端行为的契约变化，都必须同步更新 ReleaseNote
+
+### 关键文件
+- `VERSION`
+- `frontend/vite.config.ts`
+- `frontend/env.d.ts`
+- `frontend/src/meta/appVersion.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/components/AppVersionInfo.vue`
+- `frontend/src/components/AppLayout.vue`
+- `frontend/src/types/index.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `backend/pom.xml`
+- `backend/src/main/java/com/mediamarshal/service/AppVersionProvider.java`
+- `frontend/Dockerfile`
+- `backend/Dockerfile`
+- `docker-compose.yml`
+- `.cursor/rules/frontend-rules.mdc`
+
+### 接口变更
+- 无新增 REST API 或前端可见接口字段
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [版本号标题旁展示与首版 ReleaseNote 内容优化] 2026-05-06
+
+### 已完成
+- 将版本号入口从侧边栏底部移动到左上角 `Media Marshal` 标题后方
+- 保持原有 hover `el-popover` 交互不变，仅优化版本号按钮为更轻量的标题旁徽标样式
+- 根据 git 提交记录与开发文档整理首版 ReleaseNote
+  - 当前版本校正为 `v0.2.4`
+  - 内容覆盖统一版本号、媒体资产识别、批量队列、双语标题匹配、路径模板工作流、源文件缺失保护等近期核心变化
+- 同步更新中英文 ReleaseNote 文案
+
+### 关键文件
+- `VERSION`
+- `frontend/src/components/AppLayout.vue`
+- `frontend/src/components/AppVersionInfo.vue`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无
 
 ### 偏离设计的地方
 - 无

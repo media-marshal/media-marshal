@@ -1,4 +1,19 @@
+import releaseNotes from './releaseNotes/en'
+
 export default {
+  appVersion: {
+    title: 'Release Notes',
+    itemType: {
+      feature: 'New',
+      fix: 'Fix',
+      optimization: 'Improved',
+    },
+  },
+  releaseNotes,
+  locale: {
+    zhShort: '中',
+    enShort: 'EN',
+  },
   nav: {
     dashboard: 'Dashboard',
     queue: 'Review Queue',

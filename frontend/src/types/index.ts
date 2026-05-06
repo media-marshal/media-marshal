@@ -117,6 +117,20 @@ export interface TemplateVariableGroup {
   variables: TemplateVariableItem[]
 }
 
+// ─── 发布说明 ────────────────────────────────────────────────────
+export type ReleaseNoteItemType = 'feature' | 'fix' | 'optimization'
+
+export interface ReleaseNoteItem {
+  type: ReleaseNoteItemType
+  key: string
+}
+
+export interface ReleaseNote {
+  version: string
+  date: string
+  items: ReleaseNoteItem[]
+}
+
 // ─── WebSocket 事件 ──────────────────────────────────────────────
 export type WsEventType =
   | 'task.created'

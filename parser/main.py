@@ -28,14 +28,26 @@ guessit sidecar - FastAPI 封装
 from fastapi import FastAPI, HTTPException, Query
 from guessit import guessit
 import logging
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+APP_VERSION_FALLBACK = "0.2.4"
+
+
+def load_app_version() -> str:
+    version_file = Path(__file__).with_name("VERSION")
+    if not version_file.exists():
+        return APP_VERSION_FALLBACK
+    version = version_file.read_text(encoding="utf-8").strip()
+    return version.removeprefix("v") or APP_VERSION_FALLBACK
+
+
 app = FastAPI(
     title="Media Marshal Parser",
     description="guessit HTTP sidecar for Media Marshal",
-    version="0.1.0",
+    version=load_app_version(),
 )
 
 

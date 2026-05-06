@@ -53,6 +53,12 @@ t('nav.queue')
 '已完成'
 ```
 
+## 版本号与 ReleaseNote
+- 应用版本号唯一来源是仓库根目录 `VERSION`，前端不得从 `package.json` 自行读取展示版本。
+- 新增用户可见功能、修复用户可感知问题、优化交互/性能/文案/展示逻辑，或接口契约变化影响前端行为时，必须同步更新 ReleaseNote。
+- ReleaseNote 结构索引维护在 `frontend/src/meta/releaseNotes.ts`，用户可见文案分别维护在 `frontend/src/i18n/releaseNotes/zh.ts` 与 `frontend/src/i18n/releaseNotes/en.ts`。
+- 发布版本变化时，只修改根目录 `VERSION`，然后运行 `node scripts/sync-version.mjs` 同步包元数据，确保前端、后端与 parser 读取同一版本。
+
 ## WebSocket
 - 组件通过 `onTaskEvent()` 订阅，在 `onUnmounted` 调用返回的取消函数
 ```typescript

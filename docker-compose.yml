@@ -3,8 +3,8 @@ services:
   # ── Java 主服务 ─────────────────────────────────────────
   media-marshal:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: media-marshal
     restart: unless-stopped
     ports:
@@ -30,8 +30,8 @@ services:
   # ── Portal 前端（Nginx）──────────────────────────────────
   portal:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: media-marshal-portal
     restart: unless-stopped
     ports:
@@ -44,8 +44,8 @@ services:
   # ── guessit Python Sidecar ────────────────────────────────
   parser:
     build:
-      context: ./parser
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: parser/Dockerfile
     container_name: media-marshal-parser
     restart: unless-stopped
     # 不对外暴露端口，仅内部网络访问
