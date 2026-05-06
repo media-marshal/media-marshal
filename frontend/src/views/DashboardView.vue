@@ -38,15 +38,6 @@
         <div class="card-header">
           <span>{{ t('dashboard.recentTasks') }}</span>
           <div class="header-actions">
-            <el-select v-model="mediaTypeFilter" size="small" class="media-type-filter">
-              <el-option :label="t('dashboard.allMediaTypes')" value="ALL" />
-              <el-option
-                v-for="mediaType in mediaTypeOptions"
-                :key="mediaType"
-                :label="t(`task.mediaType.${mediaType}`)"
-                :value="mediaType"
-              />
-            </el-select>
             <el-select v-model="statusFilter" size="small" class="status-filter">
               <el-option :label="t('dashboard.allStatuses')" value="ALL" />
               <el-option
@@ -150,7 +141,7 @@ import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { MediaTask, MediaType, TaskStatus } from '@/types'
+import type { MediaTask, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
 const mediaStore = useMediaStore()
@@ -160,19 +151,15 @@ const deletingId = ref<number | null>(null)
 const selectedTasks = ref<MediaTask[]>([])
 const batchDeleting = ref(false)
 const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED']
-const mediaTypeOptions: MediaType[] = ['MOVIE', 'TV_SHOW']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
-const mediaTypeFilter = ref<MediaType | 'ALL'>('ALL')
 const currentPage = ref(1)
 const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
 const filteredTasks = computed(() => {
-  return tasks.value.filter((task) => {
-    const statusMatched = statusFilter.value === 'ALL' || task.status === statusFilter.value
-    const mediaTypeMatched = mediaTypeFilter.value === 'ALL' || task.mediaType === mediaTypeFilter.value
-    return statusMatched && mediaTypeMatched
-  })
+  return statusFilter.value === 'ALL'
+    ? tasks.value
+    : tasks.value.filter((task) => task.status === statusFilter.value)
 })
 
 const sortedTasks = computed(() => {
@@ -186,7 +173,7 @@ const displayedTasks = computed(() => {
 
 onMounted(() => fetchTasks())
 
-watch([statusFilter, mediaTypeFilter, pageSize], () => {
+watch([statusFilter, pageSize], () => {
   selectedTasks.value = []
   currentPage.value = 1
 })
@@ -340,8 +327,7 @@ h2 {
   align-items: center;
 }
 
-.status-filter,
-.media-type-filter {
+.status-filter {
   width: 150px;
 }
 

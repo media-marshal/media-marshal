@@ -2321,6 +2321,543 @@ v1 不做：
 
 ---
 
+## ADR-020 媒体资产识别与蓝光原盘目录支持（v0.2.x）（2026-05-06）✅
+
+### 背景
+当前文件发现和任务处理模型隐含假设是“一个视频文件 = 一个处理任务”。这对 `.mkv`、`.mp4`、`.iso` 等单文件媒体可用，但对蓝光原盘目录不适用。
+
+典型蓝光原盘结构：
+
+```text
+The Matrix (1999)/
+  BDMV/
+    index.bdmv
+    MovieObject.bdmv
+    PLAYLIST/
+    CLIPINF/
+    STREAM/
+      00001.m2ts
+      00002.m2ts
+  CERTIFICATE/
+```
+
+在现有规则下，`BDMV/STREAM/*.m2ts` 会被当成多个普通视频文件逐一扫描并创建任务，导致：
+
+- 一个蓝光原盘被拆成多个任务
+- `00001.m2ts` 这类内部文件名无法提供有效标题，TMDB 匹配质量很差
+- `BDMV` 内部结构文件可能生成大量 `SKIPPED` 噪音
+- Queue / Dashboard 无法以“一个蓝光原盘 = 一个任务”的方式展示
+- 文件操作阶段缺少“目录型媒体资产”的整体操作语义
+
+因此需要把系统从“文件任务”升级为“媒体资产任务”。
+
+### 结论
+
+引入**媒体资产 Media Asset** 概念：
+
+> `MediaTask` 表示一个媒体资产处理任务，而不是一个普通视频文件处理任务。
+
+普通视频文件和蓝光原盘目录是并列的媒体资产类型：
+
+| 资产类型 | 示例 | 任务粒度 |
+|---|---|---|
+| `VIDEO_FILE` | `Movie.2026.mkv` | 单个文件 |
+| `ISO_IMAGE` | `Movie.2026.iso` | 单个镜像文件 |
+| `BLURAY_DIRECTORY` | `Movie (2026)/BDMV/...` | 整个蓝光根目录 |
+
+文件发现流程调整为：
+
+```text
+路径发现
+  → 媒体资产识别
+  → 以资产根路径创建 / 查重任务
+  → 元数据匹配 / 人工确认
+  → 按资产类型执行整理
+```
+
+蓝光原盘目录识别后：
+
+- 以蓝光外层根目录创建一个任务
+- 内部 `BDMV/**`、`CERTIFICATE/**` 不再单独生成任务
+- 不改变内部目录结构和文件名
+- 文件操作以整个蓝光根目录为单位执行
+- 默认按电影资产处理，v1 暂不支持剧集蓝光原盘
+
+### 媒体资产识别模块
+
+新增独立媒体资产识别模块，建议包路径：
+
+```text
+backend/src/main/java/com/mediamarshal/service/discovery/asset/
+```
+
+职责边界：
+
+- 输入：发现到的路径、对应 WatchRule、sourceDir 上下文
+- 输出：是否识别为媒体资产；如果是，返回资产根路径和资产类型
+- 不做 TMDB 匹配
+- 不做文件操作
+- 不创建任务
+
+建议核心接口：
+
+```java
+public interface MediaAssetDetector {
+    Optional<MediaAsset> detect(Path path, WatchRule rule);
+}
+```
+
+建议模型：
+
+```java
+public record MediaAsset(
+    Path rootPath,
+    MediaAssetType type,
+    String displayName,
+    boolean shouldPruneChildren
+) {}
+```
+
+建议枚举：
+
+```java
+public enum MediaAssetType {
+    VIDEO_FILE,
+    ISO_IMAGE,
+    BLURAY_DIRECTORY
+}
+```
+
+建议 detector 策略：
+
+```text
+BluRayDirectoryAssetDetector
+IsoImageAssetDetector
+VideoFileAssetDetector
+```
+
+聚合服务：
+
+```text
+MediaAssetDetectionService
+```
+
+按优先级调用 detector。蓝光目录识别必须优先于普通视频文件识别，避免内部 `.m2ts` 被当成普通视频文件。
+
+推荐识别优先级：
+
+1. `BluRayDirectoryAssetDetector`
+2. `IsoImageAssetDetector`
+3. `VideoFileAssetDetector`
+
+后续可扩展：
+
+- `DvdDirectoryAssetDetector`
+- `UhdBluRayDirectoryAssetDetector`
+- 其他目录型媒体资产 detector
+
+### 蓝光原盘识别规则
+
+一个目录 `D` 是蓝光原盘根目录，当且仅当：
+
+1. `D/BDMV` 是目录
+2. 满足以下任一强特征：
+   - `D/BDMV/index.bdmv` 存在
+   - `D/BDMV/MovieObject.bdmv` 存在
+   - `D/BDMV/STREAM` 是目录，且至少有一个 `.m2ts` 文件
+3. `D` 不是 WatchRule 的 `sourceDir` 本身
+4. `D` 的目录名不是 `BDMV`
+5. 路径和文件名比较应大小写不敏感，兼容不同文件系统
+
+辅助特征可以增强判断可信度，但不能单独作为识别条件：
+
+- `CERTIFICATE/`
+- `BDMV/PLAYLIST/`
+- `BDMV/CLIPINF/`
+- `BDMV/AUXDATA/`
+- `BDMV/BACKUP/`
+
+#### 向上归一化
+
+如果发现的是蓝光内部路径，例如：
+
+```text
+/downloads/The Matrix (1999)/BDMV/STREAM/00001.m2ts
+```
+
+识别模块必须向上查找最近的蓝光根目录，并返回：
+
+```text
+rootPath = /downloads/The Matrix (1999)
+type = BLURAY_DIRECTORY
+shouldPruneChildren = true
+displayName = The Matrix (1999)
+```
+
+这样实时监听、周期扫描和手动扫描即使从内部文件触发，也会归一化到同一个蓝光资产任务。
+
+#### 裸 BDMV 目录
+
+v1 暂不支持裸 `BDMV` 直接位于 WatchRule `sourceDir` 下的结构：
+
+```text
+sourceDir/
+  BDMV/
+  CERTIFICATE/
+```
+
+原因：
+
+- 缺少可用影片标题来源
+- 容易把标题识别为 `BDMV`
+- 误判风险高
+
+建议用户把原盘放入影片名外层目录：
+
+```text
+sourceDir/
+  The Matrix (1999)/
+    BDMV/
+    CERTIFICATE/
+```
+
+如果开发实现中检测到裸 `BDMV`，可选择静默跳过内部结构，或创建失败任务提示：`蓝光原盘缺少影片外层目录，请放入片名目录中`。v1 推荐先跳过并记录 warn 日志，避免污染 Queue。
+
+### 扫描剪枝规则
+
+文件发现层必须先做媒体资产识别，再做普通视频扩展名判断。
+
+推荐顺序：
+
+1. 路径规范化
+2. 校验路径位于 WatchRule `sourceDir` 下
+3. 应用忽略规则
+4. 调用 `MediaAssetDetectionService.detect(path, rule)`
+5. 如果识别为媒体资产：
+   - 以 `asset.rootPath` 做数据库查重
+   - 创建一个 `MediaTask`
+   - 如果 `asset.shouldPruneChildren=true`，停止递归扫描该资产子树
+6. 如果未识别为媒体资产：
+   - 目录继续扫描
+   - 普通杂项文件按现有规则生成 `SKIPPED`
+
+蓝光目录识别后：
+
+- 不为 `BDMV/STREAM/*.m2ts` 创建视频任务
+- 不为 `BDMV/index.bdmv`、`.mpls`、`.clpi` 等内部文件创建 `SKIPPED`
+- 不把内部文件作为附属文件处理
+- 同一个蓝光目录内部多个事件必须归一化为同一个 `asset.rootPath`，避免重复任务
+
+### 任务数据模型
+
+`media_task` 新增字段：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `asset_type` | VARCHAR(30) / Enum | `VIDEO_FILE` | 源媒体资产类型 |
+
+枚举值：
+
+```text
+VIDEO_FILE
+ISO_IMAGE
+BLURAY_DIRECTORY
+```
+
+兼容要求：
+
+- 历史任务没有 `asset_type` 时视为 `VIDEO_FILE`
+- `sourcePath` 语义升级为“源媒体资产路径”，不再一定是文件路径
+- `targetPath` 对目录型资产表示目标根目录路径
+
+API 返回的 `MediaTask` DTO / 实体响应需要新增：
+
+```typescript
+assetType: 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
+```
+
+前端展示建议：
+
+- Queue 卡片展示资产类型标签
+- Dashboard / 最近任务展示资产类型标签
+- 文案：
+  - `VIDEO_FILE`：普通视频
+  - `ISO_IMAGE`：ISO 镜像
+  - `BLURAY_DIRECTORY`：蓝光原盘
+
+### 元数据识别
+
+蓝光原盘目录默认作为电影处理：
+
+- `BLURAY_DIRECTORY` 在 `AUTO` 规则下按 `MOVIE` 处理
+- `BLURAY_DIRECTORY` 在 `MOVIE` 规则下正常处理
+- `BLURAY_DIRECTORY` 在 `TV_SHOW` 规则下 v1 暂不支持，可标记失败或跳过并提示：`暂不支持剧集蓝光原盘`
+
+guessit / TMDB 搜索输入使用 `MediaAsset.displayName`，即蓝光外层根目录名，不使用内部 `.m2ts` 文件名。
+
+示例：
+
+```text
+源路径：/downloads/The.Matrix.1999.BluRay/
+displayName：The.Matrix.1999.BluRay
+```
+
+后续按 ADR-018 标题搜索计划生成 query。
+
+### 蓝光目标路径计算
+
+蓝光原盘使用当前 WatchRule 的电影路径模板计算目标位置。
+
+规则：
+
+1. 按电影模板渲染出普通电影文件目标路径
+2. 对渲染结果取父目录，作为蓝光目标根目录
+3. 将整个蓝光原盘目录操作到该目标根目录
+4. 不改变 `BDMV/`、`CERTIFICATE/` 及其内部结构
+
+示例模板：
+
+```text
+电影/{year}/{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}
+```
+
+普通电影文件目标：
+
+```text
+电影/1999/The Matrix (1999)/The Matrix (1999) - 1080p.mkv
+```
+
+蓝光原盘目标根目录：
+
+```text
+电影/1999/The Matrix (1999)/
+```
+
+最终结构：
+
+```text
+电影/1999/The Matrix (1999)/
+  BDMV/
+  CERTIFICATE/
+```
+
+#### 模板 fallback
+
+如果电影模板没有目录层级，例如：
+
+```text
+{title} ({year}){ext}
+```
+
+取父目录会得到空路径或目标根目录，此时蓝光目录 fallback 到：
+
+```text
+{title} ({year})
+```
+
+不要直接输出到目标根目录，也不要因为模板缺少父目录而失败。
+
+#### `{ext}` 变量
+
+蓝光目录没有文件扩展名。
+
+处理约定：
+
+- `BLURAY_DIRECTORY` 渲染模板时 `{ext}` 为空字符串
+- 最终取渲染路径父目录作为目标根目录
+- 如果无法取得父目录，使用 fallback
+
+### 文件操作语义
+
+蓝光原盘作为整体目录型资产执行当前 WatchRule 的文件操作方式。
+
+| 操作 | 蓝光目录行为 |
+|---|---|
+| `MOVE` | 移动整个蓝光根目录到目标根目录，并只改变根目录位置 / 名称 |
+| `COPY` | 递归复制整个蓝光根目录到目标根目录 |
+| `HARD_LINK` | 创建目标目录结构，对目录内每个普通文件创建硬链接，保留相对路径 |
+| `SYMBOLIC_LINK` | 在目标根目录创建目录级符号链接，指向源蓝光根目录 |
+
+共同约束：
+
+- 不修改 `BDMV/`、`CERTIFICATE/` 内部结构
+- 不重命名内部 `.m2ts`、`.mpls`、`.clpi` 文件
+- 不抽取最大 `.m2ts`
+- 不把内部文件作为附属文件处理
+- 目标路径已存在时遵守 ADR-010：不覆盖、不合并、不自动改名，任务失败
+
+#### HARD_LINK 目录语义
+
+蓝光目录不能硬链接目录本身。`HARD_LINK` 的语义是递归硬链接：
+
+1. 创建目标根目录
+2. 递归创建子目录
+3. 对每个普通文件创建硬链接
+4. 保留相对路径和文件名
+
+v1 遇到非普通文件节点（例如内部符号链接、特殊文件）时建议直接失败，并记录明确错误，避免生成不完整原盘。
+
+#### SYMBOLIC_LINK 目录语义
+
+v1 采用目录级符号链接：
+
+```text
+目标根目录 -> 源蓝光根目录
+```
+
+不递归创建内部文件符号链接。
+
+说明：
+
+- 创建速度快
+- 保留完整结构
+- 源目录移动或删除后，目标链接会失效
+
+### 附属文件与 NFO
+
+蓝光内部结构属于主媒体资产，不属于附属文件。
+
+v1 核心目标是“整盘目录整体搬运”，附属文件处理先保持保守：
+
+- `BDMV/**`、`CERTIFICATE/**` 永远不进入附属文件逻辑
+- 蓝光根目录旁边的同名 NFO、poster、folder 等可作为后续增强
+- 自动生成 NFO 可按现有规则在目标根目录生成，但不应写入 `BDMV/` 内部
+
+如果开发实现复杂度较高，v1 可以先不支持蓝光旁边附属文件跟随，只保证蓝光目录本体正确整理。
+
+### 空目录清理
+
+`cleanup_empty_dirs` 仅对 `MOVE` 生效。
+
+蓝光目录 MOVE 成功后：
+
+1. 从原蓝光根目录的父目录开始
+2. 向上删除空目录
+3. 遇到非空目录停止
+4. 遇到 WatchRule `sourceDir` 停止，绝不删除源根目录
+
+`COPY`、`HARD_LINK`、`SYMBOLIC_LINK` 不清理源目录。
+
+### 源文件缺失检测
+
+ADR-016 的源文件缺失检测需要按资产根路径判断：
+
+- `VIDEO_FILE`：源文件不存在则失败
+- `ISO_IMAGE`：源文件不存在则失败
+- `BLURAY_DIRECTORY`：蓝光根目录不存在则失败
+
+v1 不要求逐个校验蓝光内部文件完整性。只要根目录存在，认为源资产仍存在。后续如需要可增加原盘结构完整性校验。
+
+### Queue / Dashboard 展示
+
+Queue 和 Dashboard 都以一个 `MediaTask` 展示一个媒体资产。
+
+蓝光任务示例：
+
+```text
+源路径：/downloads/The Matrix (1999)
+资产类型：蓝光原盘
+状态：AWAITING_CONFIRMATION
+解析标题：The Matrix
+```
+
+不展示内部文件任务：
+
+```text
+BDMV/STREAM/00001.m2ts
+BDMV/PLAYLIST/00000.mpls
+BDMV/index.bdmv
+```
+
+人工确认语义：
+
+- 用户确认的是“这个蓝光资产对应哪个 TMDB 条目”
+- 确认后整理整个蓝光目录
+
+### API 契约变更要求
+
+开发实现该 ADR 时必须同步更新 `api-contracts.mdc`：
+
+- `MediaTask` 新增 `assetType`
+- `MediaTask.sourcePath` 说明调整为“源媒体资产路径”
+- `MediaTask.targetPath` 说明补充：目录型资产时表示目标根目录
+- 如新增资产类型枚举或错误信息，需要记录
+
+### 实现建议
+
+建议分阶段落地，避免一次性推翻 pipeline：
+
+1. 新增 `MediaAssetType`、`MediaAsset`、`MediaAssetDetector`、`MediaAssetDetectionService`
+2. 将现有视频扩展名判断迁移到 `VideoFileAssetDetector`
+3. 新增 `IsoImageAssetDetector`
+4. 新增 `BluRayDirectoryAssetDetector`
+5. `MediaTask` 增加 `assetType`
+6. 文件发现层以资产根路径做查重和创建任务
+7. 整理阶段增加资产类型分发：
+   - `VIDEO_FILE` / `ISO_IMAGE` 使用现有普通文件整理逻辑
+   - `BLURAY_DIRECTORY` 使用目录型整理逻辑
+8. 普通视频行为必须保持不变
+
+建议新增整理策略抽象：
+
+```text
+AssetOrganizerStrategy
+  - VideoFileAssetOrganizer
+  - IsoImageAssetOrganizer
+  - BluRayDirectoryAssetOrganizer
+```
+
+`AssetOrganizerStrategy` 负责根据资产类型决定目标路径和整理语义；底层 `FileOperationStrategy` 继续负责执行 `MOVE` / `COPY` / `HARD_LINK` / `SYMBOLIC_LINK`。
+
+### 验收标准
+
+#### 蓝光识别与剪枝
+
+- 标准结构 `Movie/BDMV/index.bdmv` 被识别为 `BLURAY_DIRECTORY`
+- 标准结构 `Movie/BDMV/MovieObject.bdmv` 被识别为 `BLURAY_DIRECTORY`
+- 标准结构 `Movie/BDMV/STREAM/00001.m2ts` 被识别为 `BLURAY_DIRECTORY`
+- 从 `Movie/BDMV/STREAM/00001.m2ts` 触发事件时，任务根路径归一化为 `Movie`
+- 一个蓝光目录只创建一个任务
+- 不为 `BDMV/STREAM/*.m2ts` 创建普通视频任务
+- 不为 `BDMV/**` 内部结构文件创建 `SKIPPED` 任务
+- 裸 `sourceDir/BDMV` v1 不作为正常蓝光任务处理
+
+#### 任务与展示
+
+- `media_task.asset_type` 正确保存为 `BLURAY_DIRECTORY`
+- Queue 页面一个蓝光目录只展示一个待确认任务
+- Dashboard / 最近任务一个蓝光目录只展示一个任务
+- 前端能展示“蓝光原盘”资产类型标签
+- 历史任务没有 `assetType` 时按 `VIDEO_FILE` 兼容
+
+#### 元数据匹配
+
+- 蓝光目录使用外层根目录名作为 guessit / TMDB 搜索输入
+- `AUTO` 规则下蓝光目录默认按 `MOVIE` 处理
+- `MOVIE` 规则下蓝光目录正常处理
+- `TV_SHOW` 规则下蓝光目录 v1 不支持，并给出明确失败或跳过原因
+
+#### 目标路径与文件操作
+
+- 蓝光目录使用电影路径模板渲染后取父目录作为目标根目录
+- 当电影模板没有父目录时，fallback 到 `{title} ({year})`
+- `{ext}` 对蓝光目录为空，不影响目标目录计算
+- `MOVE` 移动整个蓝光根目录，内部结构不变
+- `COPY` 递归复制整个蓝光根目录，内部结构不变
+- `HARD_LINK` 递归为内部普通文件创建硬链接，目录结构不变
+- `SYMBOLIC_LINK` 创建目录级符号链接
+- 目标目录已存在时任务失败，不覆盖、不合并、不自动改名
+- 蓝光内部文件不进入附属文件处理逻辑
+
+#### 回归
+
+- 普通 `.mkv` / `.mp4` 视频文件处理行为不变
+- ISO 文件仍作为单文件媒体资产处理
+- 忽略规则、周期扫描、实时监听、手动扫描都复用同一套媒体资产识别逻辑
+- 同一蓝光目录重复扫描不会重复创建非 `FAILED` 任务
+
+---
+
 ## 待讨论事项
 
 - **Webhook 文件发现能力（后续版本）**
