@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
       { type: 'feature', key: 'releaseNotes.v0_2_4.items.reviewQueueBatching' },
       { type: 'optimization', key: 'releaseNotes.v0_2_4.items.metadataMatching' },
       { type: 'optimization', key: 'releaseNotes.v0_2_4.items.pathTemplateWorkflow' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_4.items.dashboardFilters' },
       { type: 'fix', key: 'releaseNotes.v0_2_4.items.sourceMissingGuard' },
     ],
   },

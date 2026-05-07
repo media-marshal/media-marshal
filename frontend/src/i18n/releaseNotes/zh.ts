@@ -6,6 +6,7 @@ export default {
       reviewQueueBatching: '待确认队列支持批量选择、批量搜索、批量确认、批量跳过，以及将搜索候选应用到多任务。',
       metadataMatching: '优化中文 / 双语标题多 Query 搜索、TMDB 缓存、in-flight 去重和多维置信度评分，提升自动匹配准确度。',
       pathTemplateWorkflow: '优化路径设置体验，支持文件发现模式、复制 / 硬链接 / 软链接策略、模板变量帮助、可选片段和自定义模板预览。',
+      dashboardFilters: '仪表盘任务列表支持按状态、资产类型和影片类型组合筛选。',
       sourceMissingGuard: '修复源文件删除后的确认风险，待处理和待确认任务会在源文件缺失时自动失败并给出明确原因。',
     },
   },

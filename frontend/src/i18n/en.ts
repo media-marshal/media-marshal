@@ -35,6 +35,7 @@ export default {
     batchDeleteSuccess: 'Selected task records deleted',
     details: 'Details',
     allStatuses: 'All Statuses',
+    allAssetTypes: 'All Assets',
     allMediaTypes: 'All Types',
     recentTasks: 'Recent Tasks',
     file: 'File',

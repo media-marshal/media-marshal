@@ -6,6 +6,7 @@ export default {
       reviewQueueBatching: 'Review Queue now supports batch selection, batch search, batch confirmation, batch skip, and applying a search candidate to multiple tasks.',
       metadataMatching: 'Improved Chinese / bilingual multi-query title search, TMDB caching, in-flight deduplication, and multi-factor confidence scoring for better auto matching.',
       pathTemplateWorkflow: 'Improved Path Settings with discovery modes, copy / hard link / symbolic link strategies, template variable help, optional segments, and custom template preview.',
+      dashboardFilters: 'Dashboard task list now supports combined filtering by status, asset type, and media type.',
       sourceMissingGuard: 'Fixed confirmation risks after source files are deleted. Pending and awaiting-review tasks now fail with a clear reason when the source file is missing.',
     },
   },

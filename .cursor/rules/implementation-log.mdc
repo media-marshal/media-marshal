@@ -296,6 +296,41 @@ alwaysApply: false
 
 ---
 
+## [仪表盘任务筛选恢复与资产类型筛选] 2026-05-07
+
+### 已完成
+- 排查仪表盘筛选逻辑，确认当前页面仅保留了状态筛选，影片类型筛选入口与逻辑已缺失
+- 恢复仪表盘任务列表按影片类型筛选
+  - 支持全部类型 / 电影 / 剧集
+  - 可与状态筛选组合生效
+- 新增仪表盘任务列表按资产类型筛选
+  - 支持全部资产 / 普通视频 / ISO 镜像 / 蓝光原盘
+  - 对历史任务缺失 `assetType` 的情况按 `VIDEO_FILE` 兼容处理
+  - 可与状态筛选、影片类型筛选组合生效
+- 筛选条件或分页大小变化时清空表格选择并回到第一页，避免批量删除作用于不可见筛选结果
+- 同步补充中英文 i18n 文案
+- 同步更新 ReleaseNote，记录仪表盘组合筛选能力
+
+### 关键文件
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [版本号底部展示与版本元数据同步脚本] 2026-05-06
 
 ### 已完成

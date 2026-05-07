@@ -38,7 +38,25 @@
         <div class="card-header">
           <span>{{ t('dashboard.recentTasks') }}</span>
           <div class="header-actions">
-            <el-select v-model="statusFilter" size="small" class="status-filter">
+            <el-select v-model="assetTypeFilter" size="small" class="dashboard-filter">
+              <el-option :label="t('dashboard.allAssetTypes')" value="ALL" />
+              <el-option
+                v-for="assetType in assetTypeOptions"
+                :key="assetType"
+                :label="t(`task.assetType.${assetType}`)"
+                :value="assetType"
+              />
+            </el-select>
+            <el-select v-model="mediaTypeFilter" size="small" class="dashboard-filter">
+              <el-option :label="t('dashboard.allMediaTypes')" value="ALL" />
+              <el-option
+                v-for="mediaType in mediaTypeOptions"
+                :key="mediaType"
+                :label="t(`task.mediaType.${mediaType}`)"
+                :value="mediaType"
+              />
+            </el-select>
+            <el-select v-model="statusFilter" size="small" class="dashboard-filter">
               <el-option :label="t('dashboard.allStatuses')" value="ALL" />
               <el-option
                 v-for="status in statusOptions"
@@ -148,7 +166,7 @@ import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { MediaAssetType, MediaTask, TaskStatus } from '@/types'
+import type { MediaAssetType, MediaTask, MediaType, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
 const mediaStore = useMediaStore()
@@ -158,15 +176,23 @@ const deletingId = ref<number | null>(null)
 const selectedTasks = ref<MediaTask[]>([])
 const batchDeleting = ref(false)
 const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED']
+const assetTypeOptions: MediaAssetType[] = ['VIDEO_FILE', 'ISO_IMAGE', 'BLURAY_DIRECTORY']
+const mediaTypeOptions: MediaType[] = ['MOVIE', 'TV_SHOW']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
+const assetTypeFilter = ref<MediaAssetType | 'ALL'>('ALL')
+const mediaTypeFilter = ref<MediaType | 'ALL'>('ALL')
 const currentPage = ref(1)
 const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
 const filteredTasks = computed(() => {
-  return statusFilter.value === 'ALL'
-    ? tasks.value
-    : tasks.value.filter((task) => task.status === statusFilter.value)
+  return tasks.value.filter((task) => {
+    const taskAssetType = task.assetType || 'VIDEO_FILE'
+    const matchesStatus = statusFilter.value === 'ALL' || task.status === statusFilter.value
+    const matchesAssetType = assetTypeFilter.value === 'ALL' || taskAssetType === assetTypeFilter.value
+    const matchesMediaType = mediaTypeFilter.value === 'ALL' || task.mediaType === mediaTypeFilter.value
+    return matchesStatus && matchesAssetType && matchesMediaType
+  })
 })
 
 const sortedTasks = computed(() => {
@@ -180,7 +206,7 @@ const displayedTasks = computed(() => {
 
 onMounted(() => fetchTasks())
 
-watch([statusFilter, pageSize], () => {
+watch([statusFilter, assetTypeFilter, mediaTypeFilter, pageSize], () => {
   selectedTasks.value = []
   currentPage.value = 1
 })
@@ -343,8 +369,8 @@ h2 {
   align-items: center;
 }
 
-.status-filter {
-  width: 150px;
+.dashboard-filter {
+  width: 138px;
 }
 
 .pagination-row {
