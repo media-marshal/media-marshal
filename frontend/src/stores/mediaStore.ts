@@ -56,6 +56,10 @@ export const useMediaStore = defineStore('media', () => {
     tasks.value = tasks.value.filter((task) => task.id !== id)
   }
 
+  function clearTasks() {
+    tasks.value = []
+  }
+
   return {
     tasks,
     loading,
@@ -68,5 +72,6 @@ export const useMediaStore = defineStore('media', () => {
     confirmTask,
     skipTask,
     deleteTask,
+    clearTasks,
   }
 })

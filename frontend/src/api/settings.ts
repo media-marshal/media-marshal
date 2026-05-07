@@ -13,4 +13,8 @@ export const settingsApi = {
       sensitive,
     })
   },
+
+  resetSystem() {
+    return http.post<ApiResponse<void>>('/api/settings/reset')
+  },
 }

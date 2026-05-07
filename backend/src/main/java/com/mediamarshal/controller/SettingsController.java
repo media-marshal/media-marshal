@@ -3,6 +3,7 @@ package com.mediamarshal.controller;
 import com.mediamarshal.model.dto.ApiResponse;
 import com.mediamarshal.model.entity.AppSetting;
 import com.mediamarshal.service.settings.SettingsService;
+import com.mediamarshal.service.settings.SystemResetService;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.util.List;
 public class SettingsController {
 
     private final SettingsService settingsService;
+    private final SystemResetService systemResetService;
 
     @GetMapping
     public ApiResponse<List<AppSetting>> getAll() {
@@ -31,6 +33,12 @@ public class SettingsController {
     @PutMapping("/{key}")
     public ApiResponse<Void> update(@PathVariable String key, @RequestBody UpdateRequest request) {
         settingsService.set(key, request.getValue(), request.getDescription(), request.isSensitive());
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/reset")
+    public ApiResponse<Void> reset() {
+        systemResetService.reset();
         return ApiResponse.ok();
     }
 

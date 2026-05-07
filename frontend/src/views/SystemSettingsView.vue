@@ -3,8 +3,6 @@
     <h2>{{ t('settings.title') }}</h2>
 
     <el-form v-loading="loading" label-position="top" class="settings-form">
-
-      <!-- TMDB 配置 -->
       <el-card shadow="never" class="settings-section">
         <template #header>{{ t('settings.tmdbSection') }}</template>
         <el-form-item :label="t('settings.tmdbApiKey')">
@@ -16,50 +14,59 @@
           />
         </el-form-item>
         <el-form-item :label="t('settings.tmdbLanguage')">
-          <el-select
-            v-model="form.tmdbLanguage"
-            filterable
-            style="width: 100%; max-width: 360px"
-            :placeholder="t('settings.tmdbLanguagePlaceholder')"
-          >
-            <el-option
-              v-for="option in TMDB_LANGUAGE_OPTIONS"
-              :key="option.value"
-              :label="t(option.labelKey)"
-              :value="option.value"
-            />
-          </el-select>
-          <div class="form-hint">{{ t('settings.tmdbLanguageHelp') }}</div>
+          <div class="field-stack">
+            <el-select
+              v-model="form.tmdbLanguage"
+              filterable
+              class="setting-select"
+              :placeholder="t('settings.tmdbLanguagePlaceholder')"
+            >
+              <el-option
+                v-for="option in TMDB_LANGUAGE_OPTIONS"
+                :key="option.value"
+                :label="t(option.labelKey)"
+                :value="option.value"
+              />
+            </el-select>
+            <div class="form-hint">{{ t('settings.tmdbLanguageHelp') }}</div>
+          </div>
         </el-form-item>
       </el-card>
 
-      <!-- 识别配置 -->
       <el-card shadow="never" class="settings-section">
         <template #header>{{ t('settings.matchingSection') }}</template>
         <el-form-item :label="t('settings.confidenceThreshold')">
-          <el-slider
-            v-model="form.confidenceThreshold"
-            :min="0"
-            :max="100"
-            :step="5"
-            show-input
-            style="max-width: 480px"
-          />
-          <div class="form-hint">{{ t('settings.confidenceThresholdHelp') }}</div>
+          <div class="field-stack">
+            <el-slider
+              v-model="form.confidenceThreshold"
+              :min="0"
+              :max="100"
+              :step="5"
+              show-input
+              class="confidence-slider"
+            />
+            <div class="form-hint">{{ t('settings.confidenceThresholdHelp') }}</div>
+          </div>
         </el-form-item>
       </el-card>
 
-      <!-- 邮件通知 -->
       <el-card shadow="never" class="settings-section">
         <template #header>{{ t('settings.emailSection') }}</template>
         <el-form-item :label="t('settings.emailEnabled')">
-          <div class="email-toggle-row">
-            <el-switch v-model="form.emailEnabled" disabled />
-            <span class="email-disabled-hint">{{ t('settings.emailComingSoon') }}</span>
+          <div class="field-stack">
+            <div class="email-toggle-row">
+              <el-switch v-model="form.emailEnabled" disabled />
+              <span class="email-disabled-hint">{{ t('settings.emailComingSoon') }}</span>
+            </div>
           </div>
         </el-form-item>
         <el-form-item v-if="form.emailEnabled" :label="t('settings.emailRecipient')">
-          <el-input v-model="form.emailRecipient" type="email" placeholder="you@example.com" disabled />
+          <el-input
+            v-model="form.emailRecipient"
+            type="email"
+            :placeholder="t('settings.emailRecipientPlaceholder')"
+            disabled
+          />
         </el-form-item>
       </el-card>
 
@@ -118,15 +125,19 @@ onMounted(async () => {
 })
 
 async function handleSave() {
-  await Promise.all([
-    settingsStore.updateSetting('tmdb.api-key', form.tmdbApiKey, 'TMDB API Key', true),
-    settingsStore.updateSetting('tmdb.language', form.tmdbLanguage, 'TMDB 查询语言'),
+  const updates = [
+    settingsStore.updateSetting('tmdb.language', form.tmdbLanguage),
     settingsStore.updateSetting(
       'watcher.confidence-threshold',
       String(form.confidenceThreshold / 100),
-      '匹配置信度阈值',
     ),
-  ])
+  ]
+
+  if (form.tmdbApiKey.trim() && !form.tmdbApiKey.includes('****')) {
+    updates.unshift(settingsStore.updateSetting('tmdb.api-key', form.tmdbApiKey.trim(), undefined, true))
+  }
+
+  await Promise.all(updates)
   ElMessage.success(t('settings.saved'))
 }
 </script>
@@ -147,6 +158,10 @@ h2 {
   margin-bottom: 20px;
 }
 
+.settings-form {
+  min-width: 0;
+}
+
 .settings-form :deep(.el-card__header) {
   font-weight: 600;
   color: #303133;
@@ -156,6 +171,22 @@ h2 {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
+}
+
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.setting-select {
+  width: 100%;
+  max-width: 360px;
+}
+
+.confidence-slider {
+  max-width: 480px;
 }
 
 .email-toggle-row {

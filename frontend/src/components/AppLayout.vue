@@ -39,6 +39,10 @@
             <el-icon><Tools /></el-icon>
             <span>{{ t('nav.settingsSystem') }}</span>
           </el-menu-item>
+          <el-menu-item index="/settings/danger">
+            <el-icon><Warning /></el-icon>
+            <span>{{ t('nav.settingsDanger') }}</span>
+          </el-menu-item>
           <!-- 高级设置：路由预留，v1 不在菜单中显示，v2 有内容时露出 -->
         </el-sub-menu>
       </el-menu>

@@ -2,7 +2,7 @@
   <el-popover
     placement="right-end"
     trigger="hover"
-    :width="390"
+    :width="520"
     popper-class="app-version-popover"
   >
     <template #reference>
@@ -25,7 +25,7 @@
           </div>
           <ul class="release-items">
             <li v-for="item in note.items" :key="item.key" class="release-item">
-              <el-tag size="small" effect="plain" :type="tagTypeMap[item.type]">
+              <el-tag class="release-tag" size="small" effect="plain" :type="tagTypeMap[item.type]">
                 {{ t(`appVersion.itemType.${item.type}`) }}
               </el-tag>
               <span>{{ t(item.key) }}</span>
@@ -133,11 +133,16 @@ const tagTypeMap: Record<string, TagProps['type']> = {
 
 .release-item {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 88px 1fr;
   align-items: start;
   gap: 8px;
   color: #606266;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.release-tag {
+  width: 88px;
+  justify-content: center;
 }
 </style>

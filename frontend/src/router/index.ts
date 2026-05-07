@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -7,6 +8,12 @@ const router = createRouter({
     {
       path: '/',
       redirect: '/dashboard',
+    },
+    {
+      path: '/setup',
+      name: 'setup',
+      component: () => import('@/views/SetupView.vue'),
+      meta: { bareLayout: true },
     },
     {
       path: '/dashboard',
@@ -33,6 +40,11 @@ const router = createRouter({
       name: 'settings-system',
       component: () => import('@/views/SystemSettingsView.vue'),
     },
+    {
+      path: '/settings/danger',
+      name: 'settings-danger',
+      component: () => import('@/views/DangerSettingsView.vue'),
+    },
     // 高级设置：路由预留，v1 菜单中不显示
     {
       path: '/settings/advanced',
@@ -40,6 +52,25 @@ const router = createRouter({
       component: () => import('@/views/SystemSettingsView.vue'), // placeholder，v2 替换
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  const settingsStore = useSettingsStore()
+  if (!settingsStore.loaded) {
+    await settingsStore.fetchSettings()
+  }
+
+  if (settingsStore.requiresSetup && to.name !== 'setup') {
+    return {
+      name: 'setup',
+    }
+  }
+
+  if (!settingsStore.requiresSetup && to.name === 'setup') {
+    return '/settings/paths'
+  }
+
+  return true
 })
 
 export default router

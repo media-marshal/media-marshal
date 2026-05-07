@@ -162,6 +162,7 @@ interface MetadataSearchQuery {
 |---|---|---|---|---|
 | GET | `/api/settings` | 查询所有配置（敏感项脱敏显示） | — | `AppSetting[]` |
 | PUT | `/api/settings/{key}` | 更新单项配置（写入数据库） | `UpdateRequest` | — |
+| POST | `/api/settings/reset` | 重置系统：删除数据库中的配置、监控规则、任务和候选数据，使系统回到首次初始化状态；不会删除媒体文件 | — | — |
 
 ### AppSetting 字段
 ```typescript

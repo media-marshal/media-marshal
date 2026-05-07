@@ -296,6 +296,115 @@ alwaysApply: false
 
 ---
 
+## [首次初始化模式与 TMDB API Key 强制配置] 2026-05-07
+
+### 已完成
+- 新增 `/setup` 初始化页面
+  - 使用独立全屏布局，不显示侧边栏主导航
+  - 引导用户配置 TMDB API Key 与 TMDB 返回语言
+  - 支持初始化页中英文切换
+- 在路由层新增初始化守卫
+  - 首次进入前先加载 `/api/settings`
+  - 当 `tmdb.api-key` 为空时，Dashboard / Queue / Paths / System 等主功能路由会被重定向到 `/setup`
+  - 保存配置后解除锁定并跳转回原目标页或 Dashboard
+- `settingsStore` 新增初始化状态判断
+  - `loaded`
+  - `requiresSetup`
+  - `hasConfiguredValue()`
+- 修复 `updateSetting()` 本地状态未 upsert 新配置的问题，避免首次写入 API Key 后前端仍认为未初始化
+- 系统设置页保存时跳过未变更的脱敏 API Key，避免将 `abcd****` 一类脱敏值写回后端
+- 同步补充中英文 i18n 文案
+- 同步更新 ReleaseNote
+
+### 关键文件
+- `frontend/src/views/SetupView.vue`
+- `frontend/src/router/index.ts`
+- `frontend/src/App.vue`
+- `frontend/src/stores/settingsStore.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无新增接口，第一版复用 `GET /api/settings` 与 `PUT /api/settings/{key}` 判断和保存初始化状态
+
+### 偏离设计的地方
+- 暂未做 TMDB API Key 连通性测试，后续可加后端测试接口
+
+### 遗留问题 / 需 PM 决策
+- 是否需要后续新增 `/api/setup/status` 与 TMDB 连通性测试接口
+
+---
+
+## [初始化页面文案精简与 TMDB API Key 帮助入口] 2026-05-07
+
+### 已完成
+- 精简初始化页面文案
+  - 移除“首次初始化”小字
+  - 移除“必须先完成 TMDB 配置”提示框
+  - 页面说明改为“请完成初始化配置”
+- 调整 TMDB API Key 帮助说明
+  - 表单下方文案改为解释 API Key 用途
+  - 在 `TMDB API Key` 标签后新增帮助图标
+  - 鼠标悬停帮助图标时展示获取方式说明
+  - 帮助气泡内提供 TMDB API 设置页外链
+- 同步更新中英文文案
+
+### 关键文件
+- `frontend/src/views/SetupView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
+## [前端国际化补齐与 ReleaseNote 面板对齐优化] 2026-05-07
+
+### 已完成
+- 全量扫描 `frontend/src` 用户可见硬编码文案
+- 将 HTTP 默认错误提示从硬编码中文改为 i18n
+  - `common.requestFailed`
+  - `common.networkError`
+- 移除系统设置保存时提交给后端的硬编码中文描述，避免前端按当前语言写入固定描述
+- 将邮件通知邮箱占位示例改为 i18n key
+- ReleaseNote 面板宽度从 390 调整为 520
+- ReleaseNote 条目标签列固定宽度，英文模式下 `New` / `Fix` / `Improved` 后的正文保持相同缩进
+- 同步更新 ReleaseNote，记录本次国际化与面板显示优化
+
+### 关键文件
+- `frontend/src/api/http.ts`
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/components/AppVersionInfo.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无
+
+### 偏离设计的地方
+- 无
+
+### 遗留问题 / 需 PM 决策
+- 无
+
+---
+
 ## [仪表盘任务筛选恢复与资产类型筛选] 2026-05-07
 
 ### 已完成
@@ -2413,3 +2522,104 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无
+---
+
+## [系统重置危险操作] 2026-05-07
+
+### 已完成
+- 系统设置页新增「危险操作」区域，提供「重置系统」入口。
+- 点击重置时使用二次确认，要求输入 `RESET` 后才会继续执行，避免误触。
+- 新增 `POST /api/settings/reset` 接口，重置数据库中的应用数据：
+  - 配置项 `app_setting`
+  - 监控规则 `watch_rule`
+  - 媒体任务 `media_task`
+  - 任务候选 `task_candidate`
+- 重置后刷新文件发现服务，使监听和周期扫描回到无规则空闲状态。
+- 前端重置成功后清空本地任务/设置状态，并跳转到初始化页面。
+- 中英文 i18n、ReleaseNote 和 API 契约已同步。
+- 新增后端集成测试覆盖重置会清空当前应用数据表。
+
+### 涉及文件
+- `backend/src/main/java/com/mediamarshal/controller/SettingsController.java`
+- `backend/src/main/java/com/mediamarshal/service/settings/SystemResetService.java`
+- `backend/src/test/java/com/mediamarshal/service/settings/SystemResetServiceTest.java`
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/api/settings.ts`
+- `frontend/src/stores/settingsStore.ts`
+- `frontend/src/stores/mediaStore.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+- `mvn -q -DskipTests compile`
+- `mvn -q test`
+- `mvn -q -Dtest=SystemResetServiceTest test`
+
+### 待办 / 风险
+- 当前重置仅删除数据库中的应用数据，不删除用户媒体文件或已经整理出的目标文件。
+### 交接备注 / 给 PM 的说明
+- 重置成功后系统会因为 TMDB API Key 缺失进入初始化模式；用户完成初始化后按现有流程跳转到路径设置页。
+---
+
+## [系统设置两栏布局优化] 2026-05-07
+
+### 已完成
+- 系统设置页调整为左右两栏布局：
+  - 左侧展示 TMDB 配置、识别配置、邮件通知和保存按钮。
+  - 右侧独立展示危险操作区域。
+- 危险操作卡片改为适合右侧窄栏的纵向排布，移动端自动回落为单列。
+- ReleaseNote 已补充本次系统设置布局优化记录。
+
+### 涉及文件
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 待办 / 风险
+- 无
+### 交接备注 / 给 PM 的说明
+- 危险操作仍保留输入 `RESET` 的二次确认逻辑，本次仅调整信息架构与视觉位置。
+---
+
+## [危险设置独立页面与表单说明排版] 2026-05-07
+
+### 已完成
+- 将危险操作从系统设置页拆分到独立的「危险设置」页面。
+- 设置菜单新增「危险设置」入口，与「系统设置」并列。
+- 系统设置页恢复为普通设置页面，仅保留 TMDB、识别和邮件通知配置。
+- 系统设置页与初始化页的表单说明文字统一放在控件下方，避免不同语言下出现左右位置不一致。
+- ReleaseNote 已同步本次 UI 结构调整。
+
+### 涉及文件
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/views/DangerSettingsView.vue`
+- `frontend/src/views/SetupView.vue`
+- `frontend/src/components/AppLayout.vue`
+- `frontend/src/router/index.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 待办 / 风险
+- 无
+### 交接备注 / 给 PM 的说明
+- 危险设置页面继续使用输入 `RESET` 的二次确认逻辑；本次未变更重置接口行为。
