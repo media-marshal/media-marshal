@@ -59,6 +59,14 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                 JsonNode items = root.path("results");
                 searchCalls.add(new SearchCall(endpoint, query.query(), parseResult.getYear(),
                         response.cacheStatus(), items.isArray() ? items.size() : 0));
+                if (isEmptyItems(items) && parseResult.getYear() != null) {
+                    response = callTmdbSearch(endpoint, query.query(), null);
+                    root = response.root();
+                    if (root == null) continue;
+                    items = root.path("results");
+                    searchCalls.add(new SearchCall(endpoint, query.query(), null,
+                            response.cacheStatus(), items.isArray() ? items.size() : 0));
+                }
                 if (!items.isArray()) continue;
 
                 for (JsonNode item : items) {
@@ -201,7 +209,11 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
 
     private boolean isEmptySearch(JsonNode root) {
         JsonNode results = root == null ? null : root.path("results");
-        return results == null || !results.isArray() || results.isEmpty();
+        return isEmptyItems(results);
+    }
+
+    private boolean isEmptyItems(JsonNode items) {
+        return items == null || !items.isArray() || items.isEmpty();
     }
 
     private long getTimeoutSeconds() {

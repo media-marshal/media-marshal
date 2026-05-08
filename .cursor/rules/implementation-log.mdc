@@ -2634,12 +2634,15 @@ alwaysApply: false
   - `POST /api/queue/{id}/recognition/rematch`：保存识别信息后重新 TMDB 匹配，替换旧候选，任务保持 `AWAITING_CONFIRMATION`。
 - 后端按 ADR 限制仅允许 `AWAITING_CONFIRMATION` 任务编辑；电影任务保存时清空季/集；剧集任务要求季号和集号。
 - Queue 前端新增识别信息编辑抽屉，支持查看源路径、资产类型、分辨率、当前候选，并执行“仅保存”与“保存并重新匹配”。
+- 编辑抽屉中源路径、资产类型、分辨率、当前候选等只读信息统一置灰显示。
 - 保存后全局手动搜索默认上下文同步为新媒体类型与解析标题；重新匹配后刷新当前任务候选列表。
+- TMDB 搜索在带年份过滤返回空结果时，会自动退回不带年份再查，避免剧集首播年份与文件解析年份口径不一致导致重新匹配无候选。
 - 同步更新 `api-contracts.mdc`、v0.2.5 ReleaseNote 与版本元数据。
 
 ### 影响文件
 - `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
 - `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
 - `backend/src/main/java/com/mediamarshal/model/dto/QueueRecognitionRequest.java`
 - `backend/src/main/java/com/mediamarshal/model/dto/QueueRecognitionResponse.java`
 - `backend/src/test/java/com/mediamarshal/service/pipeline/MediaProcessPipelineRecognitionTest.java`

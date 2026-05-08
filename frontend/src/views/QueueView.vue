@@ -318,12 +318,14 @@
     >
       <el-form label-position="top" class="recognition-form">
         <el-form-item :label="t('queue.sourcePath')">
-          <el-input :model-value="recognitionTask?.sourcePath || ''" readonly />
+          <el-input :model-value="recognitionTask?.sourcePath || ''" readonly disabled />
         </el-form-item>
         <el-form-item :label="t('queue.assetType')">
-          <el-tag :type="assetTypeTagType(recognitionTask?.assetType)">
-            {{ t(`task.assetType.${recognitionTask?.assetType || 'VIDEO_FILE'}`) }}
-          </el-tag>
+          <div class="readonly-value">
+            <el-tag :type="assetTypeTagType(recognitionTask?.assetType)">
+              {{ t(`task.assetType.${recognitionTask?.assetType || 'VIDEO_FILE'}`) }}
+            </el-tag>
+          </div>
         </el-form-item>
         <el-form-item :label="t('queue.mediaType')">
           <el-select v-model="recognitionForm.mediaType" class="recognition-field">
@@ -364,10 +366,10 @@
           </el-form-item>
         </template>
         <el-form-item :label="t('queue.resolution')">
-          <el-input :model-value="recognitionTask?.parsedResolution || t('queue.unknown')" readonly />
+          <el-input :model-value="recognitionTask?.parsedResolution || t('queue.unknown')" readonly disabled />
         </el-form-item>
         <el-form-item :label="t('queue.currentCandidate')">
-          <el-input :model-value="currentRecognitionCandidateSummary" readonly />
+          <el-input :model-value="currentRecognitionCandidateSummary" readonly disabled />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1366,6 +1368,17 @@ h2 {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.readonly-value {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #f5f7fa;
+  color: #a8abb2;
 }
 
 @media (max-width: 760px) {
