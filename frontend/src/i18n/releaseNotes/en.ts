@@ -1,4 +1,13 @@
 export default {
+  v0_2_5: {
+    items: {
+      queueRecognitionEditor: 'Review Queue tasks now support editing the effective recognition info, including media type, parsed title, year, season, and episode.',
+      queueRecognitionRematch: 'Added “Save and Rematch” to refresh TMDB candidates from corrected recognition info without auto-confirming the task.',
+      reviewSearchContext: 'Manual search now picks up the edited media type and title as the default review context.',
+      releaseNoteFolding: 'Improved the Release Notes panel so each version shows up to 5 changes by default, with extra items available on demand.',
+      recognitionValidation: 'Added recognition edit validation: title is required, TV tasks require season and episode, and movie tasks clear episode fields.',
+    },
+  },
   v0_2_4: {
     items: {
       versionReleaseNotes: 'Added unified version and ReleaseNote display. Frontend and backend now share the root VERSION file, and release notes appear on hover next to the page title.',

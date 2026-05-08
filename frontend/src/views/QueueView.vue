@@ -212,6 +212,12 @@
           </el-descriptions-item>
         </el-descriptions>
 
+        <div class="recognition-actions">
+          <el-button size="small" @click="openRecognitionEditor(task)">
+            {{ t('queue.editRecognition') }}
+          </el-button>
+        </div>
+
         <div class="candidate-section">
           <div class="section-title">
             <span>{{ t('queue.candidates') }}</span>
@@ -303,6 +309,88 @@
         />
       </div>
     </div>
+
+    <el-drawer
+      v-model="recognitionDrawerVisible"
+      :title="t('queue.recognitionEditorTitle')"
+      size="min(92vw, 420px)"
+      class="recognition-drawer"
+    >
+      <el-form label-position="top" class="recognition-form">
+        <el-form-item :label="t('queue.sourcePath')">
+          <el-input :model-value="recognitionTask?.sourcePath || ''" readonly />
+        </el-form-item>
+        <el-form-item :label="t('queue.assetType')">
+          <el-tag :type="assetTypeTagType(recognitionTask?.assetType)">
+            {{ t(`task.assetType.${recognitionTask?.assetType || 'VIDEO_FILE'}`) }}
+          </el-tag>
+        </el-form-item>
+        <el-form-item :label="t('queue.mediaType')">
+          <el-select v-model="recognitionForm.mediaType" class="recognition-field">
+            <el-option :label="t('task.mediaType.MOVIE')" value="MOVIE" />
+            <el-option :label="t('task.mediaType.TV_SHOW')" value="TV_SHOW" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('queue.parsedTitle')" required>
+          <el-input v-model="recognitionForm.parsedTitle" :placeholder="t('queue.parsedTitlePlaceholder')" />
+        </el-form-item>
+        <el-form-item :label="t('queue.parsedYear')">
+          <el-input-number
+            v-model="recognitionForm.parsedYear"
+            class="recognition-field"
+            :min="1"
+            :max="9999"
+            controls-position="right"
+          />
+        </el-form-item>
+        <template v-if="recognitionForm.mediaType === 'TV_SHOW'">
+          <el-form-item :label="t('queue.parsedSeason')" required>
+            <el-input-number
+              v-model="recognitionForm.parsedSeason"
+              class="recognition-field"
+              :min="0"
+              :max="999"
+              controls-position="right"
+            />
+          </el-form-item>
+          <el-form-item :label="t('queue.parsedEpisode')" required>
+            <el-input-number
+              v-model="recognitionForm.parsedEpisode"
+              class="recognition-field"
+              :min="0"
+              :max="9999"
+              controls-position="right"
+            />
+          </el-form-item>
+        </template>
+        <el-form-item :label="t('queue.resolution')">
+          <el-input :model-value="recognitionTask?.parsedResolution || t('queue.unknown')" readonly />
+        </el-form-item>
+        <el-form-item :label="t('queue.currentCandidate')">
+          <el-input :model-value="currentRecognitionCandidateSummary" readonly />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="drawer-actions">
+          <el-button @click="recognitionDrawerVisible = false">
+            {{ t('common.cancel') }}
+          </el-button>
+          <el-button
+            :loading="recognitionActionLoading === 'save'"
+            @click="handleSaveRecognition"
+          >
+            {{ t('queue.saveRecognition') }}
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="recognitionActionLoading === 'rematch'"
+            @click="handleSaveRecognitionAndRematch"
+          >
+            {{ t('queue.saveAndRematch') }}
+          </el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -313,7 +401,7 @@ import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mediaApi } from '@/api/media'
-import type { BatchConfirmItem, MatchResult, MediaAssetType, MediaTask, MediaType, TaskCandidate } from '@/types'
+import type { BatchConfirmItem, MatchResult, MediaAssetType, MediaTask, MediaType, QueueRecognitionRequest, QueueRecognitionResponse, TaskCandidate } from '@/types'
 
 const { t } = useI18n()
 const mediaStore = useMediaStore()
@@ -355,6 +443,16 @@ const globalSearchResults = ref<QueueOption[]>([])
 const currentCandidate = ref<QueueOption | null>(null)
 const searchPanelExpanded = ref(true)
 const recommendationExpanded = ref(false)
+const recognitionDrawerVisible = ref(false)
+const recognitionTask = ref<MediaTask | null>(null)
+const recognitionActionLoading = ref<'save' | 'rematch' | null>(null)
+const recognitionForm = reactive<QueueRecognitionRequest>({
+  mediaType: 'MOVIE',
+  parsedTitle: '',
+  parsedYear: null,
+  parsedSeason: null,
+  parsedEpisode: null,
+})
 
 const sortedQueueTasks = computed(() => {
   return [...queueTasks.value].sort((a, b) => taskTime(b) - taskTime(a))
@@ -438,6 +536,20 @@ const currentCandidateSummary = computed(() => {
   })
 })
 
+const currentRecognitionCandidateSummary = computed(() => {
+  const task = recognitionTask.value
+  if (!task) return t('queue.noCurrentCandidate')
+  const selected = getSelectedOption(task.id)
+  const fallback = getTaskOptions(task.id)[0]
+  const candidate = selected ?? fallback
+  if (!candidate) return t('queue.noCurrentCandidate')
+  return t('queue.currentCandidateSummary', {
+    title: displayTitle(candidate),
+    year: candidate.year ?? t('queue.unknown'),
+    mediaType: t(`task.mediaType.${candidate.mediaType}`),
+  })
+})
+
 onMounted(loadQueue)
 
 watch([currentPage, pageSize], async () => {
@@ -452,6 +564,13 @@ watch(sortedQueueTasks, () => {
   const maxPage = Math.max(1, Math.ceil(sortedQueueTasks.value.length / pageSize.value))
   if (currentPage.value > maxPage) {
     currentPage.value = maxPage
+  }
+})
+
+watch(() => recognitionForm.mediaType, (mediaType) => {
+  if (mediaType === 'MOVIE') {
+    recognitionForm.parsedSeason = null
+    recognitionForm.parsedEpisode = null
   }
 })
 
@@ -707,6 +826,88 @@ async function handleBatchSkip() {
   } finally {
     batchSkipping.value = false
   }
+}
+
+function openRecognitionEditor(task: MediaTask) {
+  recognitionTask.value = task
+  recognitionForm.mediaType = task.mediaType ?? 'MOVIE'
+  recognitionForm.parsedTitle = task.parsedTitle ?? ''
+  recognitionForm.parsedYear = task.parsedYear
+  recognitionForm.parsedSeason = task.parsedSeason
+  recognitionForm.parsedEpisode = task.parsedEpisode
+  globalSearchMediaType.value = recognitionForm.mediaType
+  if (recognitionForm.parsedTitle) {
+    globalSearchKeyword.value = recognitionForm.parsedTitle
+  }
+  recognitionDrawerVisible.value = true
+}
+
+async function handleSaveRecognition() {
+  await submitRecognition(false)
+}
+
+async function handleSaveRecognitionAndRematch() {
+  await submitRecognition(true)
+}
+
+async function submitRecognition(rematch: boolean) {
+  const task = recognitionTask.value
+  if (!task || !validateRecognitionForm()) return
+
+  recognitionActionLoading.value = rematch ? 'rematch' : 'save'
+  try {
+    const request = buildRecognitionRequest()
+    const res = rematch
+      ? await mediaApi.rematchTaskRecognition(task.id, request)
+      : await mediaApi.updateTaskRecognition(task.id, request)
+
+    applyRecognitionResponse(task.id, res.data.data, rematch)
+    globalSearchMediaType.value = request.mediaType
+    globalSearchKeyword.value = request.parsedTitle
+    ElMessage.success(rematch ? t('queue.rematchSuccess') : t('queue.recognitionSaveSuccess'))
+    if (rematch) {
+      recognitionDrawerVisible.value = false
+    }
+  } catch {
+    ElMessage.error(rematch ? t('queue.rematchFailed') : t('queue.recognitionSaveFailed'))
+  } finally {
+    recognitionActionLoading.value = null
+  }
+}
+
+function validateRecognitionForm() {
+  if (!recognitionForm.parsedTitle.trim()) {
+    ElMessage.warning(t('queue.validation.titleRequired'))
+    return false
+  }
+  if (recognitionForm.mediaType === 'TV_SHOW'
+    && (recognitionForm.parsedSeason == null || recognitionForm.parsedEpisode == null)) {
+    ElMessage.warning(t('queue.validation.seasonEpisodeRequired'))
+    return false
+  }
+  return true
+}
+
+function buildRecognitionRequest(): QueueRecognitionRequest {
+  return {
+    mediaType: recognitionForm.mediaType,
+    parsedTitle: recognitionForm.parsedTitle.trim(),
+    parsedYear: recognitionForm.parsedYear,
+    parsedSeason: recognitionForm.mediaType === 'TV_SHOW' ? recognitionForm.parsedSeason : null,
+    parsedEpisode: recognitionForm.mediaType === 'TV_SHOW' ? recognitionForm.parsedEpisode : null,
+  }
+}
+
+function applyRecognitionResponse(taskId: number, response: QueueRecognitionResponse, rematch: boolean) {
+  mediaStore.updateTask(response.task)
+  recognitionTask.value = response.task
+  if (!rematch) return
+
+  const options = response.candidates.map(mapCandidateToOption)
+  candidateOptionsByTask[taskId] = options
+  searchOptionsByTask[taskId] = []
+  selectedOptionByTask[taskId] = ''
+  currentCandidate.value = null
 }
 
 function getTaskOptions(taskId: number) {
@@ -1000,6 +1201,12 @@ h2 {
 }
 
 .task-meta {
+  margin-bottom: 10px;
+}
+
+.recognition-actions {
+  display: flex;
+  justify-content: flex-end;
   margin-bottom: 18px;
 }
 
@@ -1144,6 +1351,21 @@ h2 {
   display: flex;
   justify-content: flex-end;
   margin-top: 4px;
+}
+
+.recognition-form {
+  display: grid;
+  gap: 2px;
+}
+
+.recognition-field {
+  width: 100%;
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 @media (max-width: 760px) {

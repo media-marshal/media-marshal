@@ -33,7 +33,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-APP_VERSION_FALLBACK = "0.2.4"
+APP_VERSION_FALLBACK = "0.2.5"
 
 
 def load_app_version() -> str:

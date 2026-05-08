@@ -97,6 +97,19 @@ export interface BatchConfirmResponse {
   results: BatchConfirmResult[]
 }
 
+export interface QueueRecognitionRequest {
+  mediaType: MediaType
+  parsedTitle: string
+  parsedYear: number | null
+  parsedSeason: number | null
+  parsedEpisode: number | null
+}
+
+export interface QueueRecognitionResponse {
+  task: MediaTask
+  candidates: TaskCandidate[]
+}
+
 // ─── 模板变量帮助 ──────────────────────────────────────────────────
 export type TemplateVariableStatus = 'AVAILABLE' | 'RESERVED' | 'DEPRECATED' | 'UNAVAILABLE'
 

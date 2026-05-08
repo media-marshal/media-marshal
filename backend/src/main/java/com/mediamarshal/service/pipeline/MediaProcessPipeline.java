@@ -2,6 +2,8 @@ package com.mediamarshal.service.pipeline;
 
 import com.mediamarshal.model.dto.MatchResult;
 import com.mediamarshal.model.dto.ParseResult;
+import com.mediamarshal.model.dto.QueueRecognitionRequest;
+import com.mediamarshal.model.dto.QueueRecognitionResponse;
 import com.mediamarshal.model.entity.MediaAssetType;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.TaskCandidate;
@@ -246,6 +248,76 @@ public class MediaProcessPipeline {
         eventPublisher.publishTaskProcessing(task);
 
         manualConfirmationExecutor.submit(() -> completeSubmittedConfirm(taskId, tmdbId, mediaType, confirmationSource));
+    }
+
+    public QueueRecognitionResponse updateRecognition(Long taskId, QueueRecognitionRequest request) {
+        MediaTask task = updateRecognitionFields(taskId, request);
+        return new QueueRecognitionResponse(task, candidateRepository.findByTask_IdOrderByRankAsc(taskId));
+    }
+
+    public QueueRecognitionResponse updateRecognitionAndRematch(Long taskId, QueueRecognitionRequest request) {
+        MediaTask task = updateRecognitionFields(taskId, request);
+        ParseResult parseResult = toParseResult(task);
+        List<TaskCandidate> candidates = saveCandidates(task, metadataMatcher.search(parseResult));
+        task.setMatchConfidence(candidates.isEmpty() ? null : candidates.getFirst().getConfidence());
+        taskRepository.save(task);
+        return new QueueRecognitionResponse(task, candidates);
+    }
+
+    private MediaTask updateRecognitionFields(Long taskId, QueueRecognitionRequest request) {
+        MediaTask task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+
+        if (!MediaTask.TaskStatus.AWAITING_CONFIRMATION.equals(task.getStatus())) {
+            throw new IllegalStateException("Only awaiting confirmation tasks can be edited: " + taskId);
+        }
+
+        if (request == null) {
+            throw new IllegalArgumentException("Recognition request is required");
+        }
+
+        String parsedTitle = request.getParsedTitle() == null ? "" : request.getParsedTitle().trim();
+        if (parsedTitle.isBlank()) {
+            throw new IllegalArgumentException("Parsed title is required");
+        }
+
+        MediaTask.MediaType mediaType = parseRecognitionMediaType(request.getMediaType());
+        task.setMediaType(mediaType);
+        task.setParsedTitle(parsedTitle);
+        task.setParsedYear(request.getParsedYear());
+        if (MediaTask.MediaType.TV_SHOW.equals(mediaType)) {
+            if (request.getParsedSeason() == null || request.getParsedEpisode() == null) {
+                throw new IllegalArgumentException("Season and episode are required for TV show tasks");
+            }
+            task.setParsedSeason(request.getParsedSeason());
+            task.setParsedEpisode(request.getParsedEpisode());
+        } else {
+            task.setParsedSeason(null);
+            task.setParsedEpisode(null);
+        }
+        return taskRepository.save(task);
+    }
+
+    private MediaTask.MediaType parseRecognitionMediaType(String mediaType) {
+        if (mediaType == null || mediaType.isBlank()) {
+            throw new IllegalArgumentException("Media type is required");
+        }
+        try {
+            return MediaTask.MediaType.valueOf(mediaType.trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unsupported media type: " + mediaType, e);
+        }
+    }
+
+    private ParseResult toParseResult(MediaTask task) {
+        ParseResult parseResult = new ParseResult();
+        parseResult.setTitle(task.getParsedTitle());
+        parseResult.setYear(task.getParsedYear());
+        parseResult.setSeason(task.getParsedSeason());
+        parseResult.setEpisode(task.getParsedEpisode());
+        parseResult.setScreenSize(task.getParsedResolution());
+        applyMediaTypeToParseResult(parseResult, task.getMediaType());
+        return parseResult;
     }
 
     @SuppressWarnings("null")

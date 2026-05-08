@@ -3,6 +3,8 @@ package com.mediamarshal.controller;
 import com.mediamarshal.model.dto.ApiResponse;
 import com.mediamarshal.model.dto.MatchResult;
 import com.mediamarshal.model.dto.ParseResult;
+import com.mediamarshal.model.dto.QueueRecognitionRequest;
+import com.mediamarshal.model.dto.QueueRecognitionResponse;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.TaskCandidate;
 import com.mediamarshal.repository.MediaTaskRepository;
@@ -80,6 +82,32 @@ public class QueueController {
     @GetMapping("/{id}/candidates")
     public ApiResponse<List<TaskCandidate>> getCandidates(@PathVariable Long id) {
         return ApiResponse.ok(candidateRepository.findByTask_IdOrderByRankAsc(id));
+    }
+
+    @PutMapping("/{id}/recognition")
+    public ApiResponse<QueueRecognitionResponse> updateRecognition(
+            @PathVariable Long id,
+            @RequestBody QueueRecognitionRequest request
+    ) {
+        try {
+            return ApiResponse.ok(pipeline.updateRecognition(id, request));
+        } catch (Exception e) {
+            log.warn("Recognition update failed: taskId={}, error={}", id, e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/recognition/rematch")
+    public ApiResponse<QueueRecognitionResponse> updateRecognitionAndRematch(
+            @PathVariable Long id,
+            @RequestBody QueueRecognitionRequest request
+    ) {
+        try {
+            return ApiResponse.ok(pipeline.updateRecognitionAndRematch(id, request));
+        } catch (Exception e) {
+            log.warn("Recognition rematch failed: taskId={}, error={}", id, e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
     }
 
     @SuppressWarnings("null")

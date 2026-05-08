@@ -1,5 +1,5 @@
 import http from './http'
-import type { ApiResponse, BatchConfirmItem, BatchConfirmResponse, MatchResult, MediaTask, MediaType, TaskCandidate, TaskStatus } from '@/types'
+import type { ApiResponse, BatchConfirmItem, BatchConfirmResponse, MatchResult, MediaTask, MediaType, QueueRecognitionRequest, QueueRecognitionResponse, TaskCandidate, TaskStatus } from '@/types'
 
 export const mediaApi = {
   listTasks(status?: TaskStatus) {
@@ -42,6 +42,14 @@ export const mediaApi = {
     return http.post<ApiResponse<BatchConfirmResponse>>('/api/queue/batch-confirm', {
       items,
     })
+  },
+
+  updateTaskRecognition(id: number, request: QueueRecognitionRequest) {
+    return http.put<ApiResponse<QueueRecognitionResponse>>(`/api/queue/${id}/recognition`, request)
+  },
+
+  rematchTaskRecognition(id: number, request: QueueRecognitionRequest) {
+    return http.post<ApiResponse<QueueRecognitionResponse>>(`/api/queue/${id}/recognition/rematch`, request)
   },
 
   skipTask(id: number) {

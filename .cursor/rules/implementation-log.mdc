@@ -2623,3 +2623,74 @@ alwaysApply: false
 - 无
 ### 交接备注 / 给 PM 的说明
 - 危险设置页面继续使用输入 `RESET` 的二次确认逻辑；本次未变更重置接口行为。
+---
+
+## [ADR-021 Queue 识别信息编辑与重新匹配（v1）] 2026-05-08
+
+### 完成内容
+- Queue 待确认任务新增单任务识别信息编辑能力，当前有效字段直接落在 `MediaTask.mediaType`、`parsedTitle`、`parsedYear`、`parsedSeason`、`parsedEpisode`。
+- 新增后端接口：
+  - `PUT /api/queue/{id}/recognition`：仅保存识别信息，不触发 TMDB 重新匹配，不清空候选。
+  - `POST /api/queue/{id}/recognition/rematch`：保存识别信息后重新 TMDB 匹配，替换旧候选，任务保持 `AWAITING_CONFIRMATION`。
+- 后端按 ADR 限制仅允许 `AWAITING_CONFIRMATION` 任务编辑；电影任务保存时清空季/集；剧集任务要求季号和集号。
+- Queue 前端新增识别信息编辑抽屉，支持查看源路径、资产类型、分辨率、当前候选，并执行“仅保存”与“保存并重新匹配”。
+- 保存后全局手动搜索默认上下文同步为新媒体类型与解析标题；重新匹配后刷新当前任务候选列表。
+- 同步更新 `api-contracts.mdc`、v0.2.5 ReleaseNote 与版本元数据。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueRecognitionRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueRecognitionResponse.java`
+- `backend/src/test/java/com/mediamarshal/service/pipeline/MediaProcessPipelineRecognitionTest.java`
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/api/media.ts`
+- `frontend/src/stores/mediaStore.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `VERSION`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `backend/pom.xml`
+- `parser/main.py`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- ADR-021 v1 仅支持单任务编辑，不支持批量识别信息编辑。
+- 保存并重新匹配不会自动高置信度确认，仍需用户在 Queue 中手动确认候选。
+---
+
+## [ReleaseNote 面板折叠展示优化] 2026-05-08
+
+### 完成内容
+- ReleaseNote 悬浮面板按版本折叠展示变更记录。
+- 每个版本默认最多展示 5 条变更；超过 5 条时展示展开按钮，可查看该版本全部变更。
+- 变更条数不超过 5 条时不展示展开按钮。
+- 展开/收起状态按版本独立维护，避免影响其他版本。
+- 同步更新 v0.2.5 ReleaseNote 与中英文按钮文案。
+
+### 影响文件
+- `frontend/src/components/AppVersionInfo.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无

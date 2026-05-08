@@ -13,7 +13,7 @@
 
     <groupId>com.mediamarshal</groupId>
     <artifactId>media-marshal</artifactId>
-    <version>v0.2.4-SNAPSHOT</version>
+    <version>v0.2.5-SNAPSHOT</version>
     <name>media-marshal</name>
     <description>Automatically organize your media library — identify, rename, and generate NFO metadata</description>
 

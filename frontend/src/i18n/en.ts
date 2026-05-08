@@ -3,6 +3,8 @@ import releaseNotes from './releaseNotes/en'
 export default {
   appVersion: {
     title: 'Release Notes',
+    expand: 'Show all ({count} more)',
+    collapse: 'Collapse',
     itemType: {
       feature: 'New',
       fix: 'Fix',
@@ -70,6 +72,22 @@ export default {
     skipSuccess: 'Task skipped',
     confidence: 'Confidence',
     parsedTitle: 'Parsed Title',
+    parsedTitlePlaceholder: 'Enter the effective parsed title',
+    parsedYear: 'Parsed Year',
+    parsedSeason: 'Season',
+    parsedEpisode: 'Episode',
+    sourcePath: 'Source Path',
+    assetType: 'Asset Type',
+    resolution: 'Resolution',
+    currentCandidate: 'Current Candidate',
+    editRecognition: 'Edit Recognition',
+    recognitionEditorTitle: 'Edit Recognition Info',
+    saveRecognition: 'Save Only',
+    saveAndRematch: 'Save and Rematch',
+    recognitionSaveSuccess: 'Recognition info saved',
+    recognitionSaveFailed: 'Failed to save recognition info',
+    rematchSuccess: 'Recognition info saved and candidates refreshed',
+    rematchFailed: 'Failed to rematch with the updated recognition info',
     mediaType: 'Media Type',
     episode: 'Season / Episode',
     season: 'Season {season}',
@@ -130,6 +148,10 @@ export default {
     batchConfirmMessage: 'This will confirm {count} tasks. {lowConfidenceCount} selected candidates are below 60% confidence. The files will continue organizing and this action cannot be directly undone.',
     batchConfirmResult: 'Batch confirm submitted: {success} started organizing, {failed} failed to submit',
     batchConfirmUnknownError: 'Batch confirm failed',
+    validation: {
+      titleRequired: 'Enter a parsed title first',
+      seasonEpisodeRequired: 'Season and episode are required for TV show tasks',
+    },
   },
   task: {
     status: {

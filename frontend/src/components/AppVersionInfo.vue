@@ -24,13 +24,26 @@
             <span class="release-date">{{ note.date }}</span>
           </div>
           <ul class="release-items">
-            <li v-for="item in note.items" :key="item.key" class="release-item">
+            <li v-for="item in displayedItems(note)" :key="item.key" class="release-item">
               <el-tag class="release-tag" size="small" effect="plain" :type="tagTypeMap[item.type]">
                 {{ t(`appVersion.itemType.${item.type}`) }}
               </el-tag>
               <span>{{ t(item.key) }}</span>
             </li>
           </ul>
+          <el-button
+            v-if="hasFoldedItems(note)"
+            class="release-toggle"
+            type="primary"
+            link
+            @click="toggleReleaseNote(note.version)"
+          >
+            {{
+              isExpanded(note.version)
+                ? t('appVersion.collapse')
+                : t('appVersion.expand', { count: foldedItemCount(note) })
+            }}
+          </el-button>
         </section>
       </div>
     </div>
@@ -38,20 +51,52 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TagProps } from 'element-plus'
 import { appVersion } from '@/meta/appVersion'
 import { releaseNotes } from '@/meta/releaseNotes'
+import type { ReleaseNote, ReleaseNoteItem } from '@/types'
 
 const { t } = useI18n()
 
+const MAX_ITEMS_PER_VERSION = 5
 const visibleReleaseNotes = computed(() => releaseNotes.slice(0, 3))
+const expandedVersions = ref<Set<string>>(new Set())
 
 const tagTypeMap: Record<string, TagProps['type']> = {
   feature: 'success',
   fix: 'danger',
   optimization: 'warning',
+}
+
+function isExpanded(version: string) {
+  return expandedVersions.value.has(version)
+}
+
+function hasFoldedItems(note: ReleaseNote) {
+  return note.items.length > MAX_ITEMS_PER_VERSION
+}
+
+function foldedItemCount(note: ReleaseNote) {
+  return Math.max(note.items.length - MAX_ITEMS_PER_VERSION, 0)
+}
+
+function displayedItems(note: ReleaseNote): ReleaseNoteItem[] {
+  if (!hasFoldedItems(note) || isExpanded(note.version)) {
+    return note.items
+  }
+  return note.items.slice(0, MAX_ITEMS_PER_VERSION)
+}
+
+function toggleReleaseNote(version: string) {
+  const next = new Set(expandedVersions.value)
+  if (next.has(version)) {
+    next.delete(version)
+  } else {
+    next.add(version)
+  }
+  expandedVersions.value = next
 }
 </script>
 
@@ -83,6 +128,9 @@ const tagTypeMap: Record<string, TagProps['type']> = {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .version-heading,
@@ -144,5 +192,12 @@ const tagTypeMap: Record<string, TagProps['type']> = {
 .release-tag {
   width: 88px;
   justify-content: center;
+}
+
+.release-toggle {
+  align-self: center;
+  height: 22px;
+  padding: 0;
+  font-size: 12px;
 }
 </style>

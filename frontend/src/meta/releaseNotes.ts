@@ -2,6 +2,17 @@ import type { ReleaseNote } from '@/types'
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.2.5',
+    date: '2026-05-08',
+    items: [
+      { type: 'feature', key: 'releaseNotes.v0_2_5.items.queueRecognitionEditor' },
+      { type: 'feature', key: 'releaseNotes.v0_2_5.items.queueRecognitionRematch' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_5.items.reviewSearchContext' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_5.items.releaseNoteFolding' },
+      { type: 'fix', key: 'releaseNotes.v0_2_5.items.recognitionValidation' },
+    ],
+  },
+  {
     version: 'v0.2.4',
     date: '2026-05-06',
     items: [

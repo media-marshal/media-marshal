@@ -61,6 +61,8 @@ interface MediaTask {
 |---|---|---|---|---|
 | GET | `/api/queue` | 查询所有 AWAITING_CONFIRMATION 任务 | — | `MediaTask[]` |
 | GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
+| PUT | `/api/queue/{id}/recognition` | ADR-021：仅保存单个 Queue 任务的当前有效识别信息；不触发 TMDB 重新匹配，不清空候选 | `QueueRecognitionRequest` | `QueueRecognitionResponse` |
+| POST | `/api/queue/{id}/recognition/rematch` | ADR-021：保存识别信息并基于新字段重新 TMDB 匹配；替换旧候选，任务仍保持 AWAITING_CONFIRMATION，不自动确认 | `QueueRecognitionRequest` | `QueueRecognitionResponse` |
 | GET | `/api/queue/{id}/search?q={keyword}` | **Deprecated**：旧任务绑定搜索接口，前端新功能不再使用；保留兼容，结果不写入候选表 | — | `MatchResult[]` |
 | POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理；源文件不存在时任务转为 FAILED 并返回失败信息 | `ConfirmRequest` | — |
 | POST | `/api/queue/batch-confirm` | 批量人工确认；逐条提交后台整理，源文件缺失或单条提交失败不回滚整个批次 | `BatchConfirmRequest` | `BatchConfirmResponse` |
@@ -95,6 +97,29 @@ interface BatchConfirmResponse {
   }>
 }
 ```
+
+### QueueRecognitionRequest
+```typescript
+interface QueueRecognitionRequest {
+  mediaType: 'MOVIE' | 'TV_SHOW'
+  parsedTitle: string              // 必填，保存前会 trim
+  parsedYear: number | null        // 可为空
+  parsedSeason: number | null      // TV_SHOW 必填；MOVIE 保存时清空
+  parsedEpisode: number | null     // TV_SHOW 必填；MOVIE 保存时清空
+}
+```
+
+### QueueRecognitionResponse
+```typescript
+interface QueueRecognitionResponse {
+  task: MediaTask
+  candidates: TaskCandidate[]      // 仅保存时为原候选快照；保存并重新匹配时为替换后的候选快照
+}
+```
+
+> ADR-021 识别信息编辑接口只允许 `AWAITING_CONFIRMATION` 任务调用；`PENDING` / `PROCESSING` / `DONE` / `FAILED` / `SKIPPED` 均返回 `success=false`。
+> `PUT /api/queue/{id}/recognition` 只更新 `MediaTask.mediaType`、`parsedTitle`、`parsedYear`、`parsedSeason`、`parsedEpisode`，不会修改 `task_candidate`。
+> `POST /api/queue/{id}/recognition/rematch` 会先保存上述字段，再使用新的识别信息调用 TMDB 匹配并替换该任务旧候选；`matchConfidence` 更新为新首位候选置信度，若无候选则为 `null`。该接口不会触发高置信度自动确认。
 
 > 人工单条确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_SINGLE`；批量确认接口会快速返回提交结果，成功提交的任务先进入 `PROCESSING`，后台整理完成后最终状态仍为 `DONE`，`confirmationSource=MANUAL_BATCH`。系统高置信度自动采纳时 `confirmationSource=AUTO_MATCH`。
 > `POST /api/queue/batch-confirm` 支持来自全局手动搜索的候选：若 `tmdbId + mediaType` 不在该任务 `task_candidate` 中，后端确认时会新建候选记录并标记为 `selected=true`。

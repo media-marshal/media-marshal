@@ -3,6 +3,8 @@ import releaseNotes from './releaseNotes/zh'
 export default {
   appVersion: {
     title: '版本更新',
+    expand: '展开全部（还有 {count} 条）',
+    collapse: '收起',
     itemType: {
       feature: '新增',
       fix: '修复',
@@ -70,6 +72,22 @@ export default {
     skipSuccess: '任务已跳过',
     confidence: '置信度',
     parsedTitle: '解析标题',
+    parsedTitlePlaceholder: '输入当前有效的解析标题',
+    parsedYear: '解析年份',
+    parsedSeason: '季号',
+    parsedEpisode: '集号',
+    sourcePath: '源路径',
+    assetType: '资产类型',
+    resolution: '分辨率',
+    currentCandidate: '当前候选',
+    editRecognition: '编辑识别信息',
+    recognitionEditorTitle: '编辑识别信息',
+    saveRecognition: '仅保存',
+    saveAndRematch: '保存并重新匹配',
+    recognitionSaveSuccess: '识别信息已保存',
+    recognitionSaveFailed: '识别信息保存失败',
+    rematchSuccess: '识别信息已保存，候选已刷新',
+    rematchFailed: '按新识别信息重新匹配失败',
     mediaType: '媒体类型',
     episode: '季 / 集',
     season: '第 {season} 季',
@@ -130,6 +148,10 @@ export default {
     batchConfirmMessage: '本次将确认 {count} 个任务，其中 {lowConfidenceCount} 个候选置信度低于 60%。确认后会继续文件整理，操作不可直接撤销。',
     batchConfirmResult: '批量确认已提交：{success} 个进入整理，{failed} 个提交失败',
     batchConfirmUnknownError: '批量确认失败',
+    validation: {
+      titleRequired: '请先填写解析标题',
+      seasonEpisodeRequired: '剧集任务必须填写季号和集号',
+    },
   },
   task: {
     status: {

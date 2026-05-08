@@ -41,6 +41,15 @@ export const useMediaStore = defineStore('media', () => {
     if (task) task.status = status
   }
 
+  function updateTask(updatedTask: MediaTask) {
+    const index = tasks.value.findIndex((task) => task.id === updatedTask.id)
+    if (index >= 0) {
+      tasks.value[index] = updatedTask
+    } else {
+      tasks.value.unshift(updatedTask)
+    }
+  }
+
   async function confirmTask(id: number, tmdbId: number, mediaType: MediaType) {
     await mediaApi.confirmTask(id, tmdbId, mediaType)
     updateTaskStatus(id, 'PROCESSING')
@@ -69,6 +78,7 @@ export const useMediaStore = defineStore('media', () => {
     fetchTasks,
     fetchQueue,
     updateTaskStatus,
+    updateTask,
     confirmTask,
     skipTask,
     deleteTask,
