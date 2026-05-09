@@ -13,6 +13,8 @@ export const useMediaStore = defineStore('media', () => {
 
   const doneTasks = computed(() => tasks.value.filter((t) => t.status === 'DONE'))
 
+  const skippedTasks = computed(() => tasks.value.filter((t) => t.status === 'SKIPPED'))
+
   const failedTasks = computed(() => tasks.value.filter((t) => t.status === 'FAILED'))
 
   async function fetchTasks(status?: TaskStatus) {
@@ -74,6 +76,7 @@ export const useMediaStore = defineStore('media', () => {
     loading,
     queueTasks,
     doneTasks,
+    skippedTasks,
     failedTasks,
     fetchTasks,
     fetchQueue,

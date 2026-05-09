@@ -42,6 +42,9 @@ interface MediaTask {
   confirmationSource: 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | null
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
+  errorCode: 'TARGET_CONFLICT' | 'SOURCE_MISSING' | 'PIPELINE_FAILED' | null // status=FAILED 时用于系统内部判定和重复失败聚合
+  failureCount: number | null      // status=FAILED 时同源文件、同规则、同 errorCode 的累计失败次数
+  lastFailedAt: string | null      // 最近一次失败时间，ISO 8601
   errorMessage: string | null       // status=FAILED 时说明失败原因，如目标文件冲突
   skipReason: string | null         // status=SKIPPED 时说明跳过原因
   ruleId: number | null            // 触发此任务的 WatchRule ID
@@ -50,7 +53,8 @@ interface MediaTask {
 }
 ```
 
-> 前端任务列表“详情”列组合展示：`FAILED` 读取 `errorMessage`，`SKIPPED` 读取 `skipReason`。
+> 前端任务列表“详情”列组合展示：`FAILED` 读取 `failureCount` + `errorMessage`，`SKIPPED` 读取 `skipReason`。
+> 系统内部判断同类失败必须使用 `errorCode`，不能依赖 `errorMessage` 文案；重复失败聚合维度为 `sourcePath + ruleId + errorCode`，命中后只递增 `failureCount` 并刷新 `lastFailedAt` / `errorMessage`，不新增失败任务记录。扫描成功后历史失败记录保留，用于用户溯源。
 > `assetType` 文案：`VIDEO_FILE`=普通视频，`ISO_IMAGE`=ISO 镜像，`BLURAY_DIRECTORY`=蓝光原盘。v0.2.x 当前仅完整支持 `VIDEO_FILE` 和电影蓝光原盘；扫描到 ISO、裸 `sourceDir/BDMV`、剧集蓝光原盘时会记录为 `SKIPPED`，并通过 `skipReason` 返回原因。
 
 ---

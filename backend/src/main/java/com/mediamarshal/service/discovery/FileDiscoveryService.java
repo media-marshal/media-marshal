@@ -30,6 +30,7 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -736,6 +737,9 @@ public class FileDiscoveryService {
 
     private void markMissingSourceFailed(MediaTask task) {
         task.setStatus(MediaTask.TaskStatus.FAILED);
+        task.setErrorCode(MediaTask.TaskErrorCode.SOURCE_MISSING);
+        task.setFailureCount(task.getFailureCount() == null || task.getFailureCount() < 1 ? 1 : task.getFailureCount());
+        task.setLastFailedAt(LocalDateTime.now());
         task.setErrorMessage(MediaProcessPipeline.SOURCE_MISSING_ERROR_MESSAGE);
         mediaTaskRepository.save(task);
         eventPublisher.publishTaskFailed(task);

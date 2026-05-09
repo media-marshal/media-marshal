@@ -26,4 +26,11 @@ public interface MediaTaskRepository extends JpaRepository<MediaTask, Long> {
     Optional<MediaTask> findBySourcePath(String sourcePath);
 
     List<MediaTask> findByRuleIdAndStatusIn(Long ruleId, Collection<MediaTask.TaskStatus> statuses);
+
+    Optional<MediaTask> findFirstBySourcePathAndRuleIdAndStatusAndErrorCodeOrderByUpdatedAtDesc(
+            String sourcePath,
+            Long ruleId,
+            MediaTask.TaskStatus status,
+            MediaTask.TaskErrorCode errorCode
+    );
 }

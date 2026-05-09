@@ -66,6 +66,14 @@ public class MediaTask {
     /** 匹配置信度 0.0-1.0，低于阈值进入 AWAITING_CONFIRMATION */
     private Double matchConfidence;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private TaskErrorCode errorCode;
+
+    private Integer failureCount = 0;
+
+    private LocalDateTime lastFailedAt;
+
     /** 元数据确认来源，用于区分自动采纳、单条人工确认和批量人工确认。 */
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -128,5 +136,11 @@ public class MediaTask {
         AUTO_MATCH,
         MANUAL_SINGLE,
         MANUAL_BATCH
+    }
+
+    public enum TaskErrorCode {
+        TARGET_CONFLICT,
+        SOURCE_MISSING,
+        PIPELINE_FAILED
     }
 }

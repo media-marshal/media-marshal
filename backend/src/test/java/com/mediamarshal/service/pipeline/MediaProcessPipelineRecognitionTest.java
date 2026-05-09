@@ -6,8 +6,10 @@ import com.mediamarshal.model.dto.QueueRecognitionRequest;
 import com.mediamarshal.model.dto.QueueRecognitionResponse;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.TaskCandidate;
+import com.mediamarshal.model.exception.MediaTaskFailureException;
 import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.TaskCandidateRepository;
+import com.mediamarshal.notification.EmailNotificationService;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.matcher.MetadataMatcher;
 import com.mediamarshal.service.nfo.NfoGeneratorService;
@@ -16,7 +18,6 @@ import com.mediamarshal.service.rename.AssetOrganizerService;
 import com.mediamarshal.service.rename.FileOperationStrategy;
 import com.mediamarshal.service.settings.SettingsService;
 import com.mediamarshal.websocket.EventPublisher;
-import com.mediamarshal.notification.EmailNotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +39,8 @@ class MediaProcessPipelineRecognitionTest {
     private MediaTaskRepository taskRepository;
     private TaskCandidateRepository candidateRepository;
     private MetadataMatcher metadataMatcher;
+    private EventPublisher eventPublisher;
+    private EmailNotificationService emailNotificationService;
     private MediaProcessPipeline pipeline;
 
     @BeforeEach
@@ -44,6 +48,8 @@ class MediaProcessPipelineRecognitionTest {
         taskRepository = mock(MediaTaskRepository.class);
         candidateRepository = mock(TaskCandidateRepository.class);
         metadataMatcher = mock(MetadataMatcher.class);
+        eventPublisher = mock(EventPublisher.class);
+        emailNotificationService = mock(EmailNotificationService.class);
         pipeline = new MediaProcessPipeline(
                 mock(GuessitParserClient.class),
                 metadataMatcher,
@@ -53,8 +59,8 @@ class MediaProcessPipelineRecognitionTest {
                 candidateRepository,
                 mock(WatchRuleRepository.class),
                 mock(SettingsService.class),
-                mock(EventPublisher.class),
-                mock(EmailNotificationService.class),
+                eventPublisher,
+                emailNotificationService,
                 Map.<String, FileOperationStrategy>of()
         );
         when(taskRepository.save(any(MediaTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -134,6 +140,46 @@ class MediaProcessPipelineRecognitionTest {
         assertThatThrownBy(() -> pipeline.updateRecognition(1L, request))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Only awaiting confirmation tasks");
+    }
+
+    @Test
+    void recordFailureMergesSameSourceRuleAndErrorCode() {
+        MediaTask currentTask = new MediaTask();
+        currentTask.setId(1L);
+        currentTask.setSourcePath("D:/incoming/movie.mkv");
+        currentTask.setRuleId(9L);
+
+        MediaTask existingFailure = new MediaTask();
+        existingFailure.setId(2L);
+        existingFailure.setSourcePath("D:/incoming/movie.mkv");
+        existingFailure.setRuleId(9L);
+        existingFailure.setStatus(MediaTask.TaskStatus.FAILED);
+        existingFailure.setErrorCode(MediaTask.TaskErrorCode.TARGET_CONFLICT);
+        existingFailure.setFailureCount(1);
+
+        when(taskRepository.findFirstBySourcePathAndRuleIdAndStatusAndErrorCodeOrderByUpdatedAtDesc(
+                "D:/incoming/movie.mkv",
+                9L,
+                MediaTask.TaskStatus.FAILED,
+                MediaTask.TaskErrorCode.TARGET_CONFLICT
+        )).thenReturn(Optional.of(existingFailure));
+        when(candidateRepository.findByTask_IdOrderByRankAsc(1L)).thenReturn(List.of());
+
+        pipeline.recordFailure(
+                currentTask,
+                new MediaTaskFailureException(
+                        MediaTask.TaskErrorCode.TARGET_CONFLICT,
+                        "目标文件已存在，文件冲突"
+                )
+        );
+
+        assertThat(existingFailure.getFailureCount()).isEqualTo(2);
+        assertThat(existingFailure.getErrorMessage()).isEqualTo("目标文件已存在，文件冲突");
+        assertThat(existingFailure.getLastFailedAt()).isNotNull();
+        verify(taskRepository).save(existingFailure);
+        verify(taskRepository).delete(currentTask);
+        verify(eventPublisher).publishTaskFailed(existingFailure);
+        verify(emailNotificationService, never()).notifyTaskFailed(existingFailure);
     }
 
     private MediaTask awaitingTask() {

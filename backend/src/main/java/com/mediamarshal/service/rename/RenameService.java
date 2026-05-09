@@ -2,6 +2,7 @@ package com.mediamarshal.service.rename;
 
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.WatchRule;
+import com.mediamarshal.model.exception.MediaTaskFailureException;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.settings.SettingsService;
 import lombok.RequiredArgsConstructor;
@@ -82,7 +83,10 @@ public class RenameService {
         log.info("Rename plan: source='{}' -> target='{}'", task.getSourcePath(), target);
 
         if (Files.exists(target)) {
-            throw new IOException("目标文件已存在，文件冲突");
+            throw new MediaTaskFailureException(
+                    MediaTask.TaskErrorCode.TARGET_CONFLICT,
+                    "目标文件已存在，文件冲突"
+            );
         }
 
         // 6. 执行文件操作

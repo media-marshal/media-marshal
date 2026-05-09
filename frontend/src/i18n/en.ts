@@ -42,6 +42,8 @@ export default {
     pendingTasks: 'Pending',
     failedTasks: 'Failed',
     awaitingTasks: 'Awaiting Review',
+    skippedTasks: 'Skipped',
+    failureCount: 'Failed {count} times',
     deleteTaskConfirm: 'Delete this task record? This only removes the record and does not affect media files.',
     deleteTaskSuccess: 'Task record deleted',
     batchDelete: 'Batch Delete',

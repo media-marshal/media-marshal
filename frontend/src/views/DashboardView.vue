@@ -3,34 +3,31 @@
     <h2>{{ t('dashboard.title') }}</h2>
 
     <!-- 统计卡片 -->
-    <el-row :gutter="16" class="stat-cards">
-      <el-col :span="6">
-        <el-card shadow="never">
-          <el-statistic :title="t('dashboard.totalTasks')" :value="tasks.length" />
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="never">
-          <el-statistic :title="t('dashboard.doneTasks')" :value="doneTasks.length">
-            <template #suffix><span style="color: #67c23a">✓</span></template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="never">
-          <el-statistic :title="t('dashboard.awaitingTasks')" :value="queueTasks.length">
-            <template #suffix><span style="color: #e6a23c">!</span></template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="never">
-          <el-statistic :title="t('dashboard.failedTasks')" :value="failedTasks.length">
-            <template #suffix><span style="color: #f56c6c">✗</span></template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div class="stat-cards">
+      <el-card shadow="never">
+        <el-statistic :title="t('dashboard.totalTasks')" :value="tasks.length" />
+      </el-card>
+      <el-card shadow="never">
+        <el-statistic :title="t('dashboard.doneTasks')" :value="doneTasks.length">
+          <template #suffix><span style="color: #67c23a">✓</span></template>
+        </el-statistic>
+      </el-card>
+      <el-card shadow="never">
+        <el-statistic :title="t('dashboard.awaitingTasks')" :value="queueTasks.length">
+          <template #suffix><span style="color: #e6a23c">!</span></template>
+        </el-statistic>
+      </el-card>
+      <el-card shadow="never">
+        <el-statistic :title="t('dashboard.skippedTasks')" :value="skippedTasks.length">
+          <template #suffix><span style="color: #909399">-</span></template>
+        </el-statistic>
+      </el-card>
+      <el-card shadow="never">
+        <el-statistic :title="t('dashboard.failedTasks')" :value="failedTasks.length">
+          <template #suffix><span style="color: #f56c6c">✗</span></template>
+        </el-statistic>
+      </el-card>
+    </div>
 
     <!-- 最近任务列表 -->
     <el-card shadow="never" class="task-table-card">
@@ -115,9 +112,15 @@
           </template>
         </el-table-column>
         <el-table-column prop="confirmedTitle" :label="t('dashboard.matchedTitle')" width="200" show-overflow-tooltip />
-        <el-table-column :label="t('dashboard.details')" width="220" show-overflow-tooltip>
+        <el-table-column :label="t('dashboard.details')" width="280" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ taskDetails(row) }}
+            <div v-if="row.status === 'FAILED'" class="failure-detail">
+              <el-tag type="danger" size="small" effect="plain">
+                {{ t('dashboard.failureCount', { count: normalizedFailureCount(row) }) }}
+              </el-tag>
+              <span class="detail-message">{{ taskDetails(row) }}</span>
+            </div>
+            <span v-else>{{ taskDetails(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="matchConfidence" :label="t('dashboard.confidence')" width="90">
@@ -170,7 +173,7 @@ import type { MediaAssetType, MediaTask, MediaType, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
 const mediaStore = useMediaStore()
-const { tasks, loading, queueTasks, doneTasks, failedTasks } = storeToRefs(mediaStore)
+const { tasks, loading, queueTasks, doneTasks, skippedTasks, failedTasks } = storeToRefs(mediaStore)
 const { fetchTasks, deleteTask } = mediaStore
 const deletingId = ref<number | null>(null)
 const selectedTasks = ref<MediaTask[]>([])
@@ -272,6 +275,10 @@ function taskDetails(task: MediaTask) {
   return '-'
 }
 
+function normalizedFailureCount(task: MediaTask) {
+  return task.failureCount && task.failureCount > 0 ? task.failureCount : 1
+}
+
 function localizedTaskDetail(detail: string | null) {
   if (!detail) return '-'
 
@@ -350,6 +357,9 @@ h2 {
 }
 
 .stat-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
   margin-bottom: 24px;
 }
 
@@ -373,6 +383,20 @@ h2 {
   width: 138px;
 }
 
+.failure-detail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pagination-row {
   display: flex;
   justify-content: flex-end;
@@ -389,5 +413,17 @@ h2 {
 .created-time span:last-child {
   color: #909399;
   font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .stat-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .stat-cards {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

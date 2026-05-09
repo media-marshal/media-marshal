@@ -17,6 +17,7 @@ export type TaskStatus =
 export type MediaType = 'MOVIE' | 'TV_SHOW'
 export type MediaAssetType = 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
 export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH'
+export type TaskErrorCode = 'TARGET_CONFLICT' | 'SOURCE_MISSING' | 'PIPELINE_FAILED'
 export type DiscoveryMode = 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
 
 export interface MediaTask {
@@ -36,6 +37,9 @@ export interface MediaTask {
   confirmedYear: number | null
   confirmationSource: ConfirmationSource | null
   matchConfidence: number | null
+  errorCode: TaskErrorCode | null
+  failureCount: number | null
+  lastFailedAt: string | null
   operationType: string | null
   errorMessage: string | null
   skipReason: string | null

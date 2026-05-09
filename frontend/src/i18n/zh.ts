@@ -42,6 +42,8 @@ export default {
     pendingTasks: '待处理',
     failedTasks: '失败',
     awaitingTasks: '待确认',
+    skippedTasks: '已跳过',
+    failureCount: '失败 {count} 次',
     deleteTaskConfirm: '确认删除这条任务记录？此操作只删除记录，不影响媒体文件。',
     deleteTaskSuccess: '任务记录已删除',
     batchDelete: '批量删除',

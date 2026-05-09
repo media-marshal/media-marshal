@@ -3,6 +3,7 @@ package com.mediamarshal.service.rename;
 import com.mediamarshal.model.entity.MediaAssetType;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.WatchRule;
+import com.mediamarshal.model.exception.MediaTaskFailureException;
 import com.mediamarshal.repository.WatchRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +46,10 @@ public class BluRayDirectoryAssetOrganizer implements AssetOrganizerStrategy {
                 rule.getOperation(), sourceRoot, targetRoot);
 
         if (Files.exists(targetRoot)) {
-            throw new IOException("目标目录已存在，文件冲突");
+            throw new MediaTaskFailureException(
+                    MediaTask.TaskErrorCode.TARGET_CONFLICT,
+                    "目标文件已存在，文件冲突"
+            );
         }
 
         switch (rule.getOperation()) {

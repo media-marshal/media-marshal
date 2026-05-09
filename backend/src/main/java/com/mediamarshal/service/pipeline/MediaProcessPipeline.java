@@ -8,6 +8,7 @@ import com.mediamarshal.model.entity.MediaAssetType;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.TaskCandidate;
 import com.mediamarshal.model.entity.WatchRule;
+import com.mediamarshal.model.exception.MediaTaskFailureException;
 import com.mediamarshal.notification.EmailNotificationService;
 import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.TaskCandidateRepository;
@@ -29,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -173,11 +175,7 @@ public class MediaProcessPipeline {
 
         } catch (Exception e) {
             log.error("Pipeline failed: asset={}, taskId={}", asset.rootPath(), task.getId(), e);
-            task.setStatus(MediaTask.TaskStatus.FAILED);
-            task.setErrorMessage(e.getMessage());
-            taskRepository.save(task);
-            eventPublisher.publishTaskFailed(task);
-            emailNotificationService.notifyTaskFailed(task);
+            recordFailure(task, e);
         }
     }
 
@@ -345,13 +343,7 @@ public class MediaProcessPipeline {
             continueAfterMetadataConfirmed(task, match);
         } catch (Exception e) {
             log.error("Submitted manual confirmation failed: taskId={}", taskId, e);
-            taskRepository.findById(taskId).ifPresent(task -> {
-                task.setStatus(MediaTask.TaskStatus.FAILED);
-                task.setErrorMessage(e.getMessage());
-                taskRepository.save(task);
-                eventPublisher.publishTaskFailed(task);
-                emailNotificationService.notifyTaskFailed(task);
-            });
+            taskRepository.findById(taskId).ifPresent(task -> recordFailure(task, e));
         }
     }
 
@@ -366,13 +358,77 @@ public class MediaProcessPipeline {
     }
 
     private void failTaskBecauseSourceMissing(MediaTask task) {
+        recordFailure(
+                task,
+                new MediaTaskFailureException(
+                        MediaTask.TaskErrorCode.SOURCE_MISSING,
+                        SOURCE_MISSING_ERROR_MESSAGE
+                )
+        );
+        log.info("Task failed because source file is missing: taskId={}, sourcePath={}",
+                task.getId(), task.getSourcePath());
+    }
+
+    void recordFailure(MediaTask task, Exception error) {
+        MediaTask.TaskErrorCode errorCode = resolveErrorCode(error);
+        String errorMessage = resolveErrorMessage(error);
+        LocalDateTime now = LocalDateTime.now();
+
+        Optional<MediaTask> existingFailure = taskRepository
+                .findFirstBySourcePathAndRuleIdAndStatusAndErrorCodeOrderByUpdatedAtDesc(
+                        task.getSourcePath(),
+                        task.getRuleId(),
+                        MediaTask.TaskStatus.FAILED,
+                        errorCode
+                );
+
+        if (existingFailure.isPresent() && !Objects.equals(existingFailure.get().getId(), task.getId())) {
+            MediaTask existing = existingFailure.get();
+            existing.setFailureCount(nextFailureCount(existing.getFailureCount()));
+            existing.setLastFailedAt(now);
+            existing.setErrorCode(errorCode);
+            existing.setErrorMessage(errorMessage);
+            taskRepository.save(existing);
+
+            if (task.getId() != null) {
+                candidateRepository.deleteAll(candidateRepository.findByTask_IdOrderByRankAsc(task.getId()));
+                taskRepository.delete(task);
+            }
+
+            eventPublisher.publishTaskFailed(existing);
+            log.info("Repeated failure merged: sourcePath={}, errorCode={}, existingTaskId={}, failureCount={}",
+                    existing.getSourcePath(), errorCode, existing.getId(), existing.getFailureCount());
+            return;
+        }
+
         task.setStatus(MediaTask.TaskStatus.FAILED);
-        task.setErrorMessage(SOURCE_MISSING_ERROR_MESSAGE);
+        task.setErrorCode(errorCode);
+        task.setFailureCount(firstFailureCount(task.getFailureCount()));
+        task.setLastFailedAt(now);
+        task.setErrorMessage(errorMessage);
         taskRepository.save(task);
         eventPublisher.publishTaskFailed(task);
         emailNotificationService.notifyTaskFailed(task);
-        log.info("Task failed because source file is missing: taskId={}, sourcePath={}",
-                task.getId(), task.getSourcePath());
+    }
+
+    private MediaTask.TaskErrorCode resolveErrorCode(Exception error) {
+        if (error instanceof MediaTaskFailureException failureException) {
+            return failureException.getErrorCode();
+        }
+        return MediaTask.TaskErrorCode.PIPELINE_FAILED;
+    }
+
+    private String resolveErrorMessage(Exception error) {
+        String message = error.getMessage();
+        return message == null || message.isBlank() ? "任务处理失败" : message;
+    }
+
+    private int firstFailureCount(Integer current) {
+        return current == null || current < 1 ? 1 : current;
+    }
+
+    private int nextFailureCount(Integer current) {
+        return current == null || current < 1 ? 2 : current + 1;
     }
 
     private void fillParsedFields(MediaTask task, ParseResult parseResult) {
@@ -500,17 +556,16 @@ public class MediaProcessPipeline {
 
             task.setStatus(MediaTask.TaskStatus.DONE);
             task.setErrorMessage(null);
+            task.setErrorCode(null);
+            task.setFailureCount(0);
+            task.setLastFailedAt(null);
             taskRepository.save(task);
             eventPublisher.publishTaskDone(task);
             cleanupEmptySourceDirs(rule, sourceParent);
             log.info("Pipeline completed: taskId={}, target={}", task.getId(), target);
         } catch (Exception e) {
             log.error("Pipeline finalization failed: taskId={}", task.getId(), e);
-            task.setStatus(MediaTask.TaskStatus.FAILED);
-            task.setErrorMessage(e.getMessage());
-            taskRepository.save(task);
-            eventPublisher.publishTaskFailed(task);
-            emailNotificationService.notifyTaskFailed(task);
+            recordFailure(task, e);
         }
     }
 

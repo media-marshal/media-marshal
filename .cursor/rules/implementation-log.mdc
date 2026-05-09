@@ -2667,6 +2667,7 @@ alwaysApply: false
 - `mvn -q test`
 - `npm.cmd run type-check`
 - `npm.cmd run build`
+- `npm.cmd run build`
 
 ### 遗留问题
 - ADR-021 v1 仅支持单任务编辑，不支持批量识别信息编辑。
@@ -2697,3 +2698,37 @@ alwaysApply: false
 
 ### 遗留问题
 - 无
+
+---
+
+## [失败任务错误码与重复失败聚合] 2026-05-09
+
+### 完成内容
+- 为 `MediaTask` 引入 `errorCode`、`failureCount`、`lastFailedAt` 字段，错误码当前包含 `TARGET_CONFLICT`、`SOURCE_MISSING`、`PIPELINE_FAILED`。
+- 后端失败判定改为基于 `errorCode`：同一 `sourcePath + ruleId + errorCode` 的重复失败不再新增任务记录，只递增已有失败任务的 `failureCount`，并刷新失败时间与用户可读错误信息。
+- 目标文件/目录冲突通过 `MediaTaskFailureException` 统一映射为 `TARGET_CONFLICT`，源文件缺失映射为 `SOURCE_MISSING`，未分类异常暂归为 `PIPELINE_FAILED`。
+- 扫描成功后不删除历史失败记录，保留失败记录用于用户溯源。
+- 仪表盘新增“已跳过”任务数量统计；失败任务详情栏左侧显示“失败 x 次”标签，右侧显示 `errorMessage`。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/model/exception/MediaTaskFailureException.java`
+- `backend/src/main/java/com/mediamarshal/repository/MediaTaskRepository.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/BluRayDirectoryAssetOrganizer.java`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/stores/mediaStore.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+
+### 遗留问题
+- 错误码需要随后续失败类型继续补齐；当前未分类异常统一落到 `PIPELINE_FAILED`。
