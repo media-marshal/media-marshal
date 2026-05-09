@@ -80,7 +80,7 @@ export default {
     assetType: '资产类型',
     resolution: '分辨率',
     currentCandidate: '当前候选',
-    editRecognition: '编辑识别信息',
+    editRecognition: '编辑',
     recognitionEditorTitle: '编辑识别信息',
     saveRecognition: '仅保存',
     saveAndRematch: '保存并重新匹配',

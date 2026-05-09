@@ -34,6 +34,7 @@ parser/dist/
 # Cursor IDE（只提交 rules/，忽略缓存和用户偏好）
 .cursor/*
 !.cursor/rules/
+pet-runs
 
 # ── Docker / Dev ─────────────────────────────────────────────
 dev-data/

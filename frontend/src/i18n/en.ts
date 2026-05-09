@@ -80,7 +80,7 @@ export default {
     assetType: 'Asset Type',
     resolution: 'Resolution',
     currentCandidate: 'Current Candidate',
-    editRecognition: 'Edit Recognition',
+    editRecognition: 'Edit',
     recognitionEditorTitle: 'Edit Recognition Info',
     saveRecognition: 'Save Only',
     saveAndRematch: 'Save and Rematch',

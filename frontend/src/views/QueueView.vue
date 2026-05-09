@@ -212,12 +212,6 @@
           </el-descriptions-item>
         </el-descriptions>
 
-        <div class="recognition-actions">
-          <el-button size="small" @click="openRecognitionEditor(task)">
-            {{ t('queue.editRecognition') }}
-          </el-button>
-        </div>
-
         <div class="candidate-section">
           <div class="section-title">
             <span>{{ t('queue.candidates') }}</span>
@@ -294,6 +288,14 @@
           >
             {{ t('queue.confirm') }}
           </el-button>
+          <el-button
+            type="warning"
+            plain
+            :loading="actionLoadingByTask[task.id]"
+            @click="openRecognitionEditor(task)"
+          >
+            {{ t('queue.editRecognition') }}
+          </el-button>
           <el-button :loading="actionLoadingByTask[task.id]" @click="handleSkip(task.id)">
             {{ t('queue.skip') }}
           </el-button>
@@ -321,11 +323,9 @@
           <el-input :model-value="recognitionTask?.sourcePath || ''" readonly disabled />
         </el-form-item>
         <el-form-item :label="t('queue.assetType')">
-          <div class="readonly-value">
-            <el-tag :type="assetTypeTagType(recognitionTask?.assetType)">
-              {{ t(`task.assetType.${recognitionTask?.assetType || 'VIDEO_FILE'}`) }}
-            </el-tag>
-          </div>
+          <el-tag :type="assetTypeTagType(recognitionTask?.assetType)">
+            {{ t(`task.assetType.${recognitionTask?.assetType || 'VIDEO_FILE'}`) }}
+          </el-tag>
         </el-form-item>
         <el-form-item :label="t('queue.mediaType')">
           <el-select v-model="recognitionForm.mediaType" class="recognition-field">
@@ -1203,12 +1203,6 @@ h2 {
 }
 
 .task-meta {
-  margin-bottom: 10px;
-}
-
-.recognition-actions {
-  display: flex;
-  justify-content: flex-end;
   margin-bottom: 18px;
 }
 
@@ -1349,6 +1343,10 @@ h2 {
   gap: 10px;
 }
 
+.actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
 .pagination-row {
   display: flex;
   justify-content: flex-end;
@@ -1368,17 +1366,6 @@ h2 {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.readonly-value {
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 11px;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  background: #f5f7fa;
-  color: #a8abb2;
 }
 
 @media (max-width: 760px) {
