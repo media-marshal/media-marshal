@@ -1,20 +1,25 @@
 services:
 
-  # ── Java 主服务 ─────────────────────────────────────────
+  # Java backend service
   media-marshal:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-}
+    image: media-marshal/media-marshal:${MEDIA_MARSHAL_IMAGE_TAG:-latest}
+    pull_policy: build
     container_name: media-marshal
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${MEDIA_MARSHAL_HTTP_PORT:-8080}:8080"
     volumes:
-      - mm_data:/data               # SQLite 数据库文件
-      - ${MEDIA_DIRS:-/media}:/media # 媒体库目录（宿主机挂载）
+      - mm_data:/data
+      - ${MEDIA_DIRS:-/media}:/media
     environment:
       - MEDIA_MARSHAL_PARSER_URL=http://parser:8000
       - MEDIA_MARSHAL_CONFIDENCE_THRESHOLD=${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:-0.8}
+      - MEDIA_MARSHAL_DEBUG=${MEDIA_MARSHAL_DEBUG:-false}
       - MEDIA_MARSHAL_EMAIL_ENABLED=${MEDIA_MARSHAL_EMAIL_ENABLED:-false}
       - MEDIA_MARSHAL_EMAIL_RECIPIENT=${MEDIA_MARSHAL_EMAIL_RECIPIENT:-}
       - MEDIA_MARSHAL_MAIL_HOST=${MEDIA_MARSHAL_MAIL_HOST:-}
@@ -27,11 +32,15 @@ services:
     networks:
       - mm_net
 
-  # ── Portal 前端（Nginx）──────────────────────────────────
+  # Portal frontend served by Nginx
   portal:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+    image: media-marshal/media-marshal-portal:${MEDIA_MARSHAL_IMAGE_TAG:-latest}
+    pull_policy: build
     container_name: media-marshal-portal
     restart: unless-stopped
     ports:
@@ -41,14 +50,15 @@ services:
     networks:
       - mm_net
 
-  # ── guessit Python Sidecar ────────────────────────────────
+  # guessit Python sidecar, available only inside the compose network
   parser:
     build:
       context: .
       dockerfile: parser/Dockerfile
+    image: media-marshal/media-marshal-parser:${MEDIA_MARSHAL_IMAGE_TAG:-latest}
+    pull_policy: build
     container_name: media-marshal-parser
     restart: unless-stopped
-    # 不对外暴露端口，仅内部网络访问
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()"]
       interval: 10s
