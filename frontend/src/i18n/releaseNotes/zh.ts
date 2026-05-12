@@ -4,6 +4,7 @@ export default {
       queueRecognitionEditor: 'Queue 待确认任务支持编辑当前有效识别信息，可直接修正媒体类型、解析标题、年份、季号和集号。',
       queueRecognitionRematch: '新增“保存并重新匹配”，会基于修正后的识别信息刷新 TMDB 候选，但不会自动确认任务。',
       reviewSearchContext: '编辑识别信息后，全局手动搜索会使用新的媒体类型和标题作为默认上下文。',
+      queueResolutionDisplay: '待确认任务列表新增分辨率字段，便于确认任务时快速识别片源规格。',
       releaseNoteFolding: '优化版本更新面板，每个版本默认展示最多 5 条变更，更多内容可按需展开查看。',
       recognitionValidation: '补齐识别信息编辑校验：标题必填，剧集任务必须填写季号和集号，电影任务会清空季集字段。',
     },

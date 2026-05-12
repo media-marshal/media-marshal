@@ -8,6 +8,7 @@ export const releaseNotes: ReleaseNote[] = [
       { type: 'feature', key: 'releaseNotes.v0_2_5.items.queueRecognitionEditor' },
       { type: 'feature', key: 'releaseNotes.v0_2_5.items.queueRecognitionRematch' },
       { type: 'optimization', key: 'releaseNotes.v0_2_5.items.reviewSearchContext' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_5.items.queueResolutionDisplay' },
       { type: 'optimization', key: 'releaseNotes.v0_2_5.items.releaseNoteFolding' },
       { type: 'fix', key: 'releaseNotes.v0_2_5.items.recognitionValidation' },
     ],

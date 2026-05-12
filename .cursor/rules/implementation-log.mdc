@@ -2732,3 +2732,26 @@ alwaysApply: false
 
 ### 遗留问题
 - 错误码需要随后续失败类型继续补齐；当前未分类异常统一落到 `PIPELINE_FAILED`。
+---
+
+## [Queue 待确认任务分辨率展示] 2026-05-11
+
+### 完成内容
+- Queue 待确认任务卡片摘要新增「分辨率」字段。
+- 任务摘要从标题、类型、季集 3 项扩展为标题、类型、季集、分辨率 4 项。
+- 分辨率缺失时展示既有的未知文案。
+- 同步更新 v0.2.5 ReleaseNote 中英文记录。
+
+### 影响文件
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无

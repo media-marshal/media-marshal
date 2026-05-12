@@ -200,7 +200,7 @@
           </div>
         </template>
 
-        <el-descriptions :column="3" size="small" border class="task-meta">
+        <el-descriptions :column="4" size="small" border class="task-meta">
           <el-descriptions-item :label="t('queue.parsedTitle')">
             {{ formatParsedTitle(task) }}
           </el-descriptions-item>
@@ -209,6 +209,9 @@
           </el-descriptions-item>
           <el-descriptions-item :label="t('queue.episode')">
             {{ formatSeasonEpisode(task) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('queue.resolution')">
+            {{ formatResolution(task) }}
           </el-descriptions-item>
         </el-descriptions>
 
@@ -1002,6 +1005,10 @@ function formatSeasonEpisode(task: MediaTask) {
   if (task.parsedSeason != null) parts.push(t('queue.season', { season: task.parsedSeason }))
   if (task.parsedEpisode != null) parts.push(t('queue.episodeNumber', { episode: task.parsedEpisode }))
   return parts.join(' / ')
+}
+
+function formatResolution(task: MediaTask) {
+  return task.parsedResolution || t('queue.unknown')
 }
 
 function formatConfidence(confidence: number | null) {
