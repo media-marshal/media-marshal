@@ -6,8 +6,8 @@ services:
     ports:
       - "${MEDIA_MARSHAL_HTTP_PORT:-8080}:8080"
     volumes:
-      - /opt/media-marshal/data:/data # 配置存储路径
-      - ${MEDIA_DIRS:-/Resources}:/Resources # 媒体库目录（宿主机挂载）
+      - /opt/media-marshal/data:/data
+      - ${MEDIA_DIRS:-/media}:/media
     environment:
       - MEDIA_MARSHAL_PARSER_URL=http://parser:8000
       - MEDIA_MARSHAL_CONFIDENCE_THRESHOLD=${MEDIA_MARSHAL_CONFIDENCE_THRESHOLD:-0.8}
@@ -39,8 +39,6 @@ services:
     image: ghcr.io/media-marshal/media-marshal-parser:${MEDIA_MARSHAL_IMAGE_TAG:-alpha}
     container_name: media-marshal-parser
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()"]
       interval: 10s
