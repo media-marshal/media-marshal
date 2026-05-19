@@ -31,6 +31,7 @@ export interface MediaTask {
   parsedYear: number | null
   parsedSeason: number | null
   parsedEpisode: number | null
+  parsedEpisodeEnd: number | null
   parsedResolution: string | null
   tmdbId: number | null
   confirmedTitle: string | null
@@ -107,6 +108,7 @@ export interface QueueRecognitionRequest {
   parsedYear: number | null
   parsedSeason: number | null
   parsedEpisode: number | null
+  parsedEpisodeEnd: number | null
 }
 
 export interface QueueRecognitionResponse {

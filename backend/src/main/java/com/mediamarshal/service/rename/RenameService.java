@@ -148,7 +148,7 @@ public class RenameService {
                 .tmdbId(task.getTmdbId())
                 .mediaType(task.getMediaType() != null ? task.getMediaType().name() : null)
                 .season(task.getParsedSeason())
-                .episode(task.getParsedEpisode())
+                .episode(toTemplateEpisode(task))
                 .ext(ext)
                 .titleInitial(resolveTitleInitial(task.getConfirmedTitle()))
                 .resolution(task.getParsedResolution())
@@ -160,6 +160,16 @@ public class RenameService {
                 .codec(null)
                 .releaseGroup(null)
                 .build();
+    }
+
+    private Object toTemplateEpisode(MediaTask task) {
+        if (task.getParsedEpisode() == null) {
+            return null;
+        }
+        if (task.getParsedEpisodeEnd() == null) {
+            return task.getParsedEpisode();
+        }
+        return new TemplateRange(task.getParsedEpisode(), task.getParsedEpisodeEnd());
     }
 
     String resolveTitleInitial(String title) {

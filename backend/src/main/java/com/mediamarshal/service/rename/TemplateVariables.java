@@ -47,7 +47,7 @@ public class TemplateVariables {
 
     /** 集号（原始数值，用于 {episode} 和格式化变体） */
     @TemplateVar("episode")
-    private Integer episode;
+    private Object episode;
 
     /** TMDB 分集标题（预留，v1 不填充） */
     @TemplateVar("episode_title")

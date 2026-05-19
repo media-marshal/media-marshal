@@ -457,6 +457,7 @@ const recognitionForm = reactive<QueueRecognitionRequest>({
   parsedYear: null,
   parsedSeason: null,
   parsedEpisode: null,
+  parsedEpisodeEnd: null,
 })
 
 const sortedQueueTasks = computed(() => {
@@ -576,6 +577,7 @@ watch(() => recognitionForm.mediaType, (mediaType) => {
   if (mediaType === 'MOVIE') {
     recognitionForm.parsedSeason = null
     recognitionForm.parsedEpisode = null
+    recognitionForm.parsedEpisodeEnd = null
   }
 })
 
@@ -840,6 +842,7 @@ function openRecognitionEditor(task: MediaTask) {
   recognitionForm.parsedYear = task.parsedYear
   recognitionForm.parsedSeason = task.parsedSeason
   recognitionForm.parsedEpisode = task.parsedEpisode
+  recognitionForm.parsedEpisodeEnd = task.parsedEpisodeEnd
   globalSearchMediaType.value = recognitionForm.mediaType
   if (recognitionForm.parsedTitle) {
     globalSearchKeyword.value = recognitionForm.parsedTitle
@@ -900,6 +903,7 @@ function buildRecognitionRequest(): QueueRecognitionRequest {
     parsedYear: recognitionForm.parsedYear,
     parsedSeason: recognitionForm.mediaType === 'TV_SHOW' ? recognitionForm.parsedSeason : null,
     parsedEpisode: recognitionForm.mediaType === 'TV_SHOW' ? recognitionForm.parsedEpisode : null,
+    parsedEpisodeEnd: recognitionForm.mediaType === 'TV_SHOW' ? recognitionForm.parsedEpisodeEnd : null,
   }
 }
 
@@ -1003,7 +1007,12 @@ function formatSeasonEpisode(task: MediaTask) {
   if (task.parsedSeason == null && task.parsedEpisode == null) return t('queue.notApplicable')
   const parts: string[] = []
   if (task.parsedSeason != null) parts.push(t('queue.season', { season: task.parsedSeason }))
-  if (task.parsedEpisode != null) parts.push(t('queue.episodeNumber', { episode: task.parsedEpisode }))
+  if (task.parsedEpisode != null) {
+    const episode = task.parsedEpisodeEnd != null
+      ? `${task.parsedEpisode}-${task.parsedEpisodeEnd}`
+      : task.parsedEpisode
+    parts.push(t('queue.episodeNumber', { episode }))
+  }
   return parts.join(' / ')
 }
 

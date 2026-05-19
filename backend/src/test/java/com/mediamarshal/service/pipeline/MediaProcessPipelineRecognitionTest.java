@@ -71,6 +71,7 @@ class MediaProcessPipelineRecognitionTest {
         MediaTask task = awaitingTask();
         task.setParsedSeason(1);
         task.setParsedEpisode(2);
+        task.setParsedEpisodeEnd(3);
         when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
         when(candidateRepository.findByTask_IdOrderByRankAsc(1L)).thenReturn(List.of());
 
@@ -88,6 +89,7 @@ class MediaProcessPipelineRecognitionTest {
         assertThat(response.task().getParsedYear()).isEqualTo(1999);
         assertThat(response.task().getParsedSeason()).isNull();
         assertThat(response.task().getParsedEpisode()).isNull();
+        assertThat(response.task().getParsedEpisodeEnd()).isNull();
     }
 
     @Test
@@ -113,6 +115,7 @@ class MediaProcessPipelineRecognitionTest {
         request.setParsedYear(2024);
         request.setParsedSeason(2);
         request.setParsedEpisode(3);
+        request.setParsedEpisodeEnd(4);
 
         QueueRecognitionResponse response = pipeline.updateRecognitionAndRematch(1L, request);
 
@@ -122,6 +125,7 @@ class MediaProcessPipelineRecognitionTest {
         assertThat(parseCaptor.getValue().getType()).isEqualTo("episode");
         assertThat(parseCaptor.getValue().getSeason()).isEqualTo(2);
         assertThat(parseCaptor.getValue().getEpisode()).isEqualTo(3);
+        assertThat(parseCaptor.getValue().getEpisodeEnd()).isEqualTo(4);
         verify(candidateRepository).deleteAll(List.of(oldCandidate));
         assertThat(response.task().getMatchConfidence()).isEqualTo(0.92);
         assertThat(response.candidates()).containsExactly(newCandidate);
@@ -140,6 +144,23 @@ class MediaProcessPipelineRecognitionTest {
         assertThatThrownBy(() -> pipeline.updateRecognition(1L, request))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Only awaiting confirmation tasks");
+    }
+
+    @Test
+    void updateRecognitionRejectsEpisodeRangeEndBeforeStart() {
+        MediaTask task = awaitingTask();
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+        QueueRecognitionRequest request = new QueueRecognitionRequest();
+        request.setMediaType("TV_SHOW");
+        request.setParsedTitle("Friends");
+        request.setParsedSeason(1);
+        request.setParsedEpisode(17);
+        request.setParsedEpisodeEnd(16);
+
+        assertThatThrownBy(() -> pipeline.updateRecognition(1L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Episode range end");
     }
 
     @Test

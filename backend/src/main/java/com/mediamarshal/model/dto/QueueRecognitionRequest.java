@@ -14,4 +14,6 @@ public class QueueRecognitionRequest {
     private Integer parsedSeason;
 
     private Integer parsedEpisode;
+
+    private Integer parsedEpisodeEnd;
 }

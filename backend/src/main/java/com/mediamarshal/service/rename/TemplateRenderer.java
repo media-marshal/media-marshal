@@ -4,45 +4,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * 命名模板渲染引擎（ADR-001）
- *
- * 通过反射扫描 TemplateVariables 中的 @TemplateVar 字段，自动构建替换 Map，
- * 再将模板字符串中的占位符替换为实际值。
- *
- * 支持的占位符格式：
- *   {varname}        → 直接 toString，如 {title} → "The Dark Knight"
- *   {varname:02d}    → 数值格式化，如 {season:02d} → "03"（对应 String.format("%02d", value)）
- *   [[ ... ]]        → 可选片段；片段内任意变量缺失时移除整个片段
- *
- * Null 值处理：占位符保持原样（不替换）。
- * 这样用户能从路径中看出哪个变量未被填充，便于调试。
- */
 @Slf4j
 @Component
 public class TemplateRenderer {
 
-    /**
-     * 匹配 {varname} 或 {varname:format} 的正则
-     * group(1) = varname，group(2) = format（可为 null）
-     */
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+)(?::([^}]+))?}");
-
-    /** 匹配 ADR-017 的一层可选片段 [[ ... ]]，v1 不支持嵌套。 */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+)(?::([^;}]+))?(?:;([^}]+))?}");
     private static final Pattern OPTIONAL_SEGMENT = Pattern.compile("\\[\\[(.*?)]\\]");
 
-    /**
-     * 渲染模板字符串
-     *
-     * @param template  模板字符串，如 "{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}"
-     * @param variables 变量袋
-     * @return 渲染后的路径字符串（不含目标根目录）
-     */
     public String render(String template, TemplateVariables variables) {
         Map<String, Object> varMap = buildVarMap(variables);
         log.debug("Rendering template='{}' with vars={}", template, varMap);
@@ -84,32 +59,88 @@ public class TemplateRenderer {
 
         while (matcher.find()) {
             String varName = matcher.group(1);
-            String format = matcher.group(2);   // null if no format specifier
+            String format = matcher.group(2);
+            TemplatePlaceholderOptions options = TemplatePlaceholderOptions.parse(matcher.group(3));
             Object value = varMap.get(varName);
 
             if (value == null) {
-                // 变量未填充，保持占位符原样
                 matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(0)));
                 log.debug("Variable '{}' is null, keeping placeholder", varName);
                 continue;
             }
 
-            String rendered = applyFormat(varName, value, format);
+            String rendered = renderValue(varName, value, format, options);
             matcher.appendReplacement(result, Matcher.quoteReplacement(rendered));
         }
         matcher.appendTail(result);
         return result.toString();
     }
 
-    /**
-     * 应用格式化规则
-     * 目前仅支持整数的 printf 风格格式（02d、04d 等）
-     */
+    private String renderValue(String varName, Object value, String format, TemplatePlaceholderOptions options) {
+        TemplateRange range = toTemplateRange(varName, value);
+        if (range != null) {
+            return renderRange(varName, range, format, options);
+        }
+        return applyAffixes(applyFormat(varName, value, format), options);
+    }
+
+    private TemplateRange toTemplateRange(String varName, Object value) {
+        if (value instanceof TemplateRange range) {
+            return range;
+        }
+        if (value instanceof Iterable<?> iterable && !(value instanceof CharSequence)) {
+            List<Integer> values = new ArrayList<>();
+            for (Object item : iterable) {
+                if (!(item instanceof Number number)) {
+                    log.warn("Range rendering ignored for non-numeric iterable variable '{}'", varName);
+                    return null;
+                }
+                values.add(number.intValue());
+            }
+            if (values.isEmpty()) {
+                return null;
+            }
+            validateContiguousRange(varName, values);
+            return new TemplateRange(values.getFirst(), values.size() == 1 ? null : values.getLast());
+        }
+        return null;
+    }
+
+    private void validateContiguousRange(String varName, List<Integer> values) {
+        for (int i = 1; i < values.size(); i++) {
+            if (values.get(i) != values.get(i - 1) + 1) {
+                throw new IllegalArgumentException(
+                        "Only contiguous ranges are supported for template variable '" + varName + "': " + values
+                );
+            }
+        }
+    }
+
+    private String renderRange(
+            String varName,
+            TemplateRange range,
+            String format,
+            TemplatePlaceholderOptions options
+    ) {
+        String start = applyFormat(varName, range.start(), format);
+        if (!range.isRange()) {
+            return applyAffixes(start, options);
+        }
+
+        String end = applyFormat(varName, range.end(), format);
+        String startToken = options.prefix() + start + (options.repeatSuffix() ? options.suffix() : "");
+        String endToken = (options.repeatPrefix() ? options.prefix() : "") + end + options.suffix();
+        return startToken + options.separator() + endToken;
+    }
+
+    private String applyAffixes(String value, TemplatePlaceholderOptions options) {
+        return options.prefix() + value + options.suffix();
+    }
+
     private String applyFormat(String varName, Object value, String format) {
         if (format == null) {
             return String.valueOf(value);
         }
-        // 仅对数值类型应用格式化
         if (value instanceof Number number) {
             try {
                 return String.format("%" + format, number.intValue());
@@ -123,14 +154,13 @@ public class TemplateRenderer {
         return String.valueOf(value);
     }
 
-    /**
-     * 通过反射扫描 @TemplateVar 注解，构建 varName → value 映射
-     */
     private Map<String, Object> buildVarMap(TemplateVariables variables) {
         Map<String, Object> map = new HashMap<>();
         for (Field field : TemplateVariables.class.getDeclaredFields()) {
             TemplateVar annotation = field.getAnnotation(TemplateVar.class);
-            if (annotation == null) continue;
+            if (annotation == null) {
+                continue;
+            }
             field.setAccessible(true);
             try {
                 Object value = field.get(variables);
@@ -140,5 +170,71 @@ public class TemplateRenderer {
             }
         }
         return map;
+    }
+
+    private record TemplatePlaceholderOptions(
+            String prefix,
+            String suffix,
+            String separator,
+            boolean repeatPrefix,
+            boolean repeatSuffix
+    ) {
+        private static final String PREFIX = "prefix";
+        private static final String SUFFIX = "suffix";
+        private static final String SEPARATOR = "separator";
+        private static final String REPEAT_PREFIX = "repeatPrefix";
+        private static final String REPEAT_SUFFIX = "repeatSuffix";
+
+        static TemplatePlaceholderOptions parse(String rawParams) {
+            Map<String, String> params = parseParams(rawParams);
+            return new TemplatePlaceholderOptions(
+                    params.getOrDefault(PREFIX, ""),
+                    params.getOrDefault(SUFFIX, ""),
+                    params.getOrDefault(SEPARATOR, "-"),
+                    parseBoolean(params.get(REPEAT_PREFIX), true),
+                    parseBoolean(params.get(REPEAT_SUFFIX), true)
+            );
+        }
+
+        private static Map<String, String> parseParams(String rawParams) {
+            Map<String, String> params = new HashMap<>();
+            if (rawParams == null || rawParams.isBlank()) {
+                return params;
+            }
+            for (String token : rawParams.split(";")) {
+                int equalsIndex = token.indexOf('=');
+                if (equalsIndex <= 0) {
+                    throw new IllegalArgumentException("Invalid template parameter: " + token);
+                }
+                String key = token.substring(0, equalsIndex).trim();
+                String value = token.substring(equalsIndex + 1);
+                if (!isSupportedParam(key)) {
+                    throw new IllegalArgumentException("Unsupported template parameter: " + key);
+                }
+                params.put(key, value);
+            }
+            return params;
+        }
+
+        private static boolean isSupportedParam(String key) {
+            return PREFIX.equals(key)
+                    || SUFFIX.equals(key)
+                    || SEPARATOR.equals(key)
+                    || REPEAT_PREFIX.equals(key)
+                    || REPEAT_SUFFIX.equals(key);
+        }
+
+        private static boolean parseBoolean(String value, boolean defaultValue) {
+            if (value == null || value.isBlank()) {
+                return defaultValue;
+            }
+            if ("true".equalsIgnoreCase(value)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(value)) {
+                return false;
+            }
+            throw new IllegalArgumentException("Boolean template parameter must be true or false: " + value);
+        }
     }
 }

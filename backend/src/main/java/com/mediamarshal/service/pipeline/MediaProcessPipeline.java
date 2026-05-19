@@ -289,11 +289,23 @@ public class MediaProcessPipeline {
             }
             task.setParsedSeason(request.getParsedSeason());
             task.setParsedEpisode(request.getParsedEpisode());
+            task.setParsedEpisodeEnd(normalizeParsedEpisodeEnd(request.getParsedEpisode(), request.getParsedEpisodeEnd()));
         } else {
             task.setParsedSeason(null);
             task.setParsedEpisode(null);
+            task.setParsedEpisodeEnd(null);
         }
         return taskRepository.save(task);
+    }
+
+    private Integer normalizeParsedEpisodeEnd(Integer episodeStart, Integer episodeEnd) {
+        if (episodeStart == null || episodeEnd == null || episodeEnd.equals(episodeStart)) {
+            return null;
+        }
+        if (episodeEnd < episodeStart) {
+            throw new IllegalArgumentException("Episode range end must be greater than the start episode");
+        }
+        return episodeEnd;
     }
 
     private MediaTask.MediaType parseRecognitionMediaType(String mediaType) {
@@ -313,6 +325,7 @@ public class MediaProcessPipeline {
         parseResult.setYear(task.getParsedYear());
         parseResult.setSeason(task.getParsedSeason());
         parseResult.setEpisode(task.getParsedEpisode());
+        parseResult.setEpisodeEnd(task.getParsedEpisodeEnd());
         parseResult.setScreenSize(task.getParsedResolution());
         applyMediaTypeToParseResult(parseResult, task.getMediaType());
         return parseResult;
@@ -436,6 +449,7 @@ public class MediaProcessPipeline {
         task.setParsedYear(parseResult.getYear());
         task.setParsedSeason(parseResult.getSeason());
         task.setParsedEpisode(parseResult.getEpisode());
+        task.setParsedEpisodeEnd(parseResult.getEpisodeEnd());
         task.setParsedResolution(parseResult.getScreenSize());
         taskRepository.save(task);
     }
