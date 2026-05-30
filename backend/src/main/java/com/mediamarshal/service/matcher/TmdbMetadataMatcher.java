@@ -53,13 +53,14 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
         List<SearchCall> searchCalls = new ArrayList<>();
         for (String endpoint : endpoints) {
             for (TitleSearchQuery query : plan.queries()) {
-                SearchResponse response = callTmdbSearch(endpoint, query.query(), parseResult.getYear());
+                Integer searchYear = resolveSearchYear(endpoint, parseResult);
+                SearchResponse response = callTmdbSearch(endpoint, query.query(), searchYear);
                 JsonNode root = response.root();
                 if (root == null) continue;
                 JsonNode items = root.path("results");
-                searchCalls.add(new SearchCall(endpoint, query.query(), parseResult.getYear(),
+                searchCalls.add(new SearchCall(endpoint, query.query(), searchYear,
                         response.cacheStatus(), items.isArray() ? items.size() : 0));
-                if (isEmptyItems(items) && parseResult.getYear() != null) {
+                if (isEmptyItems(items) && searchYear != null) {
                     response = callTmdbSearch(endpoint, query.query(), null);
                     root = response.root();
                     if (root == null) continue;
@@ -112,6 +113,17 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                             .toList());
         }
         return results;
+    }
+
+    static Integer resolveSearchYear(String endpoint, ParseResult parseResult) {
+        if ("tv".equals(endpoint) && isLaterSeasonTv(parseResult)) {
+            return null;
+        }
+        return parseResult.getYear();
+    }
+
+    private static boolean isLaterSeasonTv(ParseResult parseResult) {
+        return parseResult.getSeason() != null && parseResult.getSeason() >= 2;
     }
 
     @Override

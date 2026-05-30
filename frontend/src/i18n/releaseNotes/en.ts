@@ -1,4 +1,10 @@
 export default {
+  v0_2_7: {
+    items: {
+      laterSeasonYearMatching: 'Improved automatic matching for multi-season TV shows: years on season 2 and later are treated as season air years instead of lowering confidence against TMDB first-air years.',
+      laterSeasonYearSearch: 'Fixed later-season TV files missing the correct TMDB candidate or falling below confidence because of year-filtered searches.',
+    },
+  },
   v0_2_6: {
     items: {
       multiEpisodeParsing: 'Added support for contiguous multi-episode parser results such as episode [16, 17] and [21, 22, ... 28].',

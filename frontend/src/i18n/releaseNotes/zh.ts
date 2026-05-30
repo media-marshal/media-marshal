@@ -1,4 +1,10 @@
 export default {
+  v0_2_7: {
+    items: {
+      laterSeasonYearMatching: '优化多季剧集自动识别：第二季及后续季的文件年份会按季播出年份处理，不再误扣 TMDB 首播年份置信度。',
+      laterSeasonYearSearch: '修复后续季因年份过滤导致正确 TMDB 剧集候选缺失或置信度偏低的问题。',
+    },
+  },
   v0_2_6: {
     items: {
       multiEpisodeParsing: '新增连续多集解析支持，可处理 episode [16, 17] 和 [21, 22, ... 28] 这类结果。',

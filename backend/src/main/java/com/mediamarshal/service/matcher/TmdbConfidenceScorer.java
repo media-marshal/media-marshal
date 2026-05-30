@@ -17,7 +17,7 @@ class TmdbConfidenceScorer {
 
     TmdbScore score(ParseResult parseResult, MatchResult candidate, TitleSearchPlan plan,
                     TitleSearchQuery matchedQuery, int searchResultCount) {
-        double yearScore = yearScore(parseResult.getYear(), candidate.getYear());
+        double yearScore = yearScore(parseResult, candidate);
         double mediaTypeScore = mediaTypeScore(parseResult, candidate);
         TitleScore titleScore = titleScore(candidate, plan.queries(), matchedQuery, searchResultCount, yearScore, mediaTypeScore);
         double structureBonus = structureBonus(candidate, plan);
@@ -82,7 +82,33 @@ class TmdbConfidenceScorer {
         return value != null && value.chars().anyMatch(ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
     }
 
-    private double yearScore(Integer parsedYear, Integer candidateYear) {
+    private double yearScore(ParseResult parseResult, MatchResult candidate) {
+        if (isLaterSeasonTv(parseResult, candidate)) {
+            return laterSeasonTvYearScore(parseResult.getYear(), candidate.getYear());
+        }
+        return exactReleaseYearScore(parseResult.getYear(), candidate.getYear());
+    }
+
+    private boolean isLaterSeasonTv(ParseResult parseResult, MatchResult candidate) {
+        return parseResult.getSeason() != null
+                && parseResult.getSeason() >= 2
+                && "TV_SHOW".equals(candidate.getMediaType());
+    }
+
+    private double laterSeasonTvYearScore(Integer parsedYear, Integer candidateYear) {
+        if (parsedYear == null) {
+            return 0.3;
+        }
+        if (candidateYear == null) {
+            return 0.1;
+        }
+        if (candidateYear <= parsedYear) {
+            return 1.0;
+        }
+        return candidateYear - parsedYear == 1 ? 0.3 : 0.0;
+    }
+
+    private double exactReleaseYearScore(Integer parsedYear, Integer candidateYear) {
         if (parsedYear == null) {
             return 0.3;
         }

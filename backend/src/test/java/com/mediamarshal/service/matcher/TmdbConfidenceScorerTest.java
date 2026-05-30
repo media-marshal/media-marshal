@@ -52,6 +52,46 @@ class TmdbConfidenceScorerTest {
     }
 
     @Test
+    void treatsLaterSeasonTvYearAsSeasonAirYear() {
+        ParseResult parseResult = parse("episode", "Slow Horses", 2025, 4, 1);
+        MatchResult candidate = candidate("Slow Horses", "Slow Horses", 2022, "TV_SHOW");
+        TitleSearchPlan plan = new TitleSearchPlan(null, "Slow Horses", "Slow Horses", List.of(
+                new TitleSearchQuery("Slow Horses", TitleSearchQueryType.ORIGINAL, 0.95)));
+
+        TmdbScore score = scorer.score(parseResult, candidate, plan, plan.queries().getFirst());
+
+        assertThat(score.yearScore()).isEqualTo(1.0);
+        assertThat(score.confidence()).isGreaterThan(0.85);
+    }
+
+    @Test
+    void keepsFirstSeasonTvYearStrict() {
+        ParseResult parseResult = parse("episode", "Slow Horses", 2025, 1, 1);
+        MatchResult candidate = candidate("Slow Horses", "Slow Horses", 2022, "TV_SHOW");
+        TitleSearchPlan plan = new TitleSearchPlan(null, "Slow Horses", "Slow Horses", List.of(
+                new TitleSearchQuery("Slow Horses", TitleSearchQueryType.ORIGINAL, 0.95)));
+
+        TmdbScore score = scorer.score(parseResult, candidate, plan, plan.queries().getFirst());
+
+        assertThat(score.yearScore()).isZero();
+        assertThat(score.confidence()).isLessThan(0.8);
+    }
+
+    @Test
+    void boostsAliasEvidenceForLaterSeasonTvWhenSeriesStartedEarlier() {
+        ParseResult parseResult = parse("episode", "For the Sake of the Republic", 2004, 2, 1);
+        MatchResult candidate = candidate("走向共和", "走向共和", 2003, "TV_SHOW");
+        TitleSearchQuery query = new TitleSearchQuery("For the Sake of the Republic", TitleSearchQueryType.ORIGINAL, 0.95);
+        TitleSearchPlan plan = new TitleSearchPlan(null, "For the Sake of the Republic", "For the Sake of the Republic", List.of(query));
+
+        TmdbScore score = scorer.score(parseResult, candidate, plan, query, 1);
+
+        assertThat(score.yearScore()).isEqualTo(1.0);
+        assertThat(score.titleScore()).isGreaterThan(0.87);
+        assertThat(score.confidence()).isBetween(0.81, 0.84);
+    }
+
+    @Test
     void awardsStructureBonusOnlyWhenLocalizedAndOriginalQueriesHitSameCandidate() {
         ParseResult parseResult = parse("episode", "长乐曲", 2024, 1, 2);
         MatchResult candidate = candidate("长乐曲", "Melody Of Golden Age", 2024, "TV_SHOW");
