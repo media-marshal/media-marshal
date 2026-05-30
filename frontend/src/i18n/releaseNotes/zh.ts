@@ -1,4 +1,12 @@
 export default {
+  v0_2_6: {
+    items: {
+      multiEpisodeParsing: '新增连续多集解析支持，可处理 episode [16, 17] 和 [21, 22, ... 28] 这类结果。',
+      templateAffixParameters: '模板占位符新增 prefix、suffix、separator、repeatPrefix、repeatSuffix 参数，用于可复用的范围渲染。',
+      episodeRangeDisplay: '待确认队列会保留并展示解析出的集数范围，例如 16-17。',
+      episodeArrayDecode: '修复 guessit 针对多集文件返回 episode JSON 数组时导致流水线失败的问题。',
+    },
+  },
   v0_2_5: {
     items: {
       queueRecognitionEditor: 'Queue 待确认任务支持编辑当前有效识别信息，可直接修正媒体类型、解析标题、年份、季号和集号。',

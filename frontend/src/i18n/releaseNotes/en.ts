@@ -1,4 +1,12 @@
 export default {
+  v0_2_6: {
+    items: {
+      multiEpisodeParsing: 'Added support for contiguous multi-episode parser results such as episode [16, 17] and [21, 22, ... 28].',
+      templateAffixParameters: 'Template placeholders now support prefix, suffix, separator, repeatPrefix, and repeatSuffix parameters for reusable range rendering.',
+      episodeRangeDisplay: 'Review Queue now preserves and displays parsed episode ranges, for example 16-17.',
+      episodeArrayDecode: 'Fixed pipeline failures when guessit returns episode as a JSON array for multi-episode files.',
+    },
+  },
   v0_2_5: {
     items: {
       queueRecognitionEditor: 'Review Queue tasks now support editing the effective recognition info, including media type, parsed title, year, season, and episode.',

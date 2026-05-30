@@ -413,6 +413,25 @@
             <code>{title} ({year})[[ - {resolution}]]{ext}</code>
           </div>
 
+          <div class="optional-segment-help">
+            <div class="optional-segment-title">{{ t('templateVariables.parameterTitle') }}</div>
+            <p>{{ t('templateVariables.parameterDescription') }}</p>
+            <div class="parameter-example-list">
+              <div>
+                <code>{episode:02d;prefix=E}</code>
+                <span>{{ t('templateVariables.parameterExampleRepeatedPrefix') }}</span>
+              </div>
+              <div>
+                <code>{episode:02d;prefix=E;repeatPrefix=false}</code>
+                <span>{{ t('templateVariables.parameterExampleSinglePrefix') }}</span>
+              </div>
+              <div>
+                <code>{episode;prefix=第;suffix=集;repeatPrefix=false;repeatSuffix=false}</code>
+                <span>{{ t('templateVariables.parameterExampleChineseRange') }}</span>
+              </div>
+            </div>
+          </div>
+
           <div v-loading="templateVariablesLoading" class="variable-category-list">
             <el-empty
               v-if="!templateVariablesLoading && visibleTemplateVariableGroups.length === 0"
@@ -758,25 +777,126 @@ function renderTemplatePreview(template: string, exampleMap: Map<string, string>
   const placeholderPattern = /\{[^}]+}/g
   let hasUnavailableVariable = false
 
-  const withOptionalSegments = template.replace(/\[\[(.*?)\]\]/g, (_match, segment: string) => {
-    const placeholders = segment.match(placeholderPattern) ?? []
-    const canRenderSegment = placeholders.every(placeholder => exampleMap.has(placeholder))
-    if (!canRenderSegment) {
-      return ''
-    }
-    return segment.replace(placeholderPattern, (placeholder: string) => exampleMap.get(placeholder) ?? placeholder)
-  })
+  const canRenderPlaceholder = (placeholder: string) => {
+    return resolvePlaceholderPreview(placeholder, exampleMap) != null
+  }
 
-  const output = withOptionalSegments.replace(placeholderPattern, (placeholder) => {
-    const example = exampleMap.get(placeholder)
+  const renderPlaceholder = (placeholder: string) => {
+    const example = resolvePlaceholderPreview(placeholder, exampleMap)
     if (example == null) {
       hasUnavailableVariable = true
       return placeholder
     }
     return example
+  }
+
+  const withOptionalSegments = template.replace(/\[\[(.*?)\]\]/g, (_match, segment: string) => {
+    const placeholders = segment.match(placeholderPattern) ?? []
+    const canRenderSegment = placeholders.every(canRenderPlaceholder)
+    if (!canRenderSegment) {
+      return ''
+    }
+    return segment.replace(placeholderPattern, renderPlaceholder)
   })
 
+  const output = withOptionalSegments.replace(placeholderPattern, renderPlaceholder)
+
   return { output, hasUnavailableVariable }
+}
+
+function resolvePlaceholderPreview(placeholder: string, exampleMap: Map<string, string>) {
+  const exactExample = exampleMap.get(placeholder)
+  if (exactExample != null) return exactExample
+
+  const parsed = parseTemplatePlaceholder(placeholder)
+  if (!parsed) return null
+
+  const formattedPlaceholder = parsed.format ? `{${parsed.name}:${parsed.format}}` : `{${parsed.name}}`
+  const rawPlaceholder = `{${parsed.name}}`
+  const baseExample = exampleMap.get(formattedPlaceholder) ?? exampleMap.get(rawPlaceholder)
+  if (baseExample == null) return null
+
+  const formattedExample = exampleMap.has(formattedPlaceholder)
+    ? baseExample
+    : applyPreviewFormat(baseExample, parsed.format)
+  return applyPreviewParameters(formattedExample, parsed.params)
+}
+
+function parseTemplatePlaceholder(placeholder: string) {
+  const match = /^\{([a-z_]+)(?::([^;}]+))?(?:;([^}]+))?}$/.exec(placeholder)
+  if (!match) return null
+
+  const params = parseTemplateParams(match[3])
+  if (!params) return null
+
+  return {
+    name: match[1],
+    format: match[2],
+    params,
+  }
+}
+
+function parseTemplateParams(rawParams?: string) {
+  const defaults = {
+    prefix: '',
+    suffix: '',
+    separator: '-',
+    repeatPrefix: true,
+    repeatSuffix: true,
+  }
+  if (!rawParams) return defaults
+
+  const supportedKeys = new Set(['prefix', 'suffix', 'separator', 'repeatPrefix', 'repeatSuffix'])
+  const params = { ...defaults }
+  for (const token of rawParams.split(';')) {
+    const equalsIndex = token.indexOf('=')
+    if (equalsIndex <= 0) return null
+
+    const key = token.slice(0, equalsIndex).trim()
+    const value = token.slice(equalsIndex + 1)
+    if (!supportedKeys.has(key)) return null
+
+    if (key === 'repeatPrefix' || key === 'repeatSuffix') {
+      if (value !== 'true' && value !== 'false') return null
+      params[key] = value === 'true'
+    } else {
+      params[key] = value
+    }
+  }
+  return params
+}
+
+function applyPreviewFormat(value: string, format?: string) {
+  if (!format) return value
+
+  const number = Number.parseInt(value, 10)
+  if (Number.isNaN(number)) return value
+
+  const zeroPad = /^0(\d+)d$/.exec(format)
+  if (zeroPad) {
+    return String(number).padStart(Number.parseInt(zeroPad[1], 10), '0')
+  }
+  return format === 'd' ? String(number) : value
+}
+
+function applyPreviewParameters(
+  value: string,
+  params: {
+    prefix: string
+    suffix: string
+    separator: string
+    repeatPrefix: boolean
+    repeatSuffix: boolean
+  },
+) {
+  const range = /^(\d+)-(\d+)$/.exec(value)
+  if (!range) {
+    return `${params.prefix}${value}${params.suffix}`
+  }
+
+  const startToken = `${params.prefix}${range[1]}${params.repeatSuffix ? params.suffix : ''}`
+  const endToken = `${params.repeatPrefix ? params.prefix : ''}${range[2]}${params.suffix}`
+  return `${startToken}${params.separator}${endToken}`
 }
 
 async function copyTemplateVariable(placeholder: string) {
@@ -1438,6 +1558,22 @@ h2 {
   color: #165dff;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
+}
+
+.parameter-example-list {
+  display: grid;
+  gap: 8px;
+}
+
+.parameter-example-list div {
+  display: grid;
+  gap: 5px;
+}
+
+.parameter-example-list span {
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .variable-category-list {
