@@ -2,6 +2,15 @@ import type { ReleaseNote } from '@/types'
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.2.8',
+    date: '2026-05-31',
+    items: [
+      { type: 'optimization', key: 'releaseNotes.v0_2_8.items.parentFolderContext' },
+      { type: 'fix', key: 'releaseNotes.v0_2_8.items.bilingualAliasConfidence' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_8.items.parentFolderSafety' },
+    ],
+  },
+  {
     version: 'v0.2.7',
     date: '2026-05-30',
     items: [

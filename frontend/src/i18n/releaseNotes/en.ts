@@ -1,4 +1,11 @@
 export default {
+  v0_2_8: {
+    items: {
+      parentFolderContext: 'Low-confidence matches can now use release-style parent folders as extra title context, improving mixed localized / English alias TV releases.',
+      bilingualAliasConfidence: 'Fixed low confidence when an English alias search finds a localized TMDB title, such as The Heir matching 家业 through parent-folder corroboration.',
+      parentFolderSafety: 'Parent-folder context only runs after filename matching falls short, and parent-only candidates stay below the auto-confirm threshold to protect existing high-confidence matches.',
+    },
+  },
   v0_2_7: {
     items: {
       laterSeasonYearMatching: 'Improved automatic matching for multi-season TV shows: years on season 2 and later are treated as season air years instead of lowering confidence against TMDB first-air years.',

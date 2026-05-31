@@ -60,6 +60,12 @@ media-marshal:
     debounce-seconds: ${MEDIA_MARSHAL_WATCHER_DEBOUNCE_SECONDS:3}
     # 源文件缺失轻量巡检间隔，用于弥补 NAS / Docker volume / 网络盘删除事件漏发
     missing-source-check-seconds: ${MEDIA_MARSHAL_WATCHER_MISSING_SOURCE_CHECK_SECONDS:60}
+    # 文件名低置信度时，尝试使用父级发布目录补充标题上下文；文件名已高置信度时不参与。
+    parent-folder-context-enabled: ${MEDIA_MARSHAL_WATCHER_PARENT_FOLDER_CONTEXT_ENABLED:true}
+    # 仅由父目录召回的候选不会被自动确认；该上限还会被动态压到自动阈值以下。
+    parent-folder-parent-only-confidence-cap: ${MEDIA_MARSHAL_WATCHER_PARENT_FOLDER_PARENT_ONLY_CONFIDENCE_CAP:0.75}
+    # 文件名和父目录命中同一 TMDB 条目时的互证加分。
+    parent-folder-mutual-boost: ${MEDIA_MARSHAL_WATCHER_PARENT_FOLDER_MUTUAL_BOOST:0.05}
 
   watch-rule:
     preflight:
