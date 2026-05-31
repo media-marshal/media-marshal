@@ -2732,6 +2732,25 @@ alwaysApply: false
 
 ### 遗留问题
 - 错误码需要随后续失败类型继续补齐；当前未分类异常统一落到 `PIPELINE_FAILED`。
+
+---
+
+## [附属文件 MD5 支持] 2026-05-30
+
+### 完成内容
+- `moveAssociatedFiles=true` 时，同主视频 basename 的 `.md5` 文件会随主视频一起按 WatchRule 操作移动/复制/链接。
+- 文件发现阶段将同名 `.md5` 识别为附属文件，等待主视频任务处理，不再作为普通杂项文件生成跳过任务。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+
+### 遗留问题
+- 其它校验类附属文件如 `.sfv`、`.sha1`、`.sha256`、`.sha512` 是否跟随移动，待产品确认后再纳入规则。
 ---
 
 ## [Queue 待确认任务分辨率展示] 2026-05-11

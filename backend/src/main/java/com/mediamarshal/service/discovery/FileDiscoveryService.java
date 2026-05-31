@@ -60,7 +60,7 @@ public class FileDiscoveryService {
     );
 
     private static final List<String> ASSOCIATED_EXTENSIONS = List.of(
-            ".srt", ".ass", ".ssa", ".sub", ".idx", ".nfo", ".jpg", ".jpeg", ".png", ".webp"
+            ".srt", ".ass", ".ssa", ".sub", ".idx", ".nfo", ".jpg", ".jpeg", ".png", ".webp", ".md5"
     );
 
     private static final List<String> GENERIC_COVER_NAMES = List.of(
