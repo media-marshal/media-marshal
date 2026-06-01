@@ -1,15 +1,15 @@
 export default {
   v0_2_8: {
     items: {
-      parentFolderContext: '低置信度识别会尝试使用父级发布目录补充标题上下文，提升中文名 / 英文别名混合发布包的自动匹配能力。',
-      bilingualAliasConfidence: '修复仅凭英文别名搜索到中文 TMDB 条目时置信度偏低的问题，例如 The Heir 与家业的互证场景。',
-      parentFolderSafety: '父目录只在文件名低置信度时参与，且仅父目录召回的候选不会越过自动确认阈值，避免影响已有高置信度识别。',
+      parentFolderContext: '当文件名信息不足时，识别会参考父级发布目录里的中文名和英文名，减少同一剧集反复进入待确认队列。',
+      bilingualAliasConfidence: '修复英文别名命中中文 TMDB 条目时置信度偏低的问题，例如 The Heir 与家业可更稳定地互相印证。',
+      parentFolderSafety: '文件名已高置信度时不会引入父目录信息；仅父目录召回的候选也不会自动确认，降低误整理风险。',
     },
   },
   v0_2_7: {
     items: {
-      laterSeasonYearMatching: '优化多季剧集自动识别：第二季及后续季的文件年份会按季播出年份处理，不再误扣 TMDB 首播年份置信度。',
-      laterSeasonYearSearch: '修复后续季因年份过滤导致正确 TMDB 剧集候选缺失或置信度偏低的问题。',
+      laterSeasonYearMatching: '多季剧集的第二季及后续季会按当前季播出年份理解文件年份，减少因年份差异触发的人工确认。',
+      laterSeasonYearSearch: '修复后续季因为文件年份不同而漏掉正确 TMDB 剧集，或让正确结果置信度偏低的问题。',
     },
   },
   v0_2_6: {
