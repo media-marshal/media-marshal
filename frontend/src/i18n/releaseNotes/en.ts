@@ -4,6 +4,7 @@ export default {
       parentFolderContext: 'When the filename alone is not enough, matching can use localized and English titles from the release folder to reduce repeated review prompts for the same show.',
       bilingualAliasConfidence: 'Fixed low confidence when an English alias points to a localized TMDB title, so cases like The Heir and 家业 can corroborate each other more reliably.',
       parentFolderSafety: 'Parent-folder context is skipped when the filename is already confident, and parent-only candidates cannot auto-confirm, reducing the risk of incorrect organization.',
+      dashboardFileSearch: 'Dashboard tasks can now be searched by file name from the File column header, making task records easier to locate.',
     },
   },
   v0_2_7: {

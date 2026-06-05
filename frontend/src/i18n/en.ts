@@ -55,6 +55,8 @@ export default {
     allMediaTypes: 'All Types',
     recentTasks: 'Recent Tasks',
     file: 'File',
+    fileSearch: 'Search by file name',
+    fileSearchPlaceholder: 'Enter file name keyword',
     assetType: 'Asset Type',
     mediaType: 'Type',
     status: 'Status',

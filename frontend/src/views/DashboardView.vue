@@ -82,7 +82,36 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="42" />
-        <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip>
+          <template #header>
+            <div class="file-column-header">
+              <el-input
+                v-if="fileNameSearchActive"
+                ref="fileNameSearchInputRef"
+                v-model="fileNameKeyword"
+                size="small"
+                clearable
+                class="file-search-input"
+                :placeholder="t('dashboard.fileSearchPlaceholder')"
+                @input="handleFileNameSearchInput"
+                @clear="resetFileNameSearch"
+              />
+              <template v-else>
+                <span>{{ t('dashboard.file') }}</span>
+                <el-tooltip :content="t('dashboard.fileSearch')" placement="top">
+                  <el-button
+                    link
+                    size="small"
+                    class="file-search-button"
+                    :icon="Search"
+                    :aria-label="t('dashboard.fileSearch')"
+                    @click.stop="activateFileNameSearch"
+                  />
+                </el-tooltip>
+              </template>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="assetType" :label="t('dashboard.assetType')" width="110">
           <template #default="{ row }">
             <el-tag :type="assetTypeTagType(row.assetType)" size="small">
@@ -164,11 +193,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import type { MediaAssetType, MediaTask, MediaType, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
@@ -184,9 +214,14 @@ const mediaTypeOptions: MediaType[] = ['MOVIE', 'TV_SHOW']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
 const assetTypeFilter = ref<MediaAssetType | 'ALL'>('ALL')
 const mediaTypeFilter = ref<MediaType | 'ALL'>('ALL')
+const fileNameSearchActive = ref(false)
+const fileNameKeyword = ref('')
+const fileNameSearchInputRef = ref<{ focus: () => void } | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+
+const normalizedFileNameKeyword = computed(() => fileNameKeyword.value.trim().toLocaleLowerCase())
 
 const filteredTasks = computed(() => {
   return tasks.value.filter((task) => {
@@ -194,7 +229,10 @@ const filteredTasks = computed(() => {
     const matchesStatus = statusFilter.value === 'ALL' || task.status === statusFilter.value
     const matchesAssetType = assetTypeFilter.value === 'ALL' || taskAssetType === assetTypeFilter.value
     const matchesMediaType = mediaTypeFilter.value === 'ALL' || task.mediaType === mediaTypeFilter.value
-    return matchesStatus && matchesAssetType && matchesMediaType
+    const matchesFileName =
+      !normalizedFileNameKeyword.value ||
+      sourceFileName(task.sourcePath).toLocaleLowerCase().includes(normalizedFileNameKeyword.value)
+    return matchesStatus && matchesAssetType && matchesMediaType && matchesFileName
   })
 })
 
@@ -209,7 +247,7 @@ const displayedTasks = computed(() => {
 
 onMounted(() => fetchTasks())
 
-watch([statusFilter, assetTypeFilter, mediaTypeFilter, pageSize], () => {
+watch([statusFilter, assetTypeFilter, mediaTypeFilter, normalizedFileNameKeyword, pageSize], () => {
   selectedTasks.value = []
   currentPage.value = 1
 })
@@ -229,6 +267,27 @@ function taskTime(task: MediaTask) {
   const value = task.updatedAt || task.createdAt
   const timestamp = new Date(value).getTime()
   return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+async function activateFileNameSearch() {
+  fileNameSearchActive.value = true
+  await nextTick()
+  fileNameSearchInputRef.value?.focus()
+}
+
+function handleFileNameSearchInput(value: string) {
+  if (value.trim() === '') {
+    resetFileNameSearch()
+  }
+}
+
+function resetFileNameSearch() {
+  fileNameKeyword.value = ''
+  fileNameSearchActive.value = false
+}
+
+function sourceFileName(sourcePath: string) {
+  return sourcePath.split(/[\\/]/).pop() || sourcePath
 }
 
 function statusTagType(status: TaskStatus): TagType | undefined {
@@ -381,6 +440,24 @@ h2 {
 
 .dashboard-filter {
   width: 138px;
+}
+
+.file-column-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.file-search-input {
+  max-width: 240px;
+}
+
+.file-search-button {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0;
 }
 
 .failure-detail {

@@ -4,6 +4,7 @@ export default {
       parentFolderContext: '当文件名信息不足时，识别会参考父级发布目录里的中文名和英文名，减少同一剧集反复进入待确认队列。',
       bilingualAliasConfidence: '修复英文别名命中中文 TMDB 条目时置信度偏低的问题，例如 The Heir 与家业可更稳定地互相印证。',
       parentFolderSafety: '文件名已高置信度时不会引入父目录信息；仅父目录召回的候选也不会自动确认，降低误整理风险。',
+      dashboardFileSearch: '仪表盘任务列表支持从“文件”表头按文件名关键字搜索，便于快速定位任务记录。',
     },
   },
   v0_2_7: {

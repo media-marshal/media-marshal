@@ -8,6 +8,7 @@ export const releaseNotes: ReleaseNote[] = [
       { type: 'fix', key: 'releaseNotes.v0_2_8.items.bilingualAliasConfidence' },
       { type: 'optimization', key: 'releaseNotes.v0_2_8.items.parentFolderContext' },
       { type: 'optimization', key: 'releaseNotes.v0_2_8.items.parentFolderSafety' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_8.items.dashboardFileSearch' },
     ],
   },
   {

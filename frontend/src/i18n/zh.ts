@@ -55,6 +55,8 @@ export default {
     allMediaTypes: '全部类型',
     recentTasks: '最近任务',
     file: '文件',
+    fileSearch: '按文件名搜索',
+    fileSearchPlaceholder: '输入文件名关键字',
     assetType: '资产类型',
     mediaType: '类型',
     status: '状态',
