@@ -2,7 +2,7 @@ services:
 
   # Java backend service
   media-marshal:
-    image: ghcr.io/media-marshal/media-marshal:latest
+    image: ghcr.io/media-marshal/media-marshal:${MEDIA_MARSHAL_IMAGE_TAG:-latest}
     container_name: media-marshal
     restart: unless-stopped
     ports:
@@ -28,13 +28,7 @@ services:
 
   # Portal frontend served by Nginx
   portal:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        NPM_REGISTRY: ${NPM_REGISTRY:-}
-    image: ghcr.io/media-marshal/media-marshal-portal:latest
-    pull_policy: build
+    image: ghcr.io/media-marshal/media-marshal-portal:${MEDIA_MARSHAL_IMAGE_TAG:-latest}
     container_name: media-marshal-portal
     restart: unless-stopped
     ports:
@@ -46,11 +40,7 @@ services:
 
   # guessit Python sidecar, available only inside the compose network
   parser:
-    build:
-      context: .
-      dockerfile: parser/Dockerfile
-    image: ghcr.io/media-marshal/media-marshal-parser:latest
-    pull_policy: build
+    image: ghcr.io/media-marshal/media-marshal-parser:${MEDIA_MARSHAL_IMAGE_TAG:-latest}
     container_name: media-marshal-parser
     restart: unless-stopped
     healthcheck:
