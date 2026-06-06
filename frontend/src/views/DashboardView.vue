@@ -84,14 +84,14 @@
         <el-table-column type="selection" width="42" />
         <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip>
           <template #header>
-            <div class="file-column-header">
+            <div class="searchable-column-header">
               <el-input
                 v-if="fileNameSearchActive"
                 ref="fileNameSearchInputRef"
                 v-model="fileNameKeyword"
                 size="small"
                 clearable
-                class="file-search-input"
+                class="table-header-search-input"
                 :placeholder="t('dashboard.fileSearchPlaceholder')"
                 @input="handleFileNameSearchInput"
                 @clear="resetFileNameSearch"
@@ -102,7 +102,7 @@
                   <el-button
                     link
                     size="small"
-                    class="file-search-button"
+                    class="table-header-search-button"
                     :icon="Search"
                     :aria-label="t('dashboard.fileSearch')"
                     @click.stop="activateFileNameSearch"
@@ -140,7 +140,36 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confirmedTitle" :label="t('dashboard.matchedTitle')" width="200" show-overflow-tooltip />
+        <el-table-column prop="confirmedTitle" :label="t('dashboard.matchedTitle')" width="200" show-overflow-tooltip>
+          <template #header>
+            <div class="searchable-column-header">
+              <el-input
+                v-if="matchedTitleSearchActive"
+                ref="matchedTitleSearchInputRef"
+                v-model="matchedTitleKeyword"
+                size="small"
+                clearable
+                class="table-header-search-input"
+                :placeholder="t('dashboard.matchedTitleSearchPlaceholder')"
+                @input="handleMatchedTitleSearchInput"
+                @clear="resetMatchedTitleSearch"
+              />
+              <template v-else>
+                <span>{{ t('dashboard.matchedTitle') }}</span>
+                <el-tooltip :content="t('dashboard.matchedTitleSearch')" placement="top">
+                  <el-button
+                    link
+                    size="small"
+                    class="table-header-search-button"
+                    :icon="Search"
+                    :aria-label="t('dashboard.matchedTitleSearch')"
+                    @click.stop="activateMatchedTitleSearch"
+                  />
+                </el-tooltip>
+              </template>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('dashboard.details')" width="280" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="row.status === 'FAILED'" class="failure-detail">
@@ -217,11 +246,15 @@ const mediaTypeFilter = ref<MediaType | 'ALL'>('ALL')
 const fileNameSearchActive = ref(false)
 const fileNameKeyword = ref('')
 const fileNameSearchInputRef = ref<{ focus: () => void } | null>(null)
+const matchedTitleSearchActive = ref(false)
+const matchedTitleKeyword = ref('')
+const matchedTitleSearchInputRef = ref<{ focus: () => void } | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
 const normalizedFileNameKeyword = computed(() => fileNameKeyword.value.trim().toLocaleLowerCase())
+const normalizedMatchedTitleKeyword = computed(() => matchedTitleKeyword.value.trim().toLocaleLowerCase())
 
 const filteredTasks = computed(() => {
   return tasks.value.filter((task) => {
@@ -232,7 +265,10 @@ const filteredTasks = computed(() => {
     const matchesFileName =
       !normalizedFileNameKeyword.value ||
       sourceFileName(task.sourcePath).toLocaleLowerCase().includes(normalizedFileNameKeyword.value)
-    return matchesStatus && matchesAssetType && matchesMediaType && matchesFileName
+    const matchesMatchedTitle =
+      !normalizedMatchedTitleKeyword.value ||
+      (task.confirmedTitle || '').toLocaleLowerCase().includes(normalizedMatchedTitleKeyword.value)
+    return matchesStatus && matchesAssetType && matchesMediaType && matchesFileName && matchesMatchedTitle
   })
 })
 
@@ -247,7 +283,7 @@ const displayedTasks = computed(() => {
 
 onMounted(() => fetchTasks())
 
-watch([statusFilter, assetTypeFilter, mediaTypeFilter, normalizedFileNameKeyword, pageSize], () => {
+watch([statusFilter, assetTypeFilter, mediaTypeFilter, normalizedFileNameKeyword, normalizedMatchedTitleKeyword, pageSize], () => {
   selectedTasks.value = []
   currentPage.value = 1
 })
@@ -276,7 +312,7 @@ async function activateFileNameSearch() {
 }
 
 function handleFileNameSearchInput(value: string) {
-  if (value.trim() === '') {
+  if (isBlankSearch(value)) {
     resetFileNameSearch()
   }
 }
@@ -288,6 +324,27 @@ function resetFileNameSearch() {
 
 function sourceFileName(sourcePath: string) {
   return sourcePath.split(/[\\/]/).pop() || sourcePath
+}
+
+async function activateMatchedTitleSearch() {
+  matchedTitleSearchActive.value = true
+  await nextTick()
+  matchedTitleSearchInputRef.value?.focus()
+}
+
+function handleMatchedTitleSearchInput(value: string) {
+  if (isBlankSearch(value)) {
+    resetMatchedTitleSearch()
+  }
+}
+
+function resetMatchedTitleSearch() {
+  matchedTitleKeyword.value = ''
+  matchedTitleSearchActive.value = false
+}
+
+function isBlankSearch(value: string) {
+  return value.length > 0 && value.trim() === ''
 }
 
 function statusTagType(status: TaskStatus): TagType | undefined {
@@ -442,7 +499,7 @@ h2 {
   width: 138px;
 }
 
-.file-column-header {
+.searchable-column-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -450,11 +507,12 @@ h2 {
   width: 100%;
 }
 
-.file-search-input {
+.table-header-search-input {
+  width: 100%;
   max-width: 240px;
 }
 
-.file-search-button {
+.table-header-search-button {
   min-height: 24px;
   min-width: 24px;
   padding: 0;

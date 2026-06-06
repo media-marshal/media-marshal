@@ -61,6 +61,8 @@ export default {
     mediaType: 'Type',
     status: 'Status',
     matchedTitle: 'Matched Title',
+    matchedTitleSearch: 'Search by matched title',
+    matchedTitleSearchPlaceholder: 'Enter matched title keyword',
     confidence: 'Confidence',
     createdAt: 'Created At',
   },

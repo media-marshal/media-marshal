@@ -61,6 +61,8 @@ export default {
     mediaType: '类型',
     status: '状态',
     matchedTitle: '匹配标题',
+    matchedTitleSearch: '按匹配标题搜索',
+    matchedTitleSearchPlaceholder: '输入匹配标题关键字',
     confidence: '置信度',
     createdAt: '创建时间',
   },
