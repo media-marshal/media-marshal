@@ -82,7 +82,36 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="42" />
-        <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="sourcePath" :label="t('dashboard.file')" min-width="300" show-overflow-tooltip>
+          <template #header>
+            <div class="searchable-column-header">
+              <el-input
+                v-if="fileNameSearchActive"
+                ref="fileNameSearchInputRef"
+                v-model="fileNameKeyword"
+                size="small"
+                clearable
+                class="table-header-search-input"
+                :placeholder="t('dashboard.fileSearchPlaceholder')"
+                @input="handleFileNameSearchInput"
+                @clear="resetFileNameSearch"
+              />
+              <template v-else>
+                <span>{{ t('dashboard.file') }}</span>
+                <el-tooltip :content="t('dashboard.fileSearch')" placement="top">
+                  <el-button
+                    link
+                    size="small"
+                    class="table-header-search-button"
+                    :icon="Search"
+                    :aria-label="t('dashboard.fileSearch')"
+                    @click.stop="activateFileNameSearch"
+                  />
+                </el-tooltip>
+              </template>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="assetType" :label="t('dashboard.assetType')" width="110">
           <template #default="{ row }">
             <el-tag :type="assetTypeTagType(row.assetType)" size="small">
@@ -111,7 +140,36 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confirmedTitle" :label="t('dashboard.matchedTitle')" width="200" show-overflow-tooltip />
+        <el-table-column prop="confirmedTitle" :label="t('dashboard.matchedTitle')" width="200" show-overflow-tooltip>
+          <template #header>
+            <div class="searchable-column-header">
+              <el-input
+                v-if="matchedTitleSearchActive"
+                ref="matchedTitleSearchInputRef"
+                v-model="matchedTitleKeyword"
+                size="small"
+                clearable
+                class="table-header-search-input"
+                :placeholder="t('dashboard.matchedTitleSearchPlaceholder')"
+                @input="handleMatchedTitleSearchInput"
+                @clear="resetMatchedTitleSearch"
+              />
+              <template v-else>
+                <span>{{ t('dashboard.matchedTitle') }}</span>
+                <el-tooltip :content="t('dashboard.matchedTitleSearch')" placement="top">
+                  <el-button
+                    link
+                    size="small"
+                    class="table-header-search-button"
+                    :icon="Search"
+                    :aria-label="t('dashboard.matchedTitleSearch')"
+                    @click.stop="activateMatchedTitleSearch"
+                  />
+                </el-tooltip>
+              </template>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('dashboard.details')" width="280" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="row.status === 'FAILED'" class="failure-detail">
@@ -164,11 +222,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import type { MediaAssetType, MediaTask, MediaType, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
@@ -184,9 +243,18 @@ const mediaTypeOptions: MediaType[] = ['MOVIE', 'TV_SHOW']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
 const assetTypeFilter = ref<MediaAssetType | 'ALL'>('ALL')
 const mediaTypeFilter = ref<MediaType | 'ALL'>('ALL')
+const fileNameSearchActive = ref(false)
+const fileNameKeyword = ref('')
+const fileNameSearchInputRef = ref<{ focus: () => void } | null>(null)
+const matchedTitleSearchActive = ref(false)
+const matchedTitleKeyword = ref('')
+const matchedTitleSearchInputRef = ref<{ focus: () => void } | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+
+const normalizedFileNameKeyword = computed(() => fileNameKeyword.value.trim().toLocaleLowerCase())
+const normalizedMatchedTitleKeyword = computed(() => matchedTitleKeyword.value.trim().toLocaleLowerCase())
 
 const filteredTasks = computed(() => {
   return tasks.value.filter((task) => {
@@ -194,7 +262,13 @@ const filteredTasks = computed(() => {
     const matchesStatus = statusFilter.value === 'ALL' || task.status === statusFilter.value
     const matchesAssetType = assetTypeFilter.value === 'ALL' || taskAssetType === assetTypeFilter.value
     const matchesMediaType = mediaTypeFilter.value === 'ALL' || task.mediaType === mediaTypeFilter.value
-    return matchesStatus && matchesAssetType && matchesMediaType
+    const matchesFileName =
+      !normalizedFileNameKeyword.value ||
+      sourceFileName(task.sourcePath).toLocaleLowerCase().includes(normalizedFileNameKeyword.value)
+    const matchesMatchedTitle =
+      !normalizedMatchedTitleKeyword.value ||
+      (task.confirmedTitle || '').toLocaleLowerCase().includes(normalizedMatchedTitleKeyword.value)
+    return matchesStatus && matchesAssetType && matchesMediaType && matchesFileName && matchesMatchedTitle
   })
 })
 
@@ -209,7 +283,7 @@ const displayedTasks = computed(() => {
 
 onMounted(() => fetchTasks())
 
-watch([statusFilter, assetTypeFilter, mediaTypeFilter, pageSize], () => {
+watch([statusFilter, assetTypeFilter, mediaTypeFilter, normalizedFileNameKeyword, normalizedMatchedTitleKeyword, pageSize], () => {
   selectedTasks.value = []
   currentPage.value = 1
 })
@@ -229,6 +303,48 @@ function taskTime(task: MediaTask) {
   const value = task.updatedAt || task.createdAt
   const timestamp = new Date(value).getTime()
   return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+async function activateFileNameSearch() {
+  fileNameSearchActive.value = true
+  await nextTick()
+  fileNameSearchInputRef.value?.focus()
+}
+
+function handleFileNameSearchInput(value: string) {
+  if (isBlankSearch(value)) {
+    resetFileNameSearch()
+  }
+}
+
+function resetFileNameSearch() {
+  fileNameKeyword.value = ''
+  fileNameSearchActive.value = false
+}
+
+function sourceFileName(sourcePath: string) {
+  return sourcePath.split(/[\\/]/).pop() || sourcePath
+}
+
+async function activateMatchedTitleSearch() {
+  matchedTitleSearchActive.value = true
+  await nextTick()
+  matchedTitleSearchInputRef.value?.focus()
+}
+
+function handleMatchedTitleSearchInput(value: string) {
+  if (isBlankSearch(value)) {
+    resetMatchedTitleSearch()
+  }
+}
+
+function resetMatchedTitleSearch() {
+  matchedTitleKeyword.value = ''
+  matchedTitleSearchActive.value = false
+}
+
+function isBlankSearch(value: string) {
+  return value.length > 0 && value.trim() === ''
 }
 
 function statusTagType(status: TaskStatus): TagType | undefined {
@@ -381,6 +497,25 @@ h2 {
 
 .dashboard-filter {
   width: 138px;
+}
+
+.searchable-column-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.table-header-search-input {
+  width: 100%;
+  max-width: 240px;
+}
+
+.table-header-search-button {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0;
 }
 
 .failure-detail {

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1429" height="697" viewBox="0 0 1429 697">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10" fill="none" stroke="#1d73d1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      .line { stroke: #1d73d1; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .box { stroke: #1d73d1; fill: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .dash { stroke-dasharray: 11 11; }
+      .text {
+        fill: #1d73d1;
+        font-family: "Comic Sans MS", "Segoe Print", "Trebuchet MS", Arial, sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+      .small { font-size: 19px; }
+      .label { font-size: 21px; }
+    </style>
+  </defs>
+
+  <rect x="34" y="114" width="1358" height="376" rx="28" class="line dash"/>
+  <text x="1264" y="148" class="text label">Intranet environment</text>
+
+  <rect x="72" y="28" width="210" height="66" rx="15" class="box"/>
+  <text x="177" y="61" class="text">Resource site</text>
+
+  <path d="M177 96 C177 112, 178 124, 180 136" class="line" marker-end="url(#arrow)"/>
+  <text x="177" y="151" class="text label">Download</text>
+  <path d="M180 173 C181 184, 181 193, 181 202" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="68" y="207" width="232" height="82" rx="16" class="box"/>
+  <text x="184" y="237" class="text">Local storage</text>
+  <text x="184" y="265" class="text">source path</text>
+
+  <path d="M305 247 C372 247, 440 247, 514 247" class="line" marker-end="url(#arrow)"/>
+  <text x="407" y="232" class="text label">Set watch path</text>
+
+  <rect x="526" y="210" width="218" height="72" rx="15" class="box"/>
+  <text x="635" y="246" class="text">MediaMarshal</text>
+
+  <path d="M751 247 C778 247, 803 247, 829 247" class="line" marker-end="url(#arrow)"/>
+
+  <path d="M842 247 L1014 196 L1186 247 L1014 298 Z" class="box"/>
+  <text x="1014" y="247" class="text">Need seeding?</text>
+
+  <path d="M1014 300 C1015 320, 1015 342, 1015 363" class="line" marker-end="url(#arrow)"/>
+  <text x="930" y="338" class="text label">Yes: hard link</text>
+
+  <path d="M1187 247 C1244 247, 1262 260, 1262 303 L1262 365" class="line"/>
+  <text x="1244" y="329" class="text label">No: move file</text>
+  <path d="M1262 365 C1262 401, 1227 416, 1157 416" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="910" y="378" width="244" height="84" rx="15" class="box"/>
+  <text x="1032" y="410" class="text">MM library</text>
+  <text x="1032" y="438" class="text">target path</text>
+
+  <path d="M907 420 C854 420, 808 420, 765 420" class="line" marker-end="url(#arrow)"/>
+  <rect x="492" y="380" width="272" height="78" rx="15" class="box"/>
+  <text x="628" y="410" class="text">Media server</text>
+  <text x="628" y="439" class="text small">Emby/Jellyfin/Plex</text>
+
+  <path d="M1032 568 C1032 533, 1032 499, 1032 466" class="line dash" marker-end="url(#arrow)"/>
+  <text x="932" y="536" class="text label">Fetch metadata</text>
+  <rect x="938" y="592" width="188" height="66" rx="15" class="box"/>
+  <text x="1032" y="625" class="text">TMDB</text>
+</svg>

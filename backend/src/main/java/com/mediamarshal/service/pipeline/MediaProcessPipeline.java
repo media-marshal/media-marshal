@@ -15,6 +15,7 @@ import com.mediamarshal.repository.TaskCandidateRepository;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.discovery.asset.MediaAsset;
 import com.mediamarshal.service.matcher.MetadataMatcher;
+import com.mediamarshal.service.matcher.ParentFolderMatchEnhancer;
 import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
 import com.mediamarshal.service.rename.AssetOrganizerService;
@@ -79,6 +80,7 @@ public class MediaProcessPipeline {
     private final SettingsService settingsService;
     private final EventPublisher eventPublisher;
     private final EmailNotificationService emailNotificationService;
+    private final ParentFolderMatchEnhancer parentFolderMatchEnhancer;
     private final Map<String, FileOperationStrategy> fileOperationStrategies;
     private final ExecutorService manualConfirmationExecutor = Executors.newFixedThreadPool(
             4,
@@ -149,7 +151,13 @@ public class MediaProcessPipeline {
             taskRepository.save(task);
 
             // Step 4: TMDB 搜索并保存候选
-            List<MatchResult> candidates = metadataMatcher.search(parseResult);
+            double confidenceThreshold = getConfidenceThreshold();
+            List<MatchResult> candidates = parentFolderMatchEnhancer.enhanceIfNeeded(
+                    asset,
+                    parseResult,
+                    metadataMatcher.search(parseResult),
+                    confidenceThreshold
+            );
             List<TaskCandidate> savedCandidates = saveCandidates(task, candidates);
             if (savedCandidates.isEmpty()) {
                 moveToAwaitingConfirmation(task, "No TMDB candidates found");
@@ -159,7 +167,7 @@ public class MediaProcessPipeline {
             // Step 5: 置信度判断
             TaskCandidate topCandidate = savedCandidates.getFirst();
             task.setMatchConfidence(topCandidate.getConfidence());
-            if (topCandidate.getConfidence() == null || topCandidate.getConfidence() < getConfidenceThreshold()) {
+            if (topCandidate.getConfidence() == null || topCandidate.getConfidence() < confidenceThreshold) {
                 moveToAwaitingConfirmation(task, "Low confidence match");
                 return;
             }

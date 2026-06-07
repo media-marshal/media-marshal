@@ -1,8 +1,16 @@
 export default {
+  v0_2_8: {
+    items: {
+      parentFolderContext: 'When the filename alone is not enough, matching can use localized and English titles from the release folder to reduce repeated review prompts for the same show.',
+      bilingualAliasConfidence: 'Fixed low confidence when an English alias points to a localized TMDB title, so cases like The Heir and 家业 can corroborate each other more reliably.',
+      parentFolderSafety: 'Parent-folder context is skipped when the filename is already confident, and parent-only candidates cannot auto-confirm, reducing the risk of incorrect organization.',
+      dashboardFileSearch: 'Dashboard tasks can now be searched from the File and Matched Title column headers, making task records easier to locate.',
+    },
+  },
   v0_2_7: {
     items: {
-      laterSeasonYearMatching: 'Improved automatic matching for multi-season TV shows: years on season 2 and later are treated as season air years instead of lowering confidence against TMDB first-air years.',
-      laterSeasonYearSearch: 'Fixed later-season TV files missing the correct TMDB candidate or falling below confidence because of year-filtered searches.',
+      laterSeasonYearMatching: 'Season 2 and later now treat the file year as that season\'s air year, reducing unnecessary manual review caused by year differences.',
+      laterSeasonYearSearch: 'Fixed later-season TV files missing the correct TMDB show, or lowering confidence for the right result, when the file year differs from the first-air year.',
     },
   },
   v0_2_6: {

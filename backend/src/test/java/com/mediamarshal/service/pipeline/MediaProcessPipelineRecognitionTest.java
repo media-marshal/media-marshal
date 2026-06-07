@@ -12,6 +12,7 @@ import com.mediamarshal.repository.TaskCandidateRepository;
 import com.mediamarshal.notification.EmailNotificationService;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.matcher.MetadataMatcher;
+import com.mediamarshal.service.matcher.ParentFolderMatchEnhancer;
 import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
 import com.mediamarshal.service.rename.AssetOrganizerService;
@@ -61,6 +62,7 @@ class MediaProcessPipelineRecognitionTest {
                 mock(SettingsService.class),
                 eventPublisher,
                 emailNotificationService,
+                mock(ParentFolderMatchEnhancer.class),
                 Map.<String, FileOperationStrategy>of()
         );
         when(taskRepository.save(any(MediaTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
