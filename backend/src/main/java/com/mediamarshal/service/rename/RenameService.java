@@ -49,6 +49,7 @@ public class RenameService {
     private final WatchRuleRepository watchRuleRepository;
     private final SettingsService settingsService;
     private final TemplateRenderer templateRenderer;
+    private final TemplatePathSafetyService templatePathSafetyService;
 
     /**
      * 根据 MediaTask 执行重命名操作，返回目标文件绝对路径
@@ -78,7 +79,7 @@ public class RenameService {
         }
 
         // 5. 拼接目标绝对路径
-        Path target = Paths.get(rule.getTargetDir()).resolve(relativePath).normalize();
+        Path target = templatePathSafetyService.resolveSafeTargetPath(rule.getTargetDir(), relativePath);
 
         log.info("Rename plan: source='{}' -> target='{}'", task.getSourcePath(), target);
 
@@ -130,6 +131,10 @@ public class RenameService {
         return templateRenderer.render(template, buildVariables(task, extOverride));
     }
 
+    Path resolveSafeTargetPath(String targetDir, String renderedRelativePath) {
+        return templatePathSafetyService.resolveSafeTargetPath(targetDir, renderedRelativePath);
+    }
+
     /**
      * 从 MediaTask 构建 TemplateVariables 变量袋
      * task 中的字段在 Pipeline Step 4 完成后应已全部填充
@@ -152,13 +157,12 @@ public class RenameService {
                 .ext(ext)
                 .titleInitial(resolveTitleInitial(task.getConfirmedTitle()))
                 .resolution(task.getParsedResolution())
-                // 以下字段为预留，v1 不填充
-                .originalTitle(null)
+                .originalTitle(task.getConfirmedOriginalTitle())
                 .episodeTitle(null)
                 .genre1(null).genre2(null).genre3(null).genre4(null)
                 .country(null)
-                .codec(null)
-                .releaseGroup(null)
+                .codec(task.getParsedCodec())
+                .releaseGroup(task.getParsedReleaseGroup())
                 .build();
     }
 

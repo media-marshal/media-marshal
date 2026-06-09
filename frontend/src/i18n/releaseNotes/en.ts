@@ -1,4 +1,12 @@
 export default {
+  v0_2_9: {
+    items: {
+      enabledTemplateVariables: 'Path templates now support {codec}, {release_group}, and {original_title} for organizing media by codec, release group, and original title.',
+      backendTemplatePreview: 'Added backend-powered template preview and validation so custom templates are checked with the real renderer before saving.',
+      safeTemplateRendering: 'Added path safety checks that block absolute paths, Windows drive paths, UNC paths, and .. traversal before any file operation runs.',
+      templateValueSanitizing: 'Template variable values now sanitize path-unsafe characters, keeping frontend previews aligned with actual backend organization.',
+    },
+  },
   v0_2_8: {
     items: {
       parentFolderContext: 'When the filename alone is not enough, matching can use localized and English titles from the release folder to reduce repeated review prompts for the same show.',

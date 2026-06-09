@@ -56,11 +56,20 @@ public class MediaTask {
     /** guessit 解析出的分辨率，如 1080p */
     private String parsedResolution;
 
+    /** guessit 解析出的视频编码，如 H.264 */
+    private String parsedCodec;
+
+    /** guessit 解析出的发布组 */
+    private String parsedReleaseGroup;
+
     /** TMDB 匹配到的 ID */
     private Long tmdbId;
 
     /** TMDB 返回的标准标题（用于重命名） */
     private String confirmedTitle;
+
+    /** TMDB 返回的原语种标题 */
+    private String confirmedOriginalTitle;
 
     /** TMDB 返回的发布年份 */
     private Integer confirmedYear;
@@ -142,6 +151,7 @@ public class MediaTask {
 
     public enum TaskErrorCode {
         TARGET_CONFLICT,
+        UNSAFE_TARGET_PATH,
         SOURCE_MISSING,
         PIPELINE_FAILED
     }

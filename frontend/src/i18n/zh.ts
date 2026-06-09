@@ -209,9 +209,9 @@ export default {
     previewTemplate: '预览',
     previewResult: '预览结果',
     previewEmpty: '请先输入路径模板',
-    previewUnavailableVariables: '部分变量当前不可用，预览中将原样保留',
+    previewFailed: '模板预览失败',
     backToPreset: '返回选择预设',
-    templateVariablesHint: '可用变量：{title}  {year}  {season:02d}  {episode:02d}  {original_title}  {ext}',
+    templateVariablesHint: '可用变量：{title}  {year}  {season:02d}  {episode:02d}  {resolution}  {codec}  {release_group}  {original_title}  {ext}',
     templateVariablesLink: '点击查看可用变量',
     templateExample: '样例',
     templateType: {
@@ -289,6 +289,7 @@ export default {
       targetDirRequired: '请输入目标根目录',
       preflightFailedTitle: '规则校验失败',
       preflightFailed: '规则校验失败，请检查源目录、目标目录和文件操作方式。',
+      templateFailedTitle: '路径模板校验失败',
     },
   },
   templateVariables: {

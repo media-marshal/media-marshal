@@ -66,6 +66,44 @@ class TemplateRendererTest {
     }
 
     @Test
+    void stringVariablesAreSanitizedBeforeRenderingPathSegments() {
+        TemplateVariables variables = TemplateVariables.builder()
+                .title("Bad/Movie:Name?")
+                .releaseGroup("TEAM|A")
+                .ext(".mkv")
+                .build();
+
+        String rendered = renderer.render("{title}[[ - {release_group}]]{ext}", variables);
+
+        assertThat(rendered).isEqualTo("Bad_Movie_Name_ - TEAM_A.mkv");
+    }
+
+    @Test
+    void optionalSegmentIsRemovedWhenSanitizedVariableIsBlank() {
+        TemplateVariables variables = TemplateVariables.builder()
+                .title("Movie")
+                .releaseGroup("   ")
+                .ext(".mkv")
+                .build();
+
+        String rendered = renderer.render("{title}[[ - {release_group}]]{ext}", variables);
+
+        assertThat(rendered).isEqualTo("Movie.mkv");
+    }
+
+    @Test
+    void emptyExtRendersAsEmptyString() {
+        TemplateVariables variables = TemplateVariables.builder()
+                .title("Movie")
+                .ext("")
+                .build();
+
+        String rendered = renderer.render("{title}{ext}", variables);
+
+        assertThat(rendered).isEqualTo("Movie");
+    }
+
+    @Test
     void formattedVariablesWorkInsideOptionalSegment() {
         TemplateVariables variables = TemplateVariables.builder()
                 .title("剧名")

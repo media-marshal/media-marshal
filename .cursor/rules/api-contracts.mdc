@@ -35,14 +35,18 @@ interface MediaTask {
   parsedYear: number | null
   parsedSeason: number | null
   parsedEpisode: number | null
+  parsedEpisodeEnd: number | null
   parsedResolution: string | null    // guessit screen_size，用于 {resolution} 模板变量
+  parsedCodec: string | null         // guessit video_codec，用于 {codec} 模板变量
+  parsedReleaseGroup: string | null  // guessit release_group，用于 {release_group} 模板变量
   tmdbId: number | null
   confirmedTitle: string | null
+  confirmedOriginalTitle: string | null // TMDB original_title / original_name，用于 {original_title} 模板变量
   confirmedYear: number | null
   confirmationSource: 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | null
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
-  errorCode: 'TARGET_CONFLICT' | 'SOURCE_MISSING' | 'PIPELINE_FAILED' | null // status=FAILED 时用于系统内部判定和重复失败聚合
+  errorCode: 'TARGET_CONFLICT' | 'UNSAFE_TARGET_PATH' | 'SOURCE_MISSING' | 'PIPELINE_FAILED' | null // status=FAILED 时用于系统内部判定和重复失败聚合
   failureCount: number | null      // status=FAILED 时同源文件、同规则、同 errorCode 的累计失败次数
   lastFailedAt: string | null      // 最近一次失败时间，ISO 8601
   errorMessage: string | null       // status=FAILED 时说明失败原因，如目标文件冲突
@@ -302,6 +306,7 @@ interface WatchRuleValidationResult {
 | 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
 |---|---|---|---|---|
 | GET | `/api/template-variables` | 查询路径模板中可用的变量、解释、样例和适用媒体类型 | — | `TemplateVariableGroup[]` |
+| POST | `/api/template-variables/preview` | 使用后端渲染器预览并校验路径模板；前端保存自定义模板前必须调用 | `TemplatePreviewRequest` | `TemplatePreviewResponse` |
 
 ### TemplateVariableGroup
 ```typescript
@@ -326,9 +331,34 @@ interface TemplateVariableItem {
 }
 ```
 
+### TemplatePreviewRequest
+```typescript
+interface TemplatePreviewRequest {
+  template: string                 // 待预览 / 校验的路径模板
+  mediaType: 'MOVIE' | 'TV_SHOW'   // 使用电影或剧集样例上下文
+  targetDir?: string | null        // WatchRule.targetDir；用于校验最终路径是否仍位于目标根目录内
+  context?: Record<string, unknown> // 可选调试上下文，key 使用变量名，如 title、year、codec、episode_end
+}
+```
+
+### TemplatePreviewResponse
+```typescript
+interface TemplatePreviewResponse {
+  output: string             // 后端 TemplateRenderer 渲染后的相对路径预览
+  warnings: string[]         // 废弃变量等非阻断提示
+  errors: string[]           // 未知变量、预留变量、媒体类型不适用变量、不安全路径等阻断错误
+  usedVariables: string[]    // 模板中识别到的变量名，按出现顺序去重；格式化变量返回基础名，如 season
+  unknownVariables: string[] // 模板中未登记的变量名
+  reservedVariables: string[] // 当前版本未启用的变量名
+  unsafePath: boolean        // true 表示渲染结果不满足 targetDir 下相对路径安全边界
+}
+```
+
 > 变量名来源以 `TemplateVariables` 上的 `@TemplateVar` 注解为准；格式化变量目前按 ADR-001 暴露 `{season:02d}`、`{season:04d}`、`{episode:02d}`、`{episode:04d}`。
 > 前端帮助面板仅展示 `AVAILABLE` 和 `DEPRECATED` 变量；`DEPRECATED` 变量需展示废弃提示，`RESERVED` / `UNAVAILABLE` 不展示。
 > 路径模板支持可选片段语法 `[[ ... ]]`：片段内所有变量都可填充时渲染片段，任意变量缺失时移除整个片段。可选片段外的缺失变量仍保留占位符原样。例如 `{title} ({year})[[ - {resolution}]]{ext}` 在分辨率缺失时渲染为 `{title} ({year}){ext}` 的替换结果。
+> 当前正式可用变量包含 `{codec}`、`{release_group}`、`{original_title}`；`{episode_title}`、`{genre_1}`~`{genre_4}`、`{country}` 仍为 `RESERVED`，不得在前端帮助面板展示。
+> 后端渲染会清洗变量值中的路径非法字符（`/ \ : * ? " < > |` 与控制字符），但模板本身的 `/` 仍表示目录层级。真实文件操作前必须校验渲染结果为 `targetDir` 下相对路径：禁止绝对路径、Windows 盘符路径、UNC 路径、`..` 路径段，以及 normalize 后逃逸目标根目录的路径。不安全时任务进入 `FAILED`，`errorCode=UNSAFE_TARGET_PATH`。
 
 ---
 

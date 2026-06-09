@@ -17,7 +17,7 @@ export type TaskStatus =
 export type MediaType = 'MOVIE' | 'TV_SHOW'
 export type MediaAssetType = 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
 export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH'
-export type TaskErrorCode = 'TARGET_CONFLICT' | 'SOURCE_MISSING' | 'PIPELINE_FAILED'
+export type TaskErrorCode = 'TARGET_CONFLICT' | 'UNSAFE_TARGET_PATH' | 'SOURCE_MISSING' | 'PIPELINE_FAILED'
 export type DiscoveryMode = 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
 
 export interface MediaTask {
@@ -33,8 +33,11 @@ export interface MediaTask {
   parsedEpisode: number | null
   parsedEpisodeEnd: number | null
   parsedResolution: string | null
+  parsedCodec: string | null
+  parsedReleaseGroup: string | null
   tmdbId: number | null
   confirmedTitle: string | null
+  confirmedOriginalTitle: string | null
   confirmedYear: number | null
   confirmationSource: ConfirmationSource | null
   matchConfidence: number | null
@@ -134,6 +137,23 @@ export interface TemplateVariableGroup {
   category: string
   categoryName: string
   variables: TemplateVariableItem[]
+}
+
+export interface TemplatePreviewRequest {
+  template: string
+  mediaType: MediaType
+  targetDir?: string | null
+  context?: Record<string, unknown>
+}
+
+export interface TemplatePreviewResponse {
+  output: string
+  warnings: string[]
+  errors: string[]
+  usedVariables: string[]
+  unknownVariables: string[]
+  reservedVariables: string[]
+  unsafePath: boolean
 }
 
 // ─── 发布说明 ────────────────────────────────────────────────────

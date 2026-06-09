@@ -15,8 +15,9 @@ import java.util.regex.Pattern;
 @Component
 public class TemplateRenderer {
 
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+)(?::([^;}]+))?(?:;([^}]+))?}");
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_][a-z0-9_]*)(?::([^;}]+))?(?:;([^}]+))?}");
     private static final Pattern OPTIONAL_SEGMENT = Pattern.compile("\\[\\[(.*?)]\\]");
+    private static final Pattern UNSAFE_PATH_VALUE_CHARS = Pattern.compile("[\\\\/:*?\"<>|\\p{Cntrl}]");
 
     public String render(String template, TemplateVariables variables) {
         Map<String, Object> varMap = buildVarMap(variables);
@@ -164,12 +165,30 @@ public class TemplateRenderer {
             field.setAccessible(true);
             try {
                 Object value = field.get(variables);
-                map.put(annotation.value(), value);
+                map.put(annotation.value(), sanitizeValue(annotation.value(), value));
             } catch (IllegalAccessException e) {
                 log.error("Failed to read TemplateVariables field: {}", field.getName(), e);
             }
         }
         return map;
+    }
+
+    private Object sanitizeValue(String varName, Object value) {
+        if (!(value instanceof CharSequence text)) {
+            return value;
+        }
+
+        String sanitized = UNSAFE_PATH_VALUE_CHARS.matcher(text.toString()).replaceAll("_").trim();
+        if ("ext".equals(varName)) {
+            return sanitized;
+        }
+        if (sanitized.isBlank()) {
+            return null;
+        }
+        if (".".equals(sanitized) || "..".equals(sanitized)) {
+            return "_";
+        }
+        return sanitized;
     }
 
     private record TemplatePlaceholderOptions(

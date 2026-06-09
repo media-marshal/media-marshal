@@ -27,7 +27,7 @@ public class TemplateVariableCatalogService {
         return List.of(
                 group("BASIC", "基础信息", List.of(
                         item("title", "String", "TMDB", "TMDB 本地化标题，随 tmdb.language 配置变化。", "蝙蝠侠：黑暗骑士", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
-                        item("original_title", "String", "TMDB", "TMDB 原语言标题。当前版本预留，未填充时占位符会原样保留。", "The Dark Knight", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
+                        item("original_title", "String", "TMDB", "TMDB 原语言标题，来自确认候选的 original_title / original_name。", "The Dark Knight", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
                         item("year", "Integer", "TMDB", "TMDB 发布年份。", "2008", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
                         item("tmdb_id", "Long", "TMDB", "TMDB 数字 ID。", "155", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
                         item("media_type", "String", "Pipeline", "最终确认的媒体类型。", "MOVIE", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE)
@@ -51,8 +51,8 @@ public class TemplateVariableCatalogService {
                 ), supportedNames),
                 group("TECHNICAL", "技术参数", List.of(
                         item("resolution", "String", "guessit", "视频分辨率，来自 guessit screen_size。", "1080p", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
-                        item("codec", "String", "guessit", "视频编码。当前版本预留，未填充时占位符会原样保留。", "H.264", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
-                        item("release_group", "String", "guessit", "发布组。当前版本预留，未填充时占位符会原样保留。", "YIFY", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
+                        item("codec", "String", "guessit", "视频编码，来自 guessit video_codec。", "H.264", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
+                        item("release_group", "String", "guessit", "发布组，来自 guessit release_group。", "YIFY", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
                         item("ext", "String", "Source file", "原始文件扩展名，包含点号。模板中不要额外再写一个点。", ".mkv", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE)
                 ), supportedNames)
         );

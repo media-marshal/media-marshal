@@ -209,9 +209,9 @@ export default {
     previewTemplate: 'Preview',
     previewResult: 'Preview Result',
     previewEmpty: 'Enter a path template first',
-    previewUnavailableVariables: 'Some variables are currently unavailable and will remain unchanged in the preview',
+    previewFailed: 'Template preview failed',
     backToPreset: 'Back to presets',
-    templateVariablesHint: 'Available variables: {title}  {year}  {season:02d}  {episode:02d}  {original_title}  {ext}',
+    templateVariablesHint: 'Available variables: {title}  {year}  {season:02d}  {episode:02d}  {resolution}  {codec}  {release_group}  {original_title}  {ext}',
     templateVariablesLink: 'Click to view available variables',
     templateExample: 'Example',
     templateType: {
@@ -289,6 +289,7 @@ export default {
       targetDirRequired: 'Please enter a target directory',
       preflightFailedTitle: 'Rule Validation Failed',
       preflightFailed: 'Rule validation failed. Please check the source directory, target directory, and file operation.',
+      templateFailedTitle: 'Path Template Validation Failed',
     },
   },
   templateVariables: {

@@ -335,6 +335,8 @@ public class MediaProcessPipeline {
         parseResult.setEpisode(task.getParsedEpisode());
         parseResult.setEpisodeEnd(task.getParsedEpisodeEnd());
         parseResult.setScreenSize(task.getParsedResolution());
+        parseResult.setVideoCodec(task.getParsedCodec());
+        parseResult.setReleaseGroup(task.getParsedReleaseGroup());
         applyMediaTypeToParseResult(parseResult, task.getMediaType());
         return parseResult;
     }
@@ -459,6 +461,8 @@ public class MediaProcessPipeline {
         task.setParsedEpisode(parseResult.getEpisode());
         task.setParsedEpisodeEnd(parseResult.getEpisodeEnd());
         task.setParsedResolution(parseResult.getScreenSize());
+        task.setParsedCodec(parseResult.getVideoCodec());
+        task.setParsedReleaseGroup(parseResult.getReleaseGroup());
         taskRepository.save(task);
     }
 
@@ -550,6 +554,7 @@ public class MediaProcessPipeline {
         task.setTmdbId(Long.valueOf(match.getSourceId()));
         task.setMediaType(MediaTask.MediaType.valueOf(match.getMediaType()));
         task.setConfirmedTitle(match.getTitle());
+        task.setConfirmedOriginalTitle(match.getOriginalTitle());
         task.setConfirmedYear(match.getYear());
         task.setMatchConfidence(match.getConfidence());
         taskRepository.save(task);

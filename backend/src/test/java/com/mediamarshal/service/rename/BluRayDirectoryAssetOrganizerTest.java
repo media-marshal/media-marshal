@@ -41,7 +41,13 @@ class BluRayDirectoryAssetOrganizerTest {
         when(settingsService.get("debug", "false")).thenReturn("false");
 
         TemplateRenderer renderer = new TemplateRenderer();
-        RenameService renameService = new RenameService(Map.of(), ruleRepository, settingsService, renderer);
+        RenameService renameService = new RenameService(
+                Map.of(),
+                ruleRepository,
+                settingsService,
+                renderer,
+                new TemplatePathSafetyService()
+        );
         BluRayDirectoryAssetOrganizer organizer = new BluRayDirectoryAssetOrganizer(
                 renameService,
                 ruleRepository,
@@ -75,7 +81,13 @@ class BluRayDirectoryAssetOrganizerTest {
         when(settingsService.get("debug", "false")).thenReturn("false");
 
         TemplateRenderer renderer = new TemplateRenderer();
-        RenameService renameService = new RenameService(Map.of(), ruleRepository, settingsService, renderer);
+        RenameService renameService = new RenameService(
+                Map.of(),
+                ruleRepository,
+                settingsService,
+                renderer,
+                new TemplatePathSafetyService()
+        );
         BluRayDirectoryAssetOrganizer organizer = new BluRayDirectoryAssetOrganizer(
                 renameService,
                 ruleRepository,

@@ -501,7 +501,7 @@ import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Docum
 import type { FormInstance, FormRules } from 'element-plus'
 import { watchRuleApi, type DiscoveryMode, type FileOperationType, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
 import { templateVariablesApi } from '@/api/templateVariables'
-import type { TemplateVariableGroup, TemplateVariableStatus } from '@/types'
+import type { MediaType, TemplatePreviewResponse, TemplateVariableGroup, TemplateVariableStatus } from '@/types'
 import DirBrowserDialog from '@/components/DirBrowserDialog.vue'
 
 const { t } = useI18n()
@@ -532,7 +532,6 @@ const dirBrowserVisible = ref(false)
 const dirBrowserTarget = ref<'source' | 'target'>('source')
 
 // ─── 预设模板 ────────────────────────────────────────────────────
-// TODO ADR-007：后续从后端接口 GET /api/template-variables 获取，当前硬编码
 type TemplateKind = 'movie' | 'tv'
 
 const PRESET_TEMPLATES = [
@@ -753,150 +752,66 @@ async function previewTemplate(kind: TemplateKind) {
     return
   }
 
-  await fetchTemplateVariables()
-
-  const mediaType = kind === 'movie' ? 'MOVIE' : 'TV_SHOW'
-  const exampleMap = new Map<string, string>()
-  for (const group of visibleTemplateVariableGroups.value) {
-    for (const variable of group.variables) {
-      if (variable.mediaTypes.includes(mediaType)) {
-        exampleMap.set(variable.placeholder, variable.example)
-      }
-    }
-  }
-
-  const preview = renderTemplatePreview(template, exampleMap)
-  templatePreviewResults[kind] = preview.output
-
-  if (preview.hasUnavailableVariable) {
-    ElMessage.warning(t('watchRule.previewUnavailableVariables'))
+  try {
+    const preview = await requestTemplatePreview(kind, template)
+    templatePreviewResults[kind] = preview.output
+    showTemplatePreviewMessages(preview)
+  } catch {
+    ElMessage.error(t('watchRule.previewFailed'))
   }
 }
 
-function renderTemplatePreview(template: string, exampleMap: Map<string, string>) {
-  const placeholderPattern = /\{[^}]+}/g
-  let hasUnavailableVariable = false
-
-  const canRenderPlaceholder = (placeholder: string) => {
-    return resolvePlaceholderPreview(placeholder, exampleMap) != null
-  }
-
-  const renderPlaceholder = (placeholder: string) => {
-    const example = resolvePlaceholderPreview(placeholder, exampleMap)
-    if (example == null) {
-      hasUnavailableVariable = true
-      return placeholder
-    }
-    return example
-  }
-
-  const withOptionalSegments = template.replace(/\[\[(.*?)\]\]/g, (_match, segment: string) => {
-    const placeholders = segment.match(placeholderPattern) ?? []
-    const canRenderSegment = placeholders.every(canRenderPlaceholder)
-    if (!canRenderSegment) {
-      return ''
-    }
-    return segment.replace(placeholderPattern, renderPlaceholder)
+async function requestTemplatePreview(kind: TemplateKind, template: string) {
+  const mediaType: MediaType = kind === 'movie' ? 'MOVIE' : 'TV_SHOW'
+  const response = await templateVariablesApi.previewTemplate({
+    template,
+    mediaType,
+    targetDir: form.targetDir,
   })
-
-  const output = withOptionalSegments.replace(placeholderPattern, renderPlaceholder)
-
-  return { output, hasUnavailableVariable }
+  return response.data.data
 }
 
-function resolvePlaceholderPreview(placeholder: string, exampleMap: Map<string, string>) {
-  const exactExample = exampleMap.get(placeholder)
-  if (exactExample != null) return exactExample
-
-  const parsed = parseTemplatePlaceholder(placeholder)
-  if (!parsed) return null
-
-  const formattedPlaceholder = parsed.format ? `{${parsed.name}:${parsed.format}}` : `{${parsed.name}}`
-  const rawPlaceholder = `{${parsed.name}}`
-  const baseExample = exampleMap.get(formattedPlaceholder) ?? exampleMap.get(rawPlaceholder)
-  if (baseExample == null) return null
-
-  const formattedExample = exampleMap.has(formattedPlaceholder)
-    ? baseExample
-    : applyPreviewFormat(baseExample, parsed.format)
-  return applyPreviewParameters(formattedExample, parsed.params)
-}
-
-function parseTemplatePlaceholder(placeholder: string) {
-  const match = /^\{([a-z_]+)(?::([^;}]+))?(?:;([^}]+))?}$/.exec(placeholder)
-  if (!match) return null
-
-  const params = parseTemplateParams(match[3])
-  if (!params) return null
-
-  return {
-    name: match[1],
-    format: match[2],
-    params,
+function showTemplatePreviewMessages(preview: TemplatePreviewResponse) {
+  if (preview.errors.length > 0) {
+    ElMessage.warning(preview.errors.join('；'))
+    return
+  }
+  if (preview.warnings.length > 0) {
+    ElMessage.warning(preview.warnings.join('；'))
   }
 }
 
-function parseTemplateParams(rawParams?: string) {
-  const defaults = {
-    prefix: '',
-    suffix: '',
-    separator: '-',
-    repeatPrefix: true,
-    repeatSuffix: true,
-  }
-  if (!rawParams) return defaults
+async function validateCustomTemplatesBeforeSave() {
+  const previews: TemplatePreviewResponse[] = []
 
-  const supportedKeys = new Set(['prefix', 'suffix', 'separator', 'repeatPrefix', 'repeatSuffix'])
-  const params = { ...defaults }
-  for (const token of rawParams.split(';')) {
-    const equalsIndex = token.indexOf('=')
-    if (equalsIndex <= 0) return null
-
-    const key = token.slice(0, equalsIndex).trim()
-    const value = token.slice(equalsIndex + 1)
-    if (!supportedKeys.has(key)) return null
-
-    if (key === 'repeatPrefix' || key === 'repeatSuffix') {
-      if (value !== 'true' && value !== 'false') return null
-      params[key] = value === 'true'
-    } else {
-      params[key] = value
+  if (showMovieTemplate.value && templateStates.movie.customMode) {
+    const template = effectiveTemplate('movie')
+    if (template) {
+      previews.push(await requestTemplatePreview('movie', template))
     }
   }
-  return params
-}
 
-function applyPreviewFormat(value: string, format?: string) {
-  if (!format) return value
-
-  const number = Number.parseInt(value, 10)
-  if (Number.isNaN(number)) return value
-
-  const zeroPad = /^0(\d+)d$/.exec(format)
-  if (zeroPad) {
-    return String(number).padStart(Number.parseInt(zeroPad[1], 10), '0')
-  }
-  return format === 'd' ? String(number) : value
-}
-
-function applyPreviewParameters(
-  value: string,
-  params: {
-    prefix: string
-    suffix: string
-    separator: string
-    repeatPrefix: boolean
-    repeatSuffix: boolean
-  },
-) {
-  const range = /^(\d+)-(\d+)$/.exec(value)
-  if (!range) {
-    return `${params.prefix}${value}${params.suffix}`
+  if (showTvTemplate.value && templateStates.tv.customMode) {
+    const template = effectiveTemplate('tv')
+    if (template) {
+      previews.push(await requestTemplatePreview('tv', template))
+    }
   }
 
-  const startToken = `${params.prefix}${range[1]}${params.repeatSuffix ? params.suffix : ''}`
-  const endToken = `${params.repeatPrefix ? params.prefix : ''}${range[2]}${params.suffix}`
-  return `${startToken}${params.separator}${endToken}`
+  const errors = previews.flatMap(preview => preview.errors)
+  const warnings = previews.flatMap(preview => preview.warnings)
+  if (errors.length > 0) {
+    await ElMessageBox.alert(
+      Array.from(new Set(errors)).join('\n'),
+      t('watchRule.validation.templateFailedTitle'),
+      { confirmButtonText: t('common.confirm'), type: 'error' },
+    )
+    return false
+  }
+  if (warnings.length > 0) {
+    ElMessage.warning(Array.from(new Set(warnings)).join('；'))
+  }
+  return true
 }
 
 async function copyTemplateVariable(placeholder: string) {
@@ -945,6 +860,9 @@ async function handleSave() {
       moviePathTemplate: showMovieTemplate.value ? effectiveTemplate('movie') : undefined,
       tvPathTemplate: showTvTemplate.value ? effectiveTemplate('tv') : undefined,
     }
+
+    const templateValid = await validateCustomTemplatesBeforeSave()
+    if (!templateValid) return
 
     const validation = (await watchRuleApi.validateRule(payload)).data.data
     if (!validation.valid) {

@@ -2,6 +2,16 @@ import type { ReleaseNote } from '@/types'
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: 'v0.2.9',
+    date: '2026-06-09',
+    items: [
+      { type: 'feature', key: 'releaseNotes.v0_2_9.items.enabledTemplateVariables' },
+      { type: 'feature', key: 'releaseNotes.v0_2_9.items.backendTemplatePreview' },
+      { type: 'fix', key: 'releaseNotes.v0_2_9.items.safeTemplateRendering' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_9.items.templateValueSanitizing' },
+    ],
+  },
+  {
     version: 'v0.2.8',
     date: '2026-05-31',
     items: [

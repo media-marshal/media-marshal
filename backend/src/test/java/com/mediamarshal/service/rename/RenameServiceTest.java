@@ -20,7 +20,8 @@ class RenameServiceTest {
             Map.of(),
             mock(WatchRuleRepository.class),
             settingsService,
-            mock(TemplateRenderer.class)
+            mock(TemplateRenderer.class),
+            new TemplatePathSafetyService()
     );
 
     @Test
@@ -74,6 +75,23 @@ class RenameServiceTest {
         assertThatThrownBy(() -> renameService.resolveTemplate(rule, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Media type is required");
+    }
+
+    @Test
+    void buildVariablesIncludesEnabledAdr023Fields() {
+        MediaTask task = new MediaTask();
+        task.setSourcePath("D:/incoming/Movie.mkv");
+        task.setConfirmedTitle("Movie");
+        task.setConfirmedOriginalTitle("Original Movie");
+        task.setParsedCodec("H.265");
+        task.setParsedReleaseGroup("TEAM");
+
+        TemplateVariables variables = renameService.buildVariables(task, null);
+
+        assertThat(variables.getOriginalTitle()).isEqualTo("Original Movie");
+        assertThat(variables.getCodec()).isEqualTo("H.265");
+        assertThat(variables.getReleaseGroup()).isEqualTo("TEAM");
+        assertThat(variables.getExt()).isEqualTo(".mkv");
     }
 
     @Test

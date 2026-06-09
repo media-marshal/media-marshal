@@ -1,4 +1,12 @@
 export default {
+  v0_2_9: {
+    items: {
+      enabledTemplateVariables: '路径模板正式启用 {codec}、{release_group}、{original_title}，可按编码、发布组和原语种标题组织媒体文件。',
+      backendTemplatePreview: '新增后端模板预览与校验能力，自定义模板保存前会使用真实渲染器检查未知变量、预留变量和媒体类型适用性。',
+      safeTemplateRendering: '补齐路径安全保护，阻止绝对路径、Windows 盘符、UNC 路径和 .. 逃逸目标根目录，避免危险模板触发文件操作。',
+      templateValueSanitizing: '模板变量值会自动清洗路径非法字符，前端预览结果与后端实际整理结果保持一致。',
+    },
+  },
   v0_2_8: {
     items: {
       parentFolderContext: '当文件名信息不足时，识别会参考父级发布目录里的中文名和英文名，减少同一剧集反复进入待确认队列。',

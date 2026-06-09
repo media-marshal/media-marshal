@@ -65,6 +65,8 @@ public class BluRayDirectoryAssetOrganizer implements AssetOrganizerStrategy {
 
     private Path buildTargetRoot(MediaTask task, WatchRule rule) {
         String relativePath = renameService.renderRelativePath(task, rule, "");
+        renameService.resolveSafeTargetPath(rule.getTargetDir(), relativePath);
+
         Path relative = Paths.get(relativePath).normalize();
         Path parent = relative.getParent();
         if (parent == null || parent.toString().isBlank()) {
@@ -72,9 +74,9 @@ public class BluRayDirectoryAssetOrganizer implements AssetOrganizerStrategy {
                     BLURAY_FALLBACK_TEMPLATE,
                     renameService.buildVariables(task, "")
             );
-            return Paths.get(rule.getTargetDir()).resolve(fallback).normalize();
+            return renameService.resolveSafeTargetPath(rule.getTargetDir(), fallback);
         }
-        return Paths.get(rule.getTargetDir()).resolve(parent).normalize();
+        return renameService.resolveSafeTargetPath(rule.getTargetDir(), parent.toString());
     }
 
     private void copyDirectory(Path sourceRoot, Path targetRoot) throws IOException {

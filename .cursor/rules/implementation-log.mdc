@@ -2699,8 +2699,6 @@ alwaysApply: false
 ### 遗留问题
 - 无
 
----
-
 ## [失败任务错误码与重复失败聚合] 2026-05-09
 
 ### 完成内容
@@ -2769,6 +2767,78 @@ alwaysApply: false
 - `.cursor/rules/implementation-log.mdc`
 
 ### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
+
+---
+
+## [ADR-023 路径模板变量正式启用与安全渲染补齐] 2026-06-09
+
+### 完成内容
+- `MediaTask` 新增 `parsedCodec`、`parsedReleaseGroup`、`confirmedOriginalTitle`，分别持久化 guessit `video_codec`、`release_group` 和确认候选的 TMDB `original_title` / `original_name`。
+- `RenameService.buildVariables()` 正式填充 `{codec}`、`{release_group}`、`{original_title}`，`TemplateVariableCatalogService` 将三者状态调整为 `AVAILABLE`。
+- `TemplateRenderer` 对变量值执行路径非法字符清洗，用户模板中的 `/` 仍表示目录层级；清洗为空的变量按缺失变量处理，可选片段按 ADR-017 移除。
+- 新增 `TemplatePathSafetyService`，真实文件操作和模板预览共用路径安全校验：阻止绝对路径、Windows 盘符路径、UNC 路径、`..` 路径段以及 normalize 后逃逸 `targetDir` 的路径。
+- 新增错误码 `UNSAFE_TARGET_PATH`，路径模板渲染结果不安全时任务进入 `FAILED`，不执行文件操作。
+- 新增 `POST /api/template-variables/preview`，使用后端 `TemplateRenderer` 和同一套路径安全规则返回 `output`、`warnings`、`errors`、`usedVariables`、`unknownVariables`、`reservedVariables`、`unsafePath`。
+- 路径设置页自定义模板预览改为调用后端预览接口；保存自定义模板前会阻断未知变量、预留变量、媒体类型不适用变量和不安全路径。
+- 清理路径设置页旧的“后续从 GET /api/template-variables 获取变量”硬编码 TODO。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TemplatePreviewRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TemplatePreviewResponse.java`
+- `backend/src/main/java/com/mediamarshal/controller/TemplateVariableController.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateRenderer.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/BluRayDirectoryAssetOrganizer.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplatePathSafetyService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplatePreviewService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariableCatalogService.java`
+- `frontend/src/api/templateVariables.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- `{episode_title}`、`{genre_1}`~`{genre_4}`、`{country}` 仍按 ADR-023 保持 `RESERVED`，后续启用时需补充真实数据来源、持久化字段和前端展示策略。
+
+---
+
+## [v0.2.9 版本号与 ReleaseNote 更新] 2026-06-09
+
+### 完成内容
+- 根目录 `VERSION` 更新为 `v0.2.9`。
+- 后端 Maven 版本更新为 `v0.2.9-SNAPSHOT`。
+- 前端 `package.json` / `package-lock.json` 版本更新为 `0.2.9`。
+- Parser sidecar 本地 fallback 版本更新为 `0.2.9`。
+- ReleaseNote 新增 `v0.2.9`，记录 ADR-023 路径模板变量启用、后端模板预览、路径安全渲染和变量值清洗。
+
+### 影响文件
+- `VERSION`
+- `backend/pom.xml`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `parser/main.py`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q -DskipTests compile`
 - `npm.cmd run type-check`
 - `npm.cmd run build`
 
