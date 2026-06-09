@@ -2825,6 +2825,7 @@ alwaysApply: false
 - 前端 `package.json` / `package-lock.json` 版本更新为 `0.2.9`。
 - Parser sidecar 本地 fallback 版本更新为 `0.2.9`。
 - ReleaseNote 新增 `v0.2.9`，记录 ADR-023 路径模板变量启用、后端模板预览、路径安全渲染和变量值清洗。
+- 重新优化所有 ReleaseNote 文案，改为用户视角的简洁描述，并移除会被 vue-i18n 当作插值变量解析的模板占位符写法。
 
 ### 影响文件
 - `VERSION`
