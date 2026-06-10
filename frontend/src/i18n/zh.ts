@@ -335,6 +335,12 @@ export default {
     tmdbLanguage: 'TMDB 返回语言',
     tmdbLanguagePlaceholder: '请选择 TMDB 返回语言',
     tmdbLanguageHelp: '影响标题、简介等文本的语言，默认使用简体中文（zh-CN）。',
+    tmdbProxyEnabled: '启用 TMDB HTTP 代理',
+    tmdbProxyHelp: '仅代理 TMDB API 请求，不影响海报图片、Parser 或其它网络访问。',
+    tmdbProxyHttpUrl: 'TMDB HTTP 代理地址',
+    tmdbProxyHttpUrlPlaceholder: '例如 http://127.0.0.1:7890',
+    tmdbProxyHttpUrlHelp: '仅支持不带认证信息的 HTTP 代理。留空并关闭开关时使用直连。',
+    tmdbProxyUrlRequired: '启用 TMDB 代理时必须填写代理地址',
     tmdbLanguageOptions: {
       zhCN: '简体中文（zh-CN）',
       zhTW: '繁體中文（zh-TW）',

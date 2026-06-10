@@ -194,7 +194,9 @@ interface MetadataSearchQuery {
 | 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
 |---|---|---|---|---|
 | GET | `/api/settings` | 查询所有配置（敏感项脱敏显示） | — | `AppSetting[]` |
+| GET | `/api/settings/effective?keys=tmdb.proxy.enabled,tmdb.proxy.http-url` | 查询指定配置的当前有效值，用于读取环境变量 / application.yml / 数据库合并后的运行时配置 | — | `EffectiveSetting[]` |
 | PUT | `/api/settings/{key}` | 更新单项配置（写入数据库） | `UpdateRequest` | — |
+| PUT | `/api/settings/tmdb-proxy` | 原子保存 TMDB HTTP 代理开关和地址；`tmdb.proxy.enabled` / `tmdb.proxy.http-url` 不通过单项接口分别保存 | `TmdbProxyUpdateRequest` | — |
 | POST | `/api/settings/reset` | 重置系统：删除数据库中的配置、监控规则、任务和候选数据，使系统回到首次初始化状态；不会删除媒体文件 | — | — |
 
 ### AppSetting 字段
@@ -215,6 +217,32 @@ interface UpdateRequest {
   sensitive?: boolean
 }
 ```
+
+### EffectiveSetting 字段
+```typescript
+interface EffectiveSetting {
+  key: string
+  value: string
+  source: 'DATABASE' | 'ENVIRONMENT' | 'APPLICATION' | 'DEFAULT' | 'INFERRED_FROM_HTTP_URL' | 'SENSITIVE'
+  overriddenByDatabase: boolean
+}
+```
+
+### TmdbProxyUpdateRequest
+```typescript
+interface TmdbProxyUpdateRequest {
+  enabled: boolean
+  httpUrl?: string
+}
+```
+
+### TMDB HTTP 代理配置语义
+- 配置键：`tmdb.proxy.enabled`、`tmdb.proxy.http-url`。
+- 环境变量：`MEDIA_MARSHAL_TMDB_PROXY_ENABLED`、`MEDIA_MARSHAL_TMDB_PROXY_HTTP_URL`。
+- 生效优先级：数据库代理配置优先；未被数据库接管时，再按环境变量、`application.yml`、默认值读取。
+- 数据库中存在 `tmdb.proxy.enabled=false` 时强制直连，即使环境变量或 `application.yml` 中存在代理地址。
+- `tmdb.proxy.enabled` 未配置但 `tmdb.proxy.http-url` 存在且非空时，视为启用代理。
+- 第一版仅支持不带认证信息的 HTTP 代理，例如 `http://127.0.0.1:7890`；不支持 SOCKS、HTTPS 代理和代理认证。
 
 ---
 

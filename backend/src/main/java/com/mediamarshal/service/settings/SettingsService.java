@@ -8,6 +8,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 配置管理服务
@@ -63,6 +64,34 @@ public class SettingsService {
                 .orElse(defaultValue);
     }
 
+    public Optional<String> getDatabaseValue(String key) {
+        return settingRepository.findByKey(key)
+                .map(setting -> setting.getValue() == null ? "" : setting.getValue());
+    }
+
+    public EffectiveValue getEffectiveValue(String key, String defaultValue) {
+        if ("tmdb.api-key".equals(key)) {
+            return getDatabaseValue(key)
+                    .map(value -> new EffectiveValue(key, value, "DATABASE", true))
+                    .orElseGet(() -> new EffectiveValue(key, defaultValue, "DEFAULT", false));
+        }
+
+        String envKey = "MEDIA_MARSHAL_" + key.replace(".", "_").replace("-", "_").toUpperCase();
+        String envValue = System.getenv(envKey);
+        if (envValue != null && !envValue.isBlank()) {
+            return new EffectiveValue(key, envValue, "ENVIRONMENT", false);
+        }
+
+        String ymlValue = environment.getProperty("media-marshal." + key);
+        if (ymlValue != null && !ymlValue.isBlank()) {
+            return new EffectiveValue(key, ymlValue, "APPLICATION", false);
+        }
+
+        return getDatabaseValue(key)
+                .map(value -> new EffectiveValue(key, value, "DATABASE", false))
+                .orElseGet(() -> new EffectiveValue(key, defaultValue, "DEFAULT", false));
+    }
+
     /**
      * 通过 Web UI 保存配置到数据库
      * 注意：此操作不会覆盖环境变量，运行时读取仍以环境变量优先
@@ -93,5 +122,8 @@ public class SettingsService {
     private String mask(String value) {
         if (value == null || value.length() <= 4) return "****";
         return value.substring(0, 4) + "****";
+    }
+
+    public record EffectiveValue(String key, String value, String source, boolean overriddenByDatabase) {
     }
 }

@@ -60,6 +60,13 @@ export interface AppSetting {
   sensitive: boolean
 }
 
+export interface EffectiveSetting {
+  key: string
+  value: string
+  source: string
+  overriddenByDatabase: boolean
+}
+
 // ─── 待确认队列候选项 ─────────────────────────────────────────────
 export interface TaskCandidate {
   id: number

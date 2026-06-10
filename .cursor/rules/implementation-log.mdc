@@ -2699,6 +2699,48 @@ alwaysApply: false
 ### 遗留问题
 - 无
 
+---
+
+## [ADR-024 TMDB HTTP 代理配置] 2026-06-09
+
+### 完成内容
+- 新增 TMDB HTTP 代理运行时配置：`tmdb.proxy.enabled`、`tmdb.proxy.http-url`，并在 `application.yml` / `.env.example` 中补充 `MEDIA_MARSHAL_TMDB_PROXY_ENABLED`、`MEDIA_MARSHAL_TMDB_PROXY_HTTP_URL`。
+- 新增 `TmdbProxySettingsService`，按 ADR-024 实现代理配置优先级：数据库代理配置优先；未被数据库接管时，再按环境变量、`application.yml`、默认值读取；数据库保存 `tmdb.proxy.enabled=false` 时强制直连。
+- 新增 `GET /api/settings/effective` 回显有效配置，支持初始化页自动带入环境变量 / `application.yml` 中的代理地址。
+- 新增 `PUT /api/settings/tmdb-proxy` 原子保存代理开关和地址，避免单项保存产生半配置状态；`tmdb.proxy.enabled` / `tmdb.proxy.http-url` 不再通过通用单项设置接口分别保存。
+- `TmdbMetadataMatcher` 搜索、详情查询、手动搜索、TMDB ID 详情查询和人工确认详情请求统一使用 scoped WebClient 代理配置；页面保存后，新发起的 TMDB 请求无需重启即可使用最新代理配置。
+- 代理错误信息补齐：地址格式错误、启用但地址为空、代理连接失败、TMDB 连接超时、代理认证失败等场景会返回可排查的错误信息。
+- 初始化页和系统设置页新增 TMDB HTTP 代理配置入口；关闭代理并保存后可覆盖错误的环境变量 / 配置文件代理。
+- 部署文档补充 TMDB HTTP 代理说明，明确第一版仅代理 TMDB API，不支持海报代理、SOCKS / HTTPS 代理和代理认证。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/service/settings/SettingsService.java`
+- `backend/src/main/java/com/mediamarshal/service/settings/TmdbProxySettingsService.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/EffectiveSettingResponse.java`
+- `backend/src/main/java/com/mediamarshal/controller/SettingsController.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/settings/TmdbProxySettingsServiceTest.java`
+- `frontend/src/api/settings.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/SetupView.vue`
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.env.example`
+- `docs/deployment.md`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 第一版不支持 SOCKS 代理、HTTPS 代理、代理认证和海报图片代理，按 ADR-024 后续规划处理。
+
 ## [失败任务错误码与重复失败聚合] 2026-05-09
 
 ### 完成内容

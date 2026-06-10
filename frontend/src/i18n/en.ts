@@ -335,6 +335,12 @@ export default {
     tmdbLanguage: 'TMDB Language',
     tmdbLanguagePlaceholder: 'Select a TMDB language',
     tmdbLanguageHelp: 'Affects titles, overview text, etc. Defaults to Simplified Chinese (zh-CN).',
+    tmdbProxyEnabled: 'Enable TMDB HTTP Proxy',
+    tmdbProxyHelp: 'Only TMDB API requests use this proxy. Posters, Parser, and other network requests are not affected.',
+    tmdbProxyHttpUrl: 'TMDB HTTP Proxy URL',
+    tmdbProxyHttpUrlPlaceholder: 'E.g. http://127.0.0.1:7890',
+    tmdbProxyHttpUrlHelp: 'Only unauthenticated HTTP proxies are supported. Turn the switch off and leave this empty to connect directly.',
+    tmdbProxyUrlRequired: 'Enter a proxy URL before enabling the TMDB proxy',
     tmdbLanguageOptions: {
       zhCN: 'Simplified Chinese (zh-CN)',
       zhTW: 'Traditional Chinese (zh-TW)',
