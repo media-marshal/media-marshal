@@ -43,6 +43,12 @@ interface MediaTask {
   confirmedTitle: string | null
   confirmedOriginalTitle: string | null // TMDB original_title / original_name，用于 {original_title} 模板变量
   confirmedYear: number | null
+  confirmedGenre1: string | null        // TMDB genres[0].name，用于 {genre_1} 模板变量
+  confirmedGenre2: string | null        // TMDB genres[1].name，用于 {genre_2} 模板变量
+  confirmedGenre3: string | null        // TMDB genres[2].name，用于 {genre_3} 模板变量
+  confirmedGenre4: string | null        // TMDB genres[3].name，用于 {genre_4} 模板变量
+  confirmedCountry: string | null       // TMDB origin_country[0]，回退 production_countries[0].iso_3166_1，用于 {country}
+  confirmedEpisodeTitle: string | null  // TV 单集 TMDB episode name，用于 {episode_title}
   confirmationSource: 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | null
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
@@ -131,6 +137,7 @@ interface QueueRecognitionResponse {
 
 > 人工单条确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_SINGLE`；批量确认接口会快速返回提交结果，成功提交的任务先进入 `PROCESSING`，后台整理完成后最终状态仍为 `DONE`，`confirmationSource=MANUAL_BATCH`。系统高置信度自动采纳时 `confirmationSource=AUTO_MATCH`。
 > `POST /api/queue/batch-confirm` 支持来自全局手动搜索的候选：若 `tmdbId + mediaType` 不在该任务 `task_candidate` 中，后端确认时会新建候选记录并标记为 `selected=true`。
+> ADR-025 后所有确认路径（自动高置信度、人工单条、批量确认、全局搜索候选确认、TMDB ID 直接确认）都会在最终确认所选候选时拉取 TMDB 详情；详情失败会导致该次确认失败。TV 单集的 episode 详情失败时，若当前路径模板使用 `{episode_title}`，确认失败；未使用该变量时继续整理并保持 `episodeTitle=null`。
 > 后台删除事件监听、周期扫描巡检和确认前最终校验都会将源文件缺失的 `PENDING` / `AWAITING_CONFIRMATION` 任务标记为 `FAILED`，固定失败信息为：`源文件不存在，无法继续处理`。v1 不自动失败 `PROCESSING` 任务，避免误伤正在执行的文件操作。
 
 ### TaskCandidate
@@ -146,6 +153,12 @@ interface TaskCandidate {
   confidence: number | null        // 0.0 ~ 1.0
   posterUrl: string | null
   overview: string | null
+  genre1: string | null            // 确认候选时的 TMDB genre 快照
+  genre2: string | null
+  genre3: string | null
+  genre4: string | null
+  country: string | null           // 确认候选时的 TMDB country 快照
+  episodeTitle: string | null      // TV 单集候选的 TMDB episode name 快照；多集范围为空
   rank: number                     // 1 = 系统最高推荐
   selected: boolean
   createdAt: string
@@ -163,11 +176,15 @@ interface MatchResult {
   mediaType: 'MOVIE' | 'TV_SHOW'
   overview: string | null
   posterUrl: string | null
+  genres: string[] | null          // TMDB detail genres[].name；最多 4 个，搜索候选可为空
+  country: string | null           // TMDB origin_country[0]，回退 production_countries[0].iso_3166_1
+  episodeTitle: string | null      // TV 单集详情名；多集范围或缺失时为空
   confidence: number | null
 }
 ```
 
-> ADR-018 仅升级后端内部匹配策略，不新增前端可见字段：全局 metadata 搜索和自动匹配仍返回 `MatchResult[]`。后端会基于原始文件名与 guessit 标题生成多 query，使用进程内 TMDB 搜索 / 详情缓存与 in-flight 去重，并按标题、年份、媒体类型、文件结构综合评分；评分解释仅在 `media-marshal.debug=true` 时写入后端日志。
+> ADR-018 升级后端内部匹配策略：全局 metadata 搜索和自动匹配仍返回 `MatchResult[]`。后端会基于原始文件名与 guessit 标题生成多 query，使用进程内 TMDB 搜索 / 详情缓存与 in-flight 去重，并按标题、年份、媒体类型、文件结构综合评分；评分解释仅在 `media-marshal.debug=true` 时写入后端日志。
+> ADR-025 起，最终确认路径会拉取所选 TMDB 条目的详情并补齐 `genres`、`country`；TV 单集且非多集范围时会拉取 episode 详情补齐 `episodeTitle`。这些字段会写入 `MediaTask.confirmed*` 和 `TaskCandidate` 快照，用于路径模板渲染。普通搜索候选不批量拉详情，字段可为空。
 
 ---
 
@@ -385,8 +402,8 @@ interface TemplatePreviewResponse {
 > 变量名来源以 `TemplateVariables` 上的 `@TemplateVar` 注解为准；格式化变量目前按 ADR-001 暴露 `{season:02d}`、`{season:04d}`、`{episode:02d}`、`{episode:04d}`。
 > 前端帮助面板仅展示 `AVAILABLE` 和 `DEPRECATED` 变量；`DEPRECATED` 变量需展示废弃提示，`RESERVED` / `UNAVAILABLE` 不展示。
 > 路径模板支持可选片段语法 `[[ ... ]]`：片段内所有变量都可填充时渲染片段，任意变量缺失时移除整个片段。可选片段外的缺失变量仍保留占位符原样。例如 `{title} ({year})[[ - {resolution}]]{ext}` 在分辨率缺失时渲染为 `{title} ({year}){ext}` 的替换结果。
-> 当前正式可用变量包含 `{codec}`、`{release_group}`、`{original_title}`；`{episode_title}`、`{genre_1}`~`{genre_4}`、`{country}` 仍为 `RESERVED`，不得在前端帮助面板展示。
-> 后端渲染会清洗变量值中的路径非法字符（`/ \ : * ? " < > |` 与控制字符），但模板本身的 `/` 仍表示目录层级。真实文件操作前必须校验渲染结果为 `targetDir` 下相对路径：禁止绝对路径、Windows 盘符路径、UNC 路径、`..` 路径段，以及 normalize 后逃逸目标根目录的路径。不安全时任务进入 `FAILED`，`errorCode=UNSAFE_TARGET_PATH`。
+> 当前正式可用 TMDB 模板变量包含 `{original_title}`、`{genre_1}`~`{genre_4}`、`{country}`、`{episode_title}`；`{episode_title}` 仅适用于 `TV_SHOW` 单集任务，多集范围保持为空，建议放在可选片段中。`{genre_1}`~`{genre_4}` 和 `{country}` 适用于 `MOVIE` / `TV_SHOW`，缺失时为空，建议放在可选片段中。
+> 后端渲染会清洗变量值和格式参数值中的路径非法字符（`/ \ : * ? " < > |` 与控制字符），但模板本身的 `/` 仍表示目录层级。真实文件操作前必须校验渲染结果为 `targetDir` 下相对路径：禁止绝对路径、Windows 盘符路径、UNC 路径、`..` 路径段，以及 normalize 后逃逸目标根目录的路径。不安全时任务进入 `FAILED`，`errorCode=UNSAFE_TARGET_PATH`。
 
 ---
 

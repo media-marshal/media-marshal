@@ -226,13 +226,21 @@ public class TemplateRenderer {
                     throw new IllegalArgumentException("Invalid template parameter: " + token);
                 }
                 String key = token.substring(0, equalsIndex).trim();
-                String value = token.substring(equalsIndex + 1);
+                String value = sanitizeParameterValue(token.substring(equalsIndex + 1));
                 if (!isSupportedParam(key)) {
                     throw new IllegalArgumentException("Unsupported template parameter: " + key);
                 }
                 params.put(key, value);
             }
             return params;
+        }
+
+        private static String sanitizeParameterValue(String value) {
+            String sanitized = UNSAFE_PATH_VALUE_CHARS.matcher(value).replaceAll("_").trim();
+            if (".".equals(sanitized) || "..".equals(sanitized)) {
+                return "_";
+            }
+            return sanitized;
         }
 
         private static boolean isSupportedParam(String key) {

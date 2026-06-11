@@ -137,6 +137,9 @@ public class ParentFolderMatchEnhancer {
         copy.setMediaType(source.getMediaType());
         copy.setOverview(source.getOverview());
         copy.setPosterUrl(source.getPosterUrl());
+        copy.setGenres(source.getGenres());
+        copy.setCountry(source.getCountry());
+        copy.setEpisodeTitle(source.getEpisodeTitle());
         copy.setConfidence(clamp(confidence));
         return copy;
     }

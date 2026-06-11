@@ -39,6 +39,12 @@ export interface MediaTask {
   confirmedTitle: string | null
   confirmedOriginalTitle: string | null
   confirmedYear: number | null
+  confirmedGenre1: string | null
+  confirmedGenre2: string | null
+  confirmedGenre3: string | null
+  confirmedGenre4: string | null
+  confirmedCountry: string | null
+  confirmedEpisodeTitle: string | null
   confirmationSource: ConfirmationSource | null
   matchConfidence: number | null
   errorCode: TaskErrorCode | null
@@ -79,6 +85,12 @@ export interface TaskCandidate {
   confidence: number | null
   posterUrl: string | null
   overview: string | null
+  genre1: string | null
+  genre2: string | null
+  genre3: string | null
+  genre4: string | null
+  country: string | null
+  episodeTitle: string | null
   rank: number
   selected: boolean
   createdAt: string
@@ -93,6 +105,9 @@ export interface MatchResult {
   mediaType: MediaType
   overview: string | null
   posterUrl: string | null
+  genres: string[] | null
+  country: string | null
+  episodeTitle: string | null
   confidence: number | null
 }
 

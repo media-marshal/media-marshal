@@ -167,6 +167,17 @@ class TemplateRendererTest {
     }
 
     @Test
+    void placeholderParameterValuesAreSanitized() {
+        TemplateVariables variables = TemplateVariables.builder()
+                .episode(new TemplateRange(1, 2))
+                .build();
+
+        String rendered = renderer.render("{episode:02d;prefix=E/;suffix=:X;separator=/}", variables);
+
+        assertThat(rendered).isEqualTo("E_01_X_E_02_X");
+    }
+
+    @Test
     void parameterizedPlaceholderWorksInsideOptionalSegment() {
         TemplateVariables variables = TemplateVariables.builder()
                 .title("Friends")

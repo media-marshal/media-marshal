@@ -74,6 +74,24 @@ public class MediaTask {
     /** TMDB 返回的发布年份 */
     private Integer confirmedYear;
 
+    @Column(length = 100)
+    private String confirmedGenre1;
+
+    @Column(length = 100)
+    private String confirmedGenre2;
+
+    @Column(length = 100)
+    private String confirmedGenre3;
+
+    @Column(length = 100)
+    private String confirmedGenre4;
+
+    @Column(length = 10)
+    private String confirmedCountry;
+
+    @Column(length = 500)
+    private String confirmedEpisodeTitle;
+
     /** 匹配置信度 0.0-1.0，低于阈值进入 AWAITING_CONFIRMATION */
     private Double matchConfidence;
 

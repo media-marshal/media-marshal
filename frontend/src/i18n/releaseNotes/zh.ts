@@ -2,6 +2,7 @@ export default {
   v0_2_9: {
     items: {
       enabledTemplateVariables: '路径模板可使用编码、发布组和原语种标题，整理结果更贴近你的命名习惯。',
+      tmdbTemplateVariables: '路径模板可按 TMDB 分类、国家和剧集单集标题组织文件。',
       backendTemplatePreview: '保存自定义模板前会先预览并提示问题，减少保存后才发现模板不可用的情况。',
       safeTemplateRendering: '危险路径模板会被拦截，避免文件被整理到目标目录之外。',
       templateValueSanitizing: '标题、发布组等内容里的非法路径字符会自动处理，预览和实际整理结果更一致。',

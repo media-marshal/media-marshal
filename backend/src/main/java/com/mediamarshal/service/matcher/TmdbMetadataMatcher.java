@@ -142,7 +142,33 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
     public MatchResult getById(String sourceId, String mediaType) {
         String endpoint = "TV_SHOW".equalsIgnoreCase(mediaType) ? "tv" : "movie";
         String cacheKey = String.join("|", "detail", endpoint, sourceId, getLanguage());
-        return cache.get(cacheKey, () -> getByIdUncached(sourceId, endpoint), ignored -> getDuration("tmdb.detail-cache-ttl-minutes", 1440));
+        TmdbInMemoryCache.CacheLookup<MatchResult> lookup = cache.getWithStatus(
+                cacheKey,
+                () -> getByIdUncached(sourceId, endpoint),
+                ignored -> getDuration("tmdb.detail-cache-ttl-minutes", 1440)
+        );
+        logCacheStatus("TMDB detail", cacheKey, lookup.status());
+        return lookup.value();
+    }
+
+    @Override
+    @SuppressWarnings("null")
+    public String getEpisodeTitle(String sourceId, int seasonNumber, int episodeNumber) {
+        String cacheKey = String.join("|",
+                "tv",
+                sourceId,
+                "season",
+                String.valueOf(seasonNumber),
+                "episode",
+                String.valueOf(episodeNumber),
+                getLanguage());
+        TmdbInMemoryCache.CacheLookup<String> lookup = cache.getWithStatus(
+                cacheKey,
+                () -> getEpisodeTitleUncached(sourceId, seasonNumber, episodeNumber),
+                ignored -> getDuration("tmdb.detail-cache-ttl-minutes", 1440)
+        );
+        logCacheStatus("TMDB episode detail", cacheKey, lookup.status());
+        return lookup.value();
     }
 
     @SuppressWarnings("null")
@@ -159,6 +185,22 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
             throw new IllegalStateException("TMDB detail response is empty: id=" + sourceId);
         }
         return mapDetail(root, endpoint);
+    }
+
+    @SuppressWarnings("null")
+    private String getEpisodeTitleUncached(String sourceId, int seasonNumber, int episodeNumber) {
+        TmdbRequestContext context = createRequestContext();
+        JsonNode root = executeTmdbRequest(context, context.client().get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/tv/{id}/season/{season}/episode/{episode}")
+                        .queryParam("api_key", getApiKey())
+                        .queryParam("language", getLanguage())
+                        .build(sourceId, seasonNumber, episodeNumber)));
+
+        if (root == null || root.isMissingNode()) {
+            throw new IllegalStateException("TMDB episode detail response is empty: id=" + sourceId);
+        }
+        return text(root, "name");
     }
 
     @Override
@@ -251,6 +293,12 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
         } catch (NumberFormatException e) {
             log.warn("Invalid {}='{}', fallback to {} minutes", key, value, fallbackMinutes);
             return Duration.ofMinutes(fallbackMinutes);
+        }
+    }
+
+    private void logCacheStatus(String label, String cacheKey, TmdbInMemoryCache.CacheStatus status) {
+        if (Boolean.parseBoolean(settingsService.get("debug", "false"))) {
+            log.debug("{} cache status: key={}, status={}", label, cacheKey, status);
         }
     }
 
@@ -403,8 +451,48 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
         result.setMediaType("movie".equals(endpoint) ? "MOVIE" : "TV_SHOW");
         result.setOverview(text(root, "overview"));
         result.setPosterUrl(buildPosterUrl(text(root, "poster_path")));
+        result.setGenres(extractGenres(root));
+        result.setCountry(extractCountry(root));
         result.setConfidence(1.0);
         return result;
+    }
+
+    private List<String> extractGenres(JsonNode root) {
+        JsonNode genres = root.path("genres");
+        if (!genres.isArray()) {
+            return List.of();
+        }
+
+        List<String> values = new ArrayList<>();
+        for (JsonNode genre : genres) {
+            String name = text(genre, "name");
+            if (name != null && !name.isBlank()) {
+                values.add(name);
+            }
+            if (values.size() >= 4) {
+                break;
+            }
+        }
+        return values;
+    }
+
+    private String extractCountry(JsonNode root) {
+        JsonNode originCountry = root.path("origin_country");
+        if (originCountry.isArray() && !originCountry.isEmpty()) {
+            String value = originCountry.get(0).asText(null);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+
+        JsonNode productionCountries = root.path("production_countries");
+        if (productionCountries.isArray() && !productionCountries.isEmpty()) {
+            String value = text(productionCountries.get(0), "iso_3166_1");
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String text(JsonNode node, String field) {

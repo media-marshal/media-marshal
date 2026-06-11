@@ -2,6 +2,7 @@ export default {
   v0_2_9: {
     items: {
       enabledTemplateVariables: 'Path templates can now use codec, release group, and original title for names that better match your library style.',
+      tmdbTemplateVariables: 'Path templates can now organize files by TMDB genre, country, and TV episode title.',
       backendTemplatePreview: 'Custom templates are previewed and checked before saving, so problems are easier to catch early.',
       safeTemplateRendering: 'Unsafe templates are blocked before they can place files outside the target folder.',
       templateValueSanitizing: 'Unsafe path characters in titles and release groups are handled automatically, keeping previews closer to the final result.',

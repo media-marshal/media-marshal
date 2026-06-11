@@ -178,7 +178,7 @@
               <template #label>
                 <span class="template-label">
                   <span>{{ t('watchRule.moviePathTemplate') }}</span>
-                  <a href="#" @click.prevent="toggleVariableDrawer">
+                  <a href="#" @click.prevent="toggleVariableDrawer('movie')">
                     {{ t('watchRule.templateVariablesLink') }}
                   </a>
                 </span>
@@ -234,8 +234,16 @@
 
             <el-form-item
               v-if="showTvTemplate"
-              :label="t('watchRule.tvPathTemplate')"
             >
+              <template #label>
+                <span class="template-label">
+                  <span>{{ t('watchRule.tvPathTemplate') }}</span>
+                  <a href="#" @click.prevent="toggleVariableDrawer('tv')">
+                    {{ t('watchRule.templateVariablesLink') }}
+                  </a>
+                </span>
+              </template>
+
               <div v-if="!templateStates.tv.customMode" class="template-input-row">
                 <el-select
                   v-model="templateStates.tv.selected"
@@ -411,6 +419,8 @@
             <div class="optional-segment-title">{{ t('templateVariables.optionalSegmentTitle') }}</div>
             <p>{{ t('templateVariables.optionalSegmentDescription') }}</p>
             <code>{title} ({year})[[ - {resolution}]]{ext}</code>
+            <code>[[{country}/]][[{genre_1}/]]{title} ({year})/{title} ({year}){ext}</code>
+            <code>{title} ({year})/S{season:02d}/{title} - S{season:02d}E{episode:02d}[[ - {episode_title}]]{ext}</code>
           </div>
 
           <div class="optional-segment-help">
@@ -519,7 +529,11 @@ const saving = ref(false)
 const formRef = ref<FormInstance>()
 const ignoredPatternsEditing = ref(false)
 const ignoredPatternInput = ref('')
+// ─── 预设模板 ────────────────────────────────────────────────────
+type TemplateKind = 'movie' | 'tv'
+
 const variableDrawerVisible = ref(false)
+const variableDrawerKind = ref<TemplateKind>('movie')
 const templateVariablesLoading = ref(false)
 const templateVariableGroups = ref<TemplateVariableGroup[]>([])
 const templatePreviewResults = reactive<Record<TemplateKind, string>>({
@@ -530,9 +544,6 @@ const templatePreviewResults = reactive<Record<TemplateKind, string>>({
 // ─── 目录浏览器 ──────────────────────────────────────────────────
 const dirBrowserVisible = ref(false)
 const dirBrowserTarget = ref<'source' | 'target'>('source')
-
-// ─── 预设模板 ────────────────────────────────────────────────────
-type TemplateKind = 'movie' | 'tv'
 
 const PRESET_TEMPLATES = [
   {
@@ -560,6 +571,12 @@ const PRESET_TEMPLATES = [
     hint: 'MOVIE/T/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
+    kind: 'movie',
+    labelKey: 'watchRule.presetTemplates.movieByCountryGenre',
+    value: '[[{country}/]][[{genre_1}/]]{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}',
+    hint: 'US/Action/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
+  },
+  {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvDefault',
     value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
@@ -583,6 +600,12 @@ const PRESET_TEMPLATES = [
     value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
     hint: 'TV_SHOW/B/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
+  {
+    kind: 'tv',
+    labelKey: 'watchRule.presetTemplates.tvWithEpisodeTitle',
+    value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {episode_title}]][[ - {resolution}]]{ext}',
+    hint: 'Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - One Minute - 1080p.mkv',
+  },
 ] satisfies Array<{ kind: TemplateKind, labelKey: string, value: string, hint: string }>
 
 // ─── 模板选择状态 ─────────────────────────────────────────────────
@@ -598,11 +621,17 @@ const templateStates = reactive<Record<TemplateKind, {
 const showMovieTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'MOVIE')
 const showTvTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'TV_SHOW')
 const showScanInterval = computed(() => form.discoveryMode === 'PERIODIC_SCAN' || form.discoveryMode === 'HYBRID')
+const variableDrawerMediaType = computed<MediaType>(() =>
+  variableDrawerKind.value === 'tv' ? 'TV_SHOW' : 'MOVIE',
+)
 const visibleTemplateVariableGroups = computed(() =>
   templateVariableGroups.value
     .map(group => ({
       ...group,
-      variables: group.variables.filter(variable => variable.status === 'AVAILABLE' || variable.status === 'DEPRECATED'),
+      variables: group.variables.filter(variable =>
+        (variable.status === 'AVAILABLE' || variable.status === 'DEPRECATED')
+        && variable.mediaTypes.includes(variableDrawerMediaType.value),
+      ),
     }))
     .filter(group => group.variables.length > 0),
 )
@@ -738,8 +767,14 @@ async function fetchTemplateVariables() {
   }
 }
 
-async function toggleVariableDrawer() {
-  variableDrawerVisible.value = !variableDrawerVisible.value
+async function toggleVariableDrawer(kind: TemplateKind) {
+  if (variableDrawerVisible.value && variableDrawerKind.value === kind) {
+    variableDrawerVisible.value = false
+    return
+  }
+
+  variableDrawerKind.value = kind
+  variableDrawerVisible.value = true
   if (variableDrawerVisible.value) {
     await fetchTemplateVariables()
   }
@@ -1469,13 +1504,17 @@ h2 {
 }
 
 .optional-segment-help code {
-  display: inline-block;
+  display: block;
   padding: 4px 7px;
   border-radius: 6px;
   background: #eef6ff;
   color: #165dff;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
+}
+
+.optional-segment-help code + code {
+  margin-top: 6px;
 }
 
 .parameter-example-list {

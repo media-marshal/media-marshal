@@ -6,6 +6,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: '2026-06-09',
     items: [
       { type: 'feature', key: 'releaseNotes.v0_2_9.items.enabledTemplateVariables' },
+      { type: 'feature', key: 'releaseNotes.v0_2_9.items.tmdbTemplateVariables' },
       { type: 'feature', key: 'releaseNotes.v0_2_9.items.backendTemplatePreview' },
       { type: 'fix', key: 'releaseNotes.v0_2_9.items.safeTemplateRendering' },
       { type: 'optimization', key: 'releaseNotes.v0_2_9.items.templateValueSanitizing' },

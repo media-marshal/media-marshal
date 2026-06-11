@@ -29,6 +29,10 @@ public interface MetadataMatcher {
      */
     MatchResult getById(String sourceId, String mediaType);
 
+    default String getEpisodeTitle(String sourceId, int seasonNumber, int episodeNumber) {
+        return null;
+    }
+
     /**
      * 数据源标识，用于配置路由（如 "tmdb"）
      */

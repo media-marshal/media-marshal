@@ -6,6 +6,7 @@ import com.mediamarshal.model.dto.QueueRecognitionRequest;
 import com.mediamarshal.model.dto.QueueRecognitionResponse;
 import com.mediamarshal.model.entity.MediaTask;
 import com.mediamarshal.model.entity.TaskCandidate;
+import com.mediamarshal.model.entity.WatchRule;
 import com.mediamarshal.model.exception.MediaTaskFailureException;
 import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.TaskCandidateRepository;
@@ -17,15 +18,20 @@ import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
 import com.mediamarshal.service.rename.AssetOrganizerService;
 import com.mediamarshal.service.rename.FileOperationStrategy;
+import com.mediamarshal.service.rename.RenameService;
 import com.mediamarshal.service.settings.SettingsService;
 import com.mediamarshal.websocket.EventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +48,10 @@ class MediaProcessPipelineRecognitionTest {
     private MetadataMatcher metadataMatcher;
     private EventPublisher eventPublisher;
     private EmailNotificationService emailNotificationService;
+    private RenameService renameService;
+    private AssetOrganizerService assetOrganizerService;
+    private WatchRuleRepository watchRuleRepository;
+    private SettingsService settingsService;
     private MediaProcessPipeline pipeline;
 
     @BeforeEach
@@ -51,15 +61,21 @@ class MediaProcessPipelineRecognitionTest {
         metadataMatcher = mock(MetadataMatcher.class);
         eventPublisher = mock(EventPublisher.class);
         emailNotificationService = mock(EmailNotificationService.class);
+        renameService = mock(RenameService.class);
+        assetOrganizerService = mock(AssetOrganizerService.class);
+        watchRuleRepository = mock(WatchRuleRepository.class);
+        settingsService = mock(SettingsService.class);
+        when(settingsService.get(any(String.class), any(String.class))).thenAnswer(invocation -> invocation.getArgument(1));
         pipeline = new MediaProcessPipeline(
                 mock(GuessitParserClient.class),
                 metadataMatcher,
-                mock(AssetOrganizerService.class),
+                assetOrganizerService,
+                renameService,
                 mock(NfoGeneratorService.class),
                 taskRepository,
                 candidateRepository,
-                mock(WatchRuleRepository.class),
-                mock(SettingsService.class),
+                watchRuleRepository,
+                settingsService,
                 eventPublisher,
                 emailNotificationService,
                 mock(ParentFolderMatchEnhancer.class),
@@ -131,6 +147,62 @@ class MediaProcessPipelineRecognitionTest {
         verify(candidateRepository).deleteAll(List.of(oldCandidate));
         assertThat(response.task().getMatchConfidence()).isEqualTo(0.92);
         assertThat(response.candidates()).containsExactly(newCandidate);
+    }
+
+    @Test
+    void confirmEnrichesSelectedCandidateWithTmdbDetail(@TempDir Path tempDir) throws Exception {
+        Path source = Files.writeString(tempDir.resolve("Show.S03E07.mkv"), "video");
+        Path target = tempDir.resolve("library/Show/Show - S03E07 - One Minute.mkv");
+
+        MediaTask task = awaitingTask();
+        task.setRuleId(9L);
+        task.setSourcePath(source.toString());
+        task.setParsedSeason(3);
+        task.setParsedEpisode(7);
+        task.setMediaType(MediaTask.MediaType.TV_SHOW);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+        WatchRule rule = new WatchRule();
+        rule.setId(9L);
+        rule.setMoveAssociatedFiles(false);
+        rule.setGenerateNfo(false);
+        when(watchRuleRepository.findById(9L)).thenReturn(Optional.of(rule));
+        when(assetOrganizerService.organize(task)).thenReturn(target);
+
+        TaskCandidate candidate = candidate(321L, "Old Show", 0.91);
+        candidate.setMediaType(MediaTask.MediaType.TV_SHOW);
+        when(candidateRepository.findByTask_IdAndTmdbIdAndMediaType(1L, 321L, MediaTask.MediaType.TV_SHOW))
+                .thenReturn(Optional.of(candidate));
+        when(candidateRepository.findByTask_IdOrderByRankAsc(1L)).thenReturn(List.of(candidate));
+
+        MatchResult detail = new MatchResult();
+        detail.setSourceId("321");
+        detail.setTitle("Show");
+        detail.setOriginalTitle("Original Show");
+        detail.setYear(2008);
+        detail.setMediaType("TV_SHOW");
+        detail.setGenres(List.of("Drama", "Crime"));
+        detail.setCountry("US");
+        detail.setPosterUrl("poster");
+        detail.setOverview("overview");
+        detail.setConfidence(1.0);
+        when(metadataMatcher.getById("321", "TV_SHOW")).thenReturn(detail);
+        when(metadataMatcher.getEpisodeTitle("321", 3, 7)).thenReturn("One Minute");
+
+        pipeline.confirm(1L, 321L, "TV_SHOW");
+
+        assertThat(task.getConfirmedTitle()).isEqualTo("Show");
+        assertThat(task.getConfirmedOriginalTitle()).isEqualTo("Original Show");
+        assertThat(task.getConfirmedGenre1()).isEqualTo("Drama");
+        assertThat(task.getConfirmedGenre2()).isEqualTo("Crime");
+        assertThat(task.getConfirmedCountry()).isEqualTo("US");
+        assertThat(task.getConfirmedEpisodeTitle()).isEqualTo("One Minute");
+        assertThat(task.getStatus()).isEqualTo(MediaTask.TaskStatus.DONE);
+        assertThat(candidate.getGenre1()).isEqualTo("Drama");
+        assertThat(candidate.getGenre2()).isEqualTo("Crime");
+        assertThat(candidate.getCountry()).isEqualTo("US");
+        assertThat(candidate.getEpisodeTitle()).isEqualTo("One Minute");
+        verify(metadataMatcher).getEpisodeTitle("321", 3, 7);
     }
 
     @Test

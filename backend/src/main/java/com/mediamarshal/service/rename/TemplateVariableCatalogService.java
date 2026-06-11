@@ -39,15 +39,15 @@ public class TemplateVariableCatalogService {
                         item("episode", "Integer", "guessit", "集号原始数值。", "7", TV_ONLY, TemplateVariableStatus.AVAILABLE),
                         item("episode:02d", "String", "guessit", "集号两位补零格式。", "07", TV_ONLY, TemplateVariableStatus.AVAILABLE),
                         item("episode:04d", "String", "guessit", "集号四位补零格式。", "0007", TV_ONLY, TemplateVariableStatus.AVAILABLE),
-                        item("episode_title", "String", "TMDB", "TMDB 分集标题。当前版本预留，未填充时占位符会原样保留。", "Sunset", TV_ONLY, TemplateVariableStatus.RESERVED)
+                        item("episode_title", "String", "TMDB", "TMDB 单集分集标题。仅单集剧集填充，多集范围或 TMDB 缺失时为空，建议放在可选片段中。", "Sunset", TV_ONLY, TemplateVariableStatus.AVAILABLE)
                 ), supportedNames),
                 group("CLASSIFICATION", "归类辅助", List.of(
                         item("title_initial", "String", "Pipeline", "确认标题首字母。数字或特殊字符返回 #，中文取拼音首字母，英文取首字母大写。", "B", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
-                        item("genre_1", "String", "TMDB", "第 1 个分类标签。当前版本预留，未填充时占位符会原样保留。", "Action", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
-                        item("genre_2", "String", "TMDB", "第 2 个分类标签。当前版本预留，未填充时占位符会原样保留。", "Crime", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
-                        item("genre_3", "String", "TMDB", "第 3 个分类标签。当前版本预留，未填充时占位符会原样保留。", "Drama", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
-                        item("genre_4", "String", "TMDB", "第 4 个分类标签。当前版本预留，未填充时占位符会原样保留。", "Mystery", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED),
-                        item("country", "String", "TMDB", "出品国。当前版本预留，未填充时占位符会原样保留。", "US", ALL_MEDIA_TYPES, TemplateVariableStatus.RESERVED)
+                        item("genre_1", "String", "TMDB", "第 1 个 TMDB 分类标签。分类可能因条目数据缺失而为空，建议放在可选片段中。", "Action", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
+                        item("genre_2", "String", "TMDB", "第 2 个 TMDB 分类标签。分类可能因条目数据缺失而为空，建议放在可选片段中。", "Crime", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
+                        item("genre_3", "String", "TMDB", "第 3 个 TMDB 分类标签。分类可能因条目数据缺失而为空，建议放在可选片段中。", "Drama", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
+                        item("genre_4", "String", "TMDB", "第 4 个 TMDB 分类标签。分类可能因条目数据缺失而为空，建议放在可选片段中。", "Mystery", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),
+                        item("country", "String", "TMDB", "TMDB 出品国 / 原产国 ISO 3166-1 alpha-2 代码，例如 US、JP、CN；缺失时为空，建议放在可选片段中。", "US", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE)
                 ), supportedNames),
                 group("TECHNICAL", "技术参数", List.of(
                         item("resolution", "String", "guessit", "视频分辨率，来自 guessit screen_size。", "1080p", ALL_MEDIA_TYPES, TemplateVariableStatus.AVAILABLE),

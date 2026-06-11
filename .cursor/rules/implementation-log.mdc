@@ -2887,3 +2887,52 @@ alwaysApply: false
 
 ### 遗留问题
 - 无
+
+---
+
+## [ADR-025 剩余 TMDB 模板变量补齐] 2026-06-11
+
+### 完成内容
+- `MediaTask` 新增 `confirmedGenre1`~`confirmedGenre4`、`confirmedCountry`、`confirmedEpisodeTitle`，用于路径模板正式渲染 TMDB 分类、国家和 TV 单集标题。
+- `TaskCandidate` 新增 `genre1`~`genre4`、`country`、`episodeTitle` 快照字段；`MatchResult` 新增 `genres`、`country`、`episodeTitle`。
+- TMDB 确认链路在最终选中候选时拉取详情：补齐 `genres` 与 `country`，TV 单集任务额外拉取 episode 详情补齐单集标题；搜索候选列表不批量拉详情。
+- 所有确认路径共用详情补齐逻辑：自动高置信度、人工单条、批量确认、全局搜索候选确认和 TMDB ID 直接确认。
+- TMDB 详情失败会导致确认失败；TV episode 详情失败时，若当前路径模板使用 `{episode_title}` 则失败，否则继续整理并保持单集标题为空。
+- `TemplateVariableCatalogService` 将 `{genre_1}`~`{genre_4}`、`{country}`、`{episode_title}` 调整为 `AVAILABLE`，并补充数据来源说明和样例。
+- `TemplatePreviewService` 样例上下文补齐 ADR-025 变量；路径设置页变量帮助按电影 / 剧集模板过滤变量，并新增国家 / 分类、单集标题模板预设。
+- `TemplateRenderer` 对格式参数值也执行路径非法字符清洗，避免 `prefix`、`suffix`、`separator` 注入非法路径字符。
+- 同步更新 API 契约、前端类型定义和 v0.2.9 ReleaseNote 条目。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/model/dto/MatchResult.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/TaskCandidate.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/MetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/ParentFolderMatchEnhancer.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplatePreviewService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateRenderer.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariableCatalogService.java`
+- `backend/src/test/java/com/mediamarshal/service/pipeline/MediaProcessPipelineRecognitionTest.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/TemplatePreviewServiceTest.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/TemplateRendererTest.java`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
