@@ -4,6 +4,7 @@ export default {
       enabledTemplateVariables: 'Path templates can now use codec, release group, and original title for names that better match your library style.',
       tmdbTemplateVariables: 'Path templates can now organize files by TMDB genre, country, and TV episode title.',
       backendTemplatePreview: 'Custom templates are previewed and checked before saving, so problems are easier to catch early.',
+      watchRuleImportExport: 'Path Settings can now import and export watch rules, making it easier to back up or restore organizing rules before upgrades or server moves.',
       tmdbProxyComposeEnv: 'TMDB proxy settings now take effect correctly when configured through Docker Compose.',
       debugLoggingSwitch: 'Debug mode now enables backend debug logs correctly, making network and matching issues easier to diagnose.',
       safeTemplateRendering: 'Unsafe templates are blocked before they can place files outside the target folder.',

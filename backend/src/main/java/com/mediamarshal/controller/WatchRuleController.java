@@ -1,14 +1,19 @@
 package com.mediamarshal.controller;
 
 import com.mediamarshal.model.dto.ApiResponse;
+import com.mediamarshal.model.dto.WatchRuleImportPackage;
+import com.mediamarshal.model.dto.WatchRuleImportPreview;
+import com.mediamarshal.model.dto.WatchRuleImportPreviewRequest;
+import com.mediamarshal.model.dto.WatchRuleImportRequest;
+import com.mediamarshal.model.dto.WatchRuleImportResult;
+import com.mediamarshal.model.dto.WatchRuleRequest;
 import com.mediamarshal.model.dto.WatchRuleValidationResult;
 import com.mediamarshal.model.entity.WatchRule;
 import com.mediamarshal.repository.WatchRuleRepository;
 import com.mediamarshal.service.discovery.FileDiscoveryService;
+import com.mediamarshal.service.watchrule.WatchRuleImportExportService;
 import com.mediamarshal.service.watchrule.WatchRulePreflightService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,14 +43,42 @@ public class WatchRuleController {
     private final WatchRuleRepository watchRuleRepository;
     private final FileDiscoveryService fileDiscoveryService;
     private final WatchRulePreflightService watchRulePreflightService;
+    private final WatchRuleImportExportService watchRuleImportExportService;
 
     @GetMapping
     public ApiResponse<List<WatchRule>> listRules() {
         return ApiResponse.ok(watchRuleRepository.findAll());
     }
 
+    @GetMapping("/export")
+    public ApiResponse<WatchRuleImportPackage> exportRules() {
+        return ApiResponse.ok(watchRuleImportExportService.exportRules());
+    }
+
+    @PostMapping("/import/preview")
+    public ApiResponse<WatchRuleImportPreview> previewImport(@RequestBody WatchRuleImportPreviewRequest request) {
+        return ApiResponse.ok(watchRuleImportExportService.preview(request));
+    }
+
+    @PostMapping("/import")
+    public ApiResponse<WatchRuleImportResult> importRules(@RequestBody WatchRuleImportRequest request) {
+        try {
+            WatchRuleImportResult result = watchRuleImportExportService.importRules(request);
+            if (result.getCreatedCount() > 0) {
+                fileDiscoveryService.reload();
+                result.setReloadTriggered(true);
+            }
+            log.info("WatchRule import completed: created={}, skipped={}, warnings={}",
+                    result.getCreatedCount(), result.getSkippedCount(), result.getWarningCount());
+            return ApiResponse.ok(result);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            log.warn("WatchRule import rejected: {}", e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
+    }
+
     @PostMapping
-    public ApiResponse<WatchRule> createRule(@Valid @RequestBody RuleRequest request) {
+    public ApiResponse<WatchRule> createRule(@Valid @RequestBody WatchRuleRequest request) {
         WatchRule rule = buildRule(new WatchRule(), request);
         WatchRule saved = watchRuleRepository.save(Objects.requireNonNull(rule));
         log.info("WatchRule created: id={}, name={}, sourceDir={}", saved.getId(), saved.getName(), saved.getSourceDir());
@@ -54,12 +87,12 @@ public class WatchRuleController {
     }
 
     @PostMapping("/validate")
-    public ApiResponse<WatchRuleValidationResult> validateRule(@Valid @RequestBody RuleRequest request) {
+    public ApiResponse<WatchRuleValidationResult> validateRule(@Valid @RequestBody WatchRuleRequest request) {
         return ApiResponse.ok(watchRulePreflightService.validate(request));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<WatchRule> updateRule(@PathVariable Long id, @Valid @RequestBody RuleRequest request) {
+    public ApiResponse<WatchRule> updateRule(@PathVariable Long id, @Valid @RequestBody WatchRuleRequest request) {
         WatchRule rule = watchRuleRepository.findById(Objects.requireNonNull(id))
                 .orElse(null);
         if (rule == null) {
@@ -110,7 +143,7 @@ public class WatchRuleController {
         }
     }
 
-    private WatchRule buildRule(WatchRule rule, RuleRequest req) {
+    private WatchRule buildRule(WatchRule rule, WatchRuleRequest req) {
         rule.setName(req.getName());
         rule.setSourceDir(req.getSourceDir());
         rule.setTargetDir(req.getTargetDir());
@@ -134,42 +167,6 @@ public class WatchRuleController {
     }
 
     @Data
-    public static class RuleRequest {
-        @NotBlank
-        private String name;
-
-        @NotBlank
-        private String sourceDir;
-
-        @NotBlank
-        private String targetDir;
-
-        @NotNull
-        private WatchRule.RuleMediaType mediaType;
-
-        /** null 表示使用全局电影默认模板 */
-        private String moviePathTemplate;
-
-        /** null 表示使用全局剧集默认模板 */
-        private String tvPathTemplate;
-
-        @NotNull
-        private com.mediamarshal.service.rename.FileOperationStrategy.OperationType operation;
-
-        private Boolean enabled;
-
-        private Boolean moveAssociatedFiles;
-
-        private Boolean cleanupEmptyDirs;
-
-        private Boolean generateNfo;
-
-        private List<String> ignoredFilePatterns;
-
-        private WatchRule.DiscoveryMode discoveryMode;
-
-        private Integer scanIntervalMinutes;
-
-        private Boolean webhookEnabled;
+    public static class RuleRequest extends WatchRuleRequest {
     }
 }

@@ -2699,8 +2699,6 @@ alwaysApply: false
 ### 遗留问题
 - 无
 
----
-
 ## [扫描重复任务日志收敛与 ReleaseNote 整理] 2026-06-13
 
 ### 完成内容
@@ -2995,3 +2993,53 @@ alwaysApply: false
 
 ### 遗留问题
 - 无
+
+---
+
+## [ADR-026 监控路径导入导出] 2026-06-13
+
+### 完成内容
+- 新增监控路径配置包导出能力：`GET /api/watch-rules/export` 返回 `kind=media-marshal.watch-rules`、`schemaVersion=1`、`appVersion`、`exportedAt` 与规则列表。
+- 导出规则仅包含 WatchRule 行为配置字段，不包含 `id`、`userId`、时间戳、任务、候选、缓存、TMDB Key、代理或其它系统配置。
+- 新增导入预览接口 `POST /api/watch-rules/import/preview`，请求体包含导入包与 `preserveEnabledState`，前端切换“保持导出时的启用状态”时会重新预览。
+- 新增导入执行接口 `POST /api/watch-rules/import`，后端重新执行结构校验、重复判断、冲突判断和必要预检，不信任前端预览结果。
+- 默认导入新增规则为 `enabled=false`；仅 `preserveEnabledState=true` 时按导出文件中的 `enabled` 写入。
+- 完全重复规则基于行为字段指纹判断并跳过，指纹不包含 `name` 与 `enabled`；路径比较只做轻量字符串规范化，不访问文件系统或解析符号链接。
+- 同 `sourceDir` 但行为不同的规则标记为 `CONFLICT`；导入文件内部同源目录不同行为同样阻断。
+- 导入文件内部完全重复规则按“第一条参与导入，后续跳过重复”处理。
+- 默认禁用导入时，路径不可用仅作为 warning 展示；保持启用状态时，如会形成启用规则父子源目录包含关系则标记为 `CONFLICT`。
+- 真正导入启用规则时复用 WatchRule 保存前完整预检；导入事务内创建所有可导入规则，任意失败则回滚，创建成功后 Controller 只触发一次 `FileDiscoveryService.reload()`。
+- 路径设置页新增“导出 / 导入”入口；导入弹窗包含上传、预览确认、完成结果三步，明确提示本功能只导入监控路径规则，不导入系统配置和任务数据。
+- 同步更新中英文 i18n、API 契约与 v0.2.9 ReleaseNote。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPackage.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPreview.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPreviewItem.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPreviewRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportResult.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportRule.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportSummary.java`
+- `backend/src/main/java/com/mediamarshal/service/watchrule/WatchRuleImportExportService.java`
+- `backend/src/main/java/com/mediamarshal/service/watchrule/WatchRulePreflightService.java`
+- `backend/src/test/java/com/mediamarshal/service/watchrule/WatchRuleImportExportServiceTest.java`
+- `frontend/src/api/watchRule.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 第一版不支持覆盖导入、路径前缀批量替换、导入时逐条编辑或完整系统备份。

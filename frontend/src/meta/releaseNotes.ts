@@ -8,6 +8,7 @@ export const releaseNotes: ReleaseNote[] = [
       { type: 'feature', key: 'releaseNotes.v0_2_9.items.enabledTemplateVariables' },
       { type: 'feature', key: 'releaseNotes.v0_2_9.items.tmdbTemplateVariables' },
       { type: 'feature', key: 'releaseNotes.v0_2_9.items.backendTemplatePreview' },
+      { type: 'feature', key: 'releaseNotes.v0_2_9.items.watchRuleImportExport' },
       { type: 'fix', key: 'releaseNotes.v0_2_9.items.tmdbProxyComposeEnv' },
       { type: 'fix', key: 'releaseNotes.v0_2_9.items.debugLoggingSwitch' },
       { type: 'fix', key: 'releaseNotes.v0_2_9.items.safeTemplateRendering' },

@@ -274,6 +274,9 @@ interface TmdbProxyUpdateRequest {
 | PATCH | `/api/watch-rules/{id}/toggle` | 启用/禁用规则 | — | `WatchRule` |
 | POST | `/api/watch-rules/{id}/scan` | 异步触发该规则源目录全量扫描 | — | — |
 | POST | `/api/watch-rules/validate` | 保存前校验规则路径与文件操作能力 | `RuleRequest` | `WatchRuleValidationResult` |
+| GET | `/api/watch-rules/export` | ADR-026：导出当前全部监控规则配置包；后端返回 JSON，前端负责下载为文件 | — | `WatchRuleImportPackage` |
+| POST | `/api/watch-rules/import/preview` | ADR-026：解析并预览导入包，不落库 | `WatchRuleImportRequest` | `WatchRuleImportPreview` |
+| POST | `/api/watch-rules/import` | ADR-026：重新校验导入包并追加创建可导入规则 | `WatchRuleImportRequest` | `WatchRuleImportResult` |
 
 > 规则变更后后端自动触发 `FileDiscoveryService.reload()`，无需前端额外操作。
 > 全量扫描会递归遍历 `sourceDir` 下已有视频文件，并复用数据库查重；接口返回时仅表示扫描任务已开始。同一路径已有扫描未结束时，接口返回 `success=false`，提示稍后再试。
@@ -336,6 +339,116 @@ interface WatchRuleValidationResult {
   details?: string[]
 }
 ```
+
+### WatchRuleImportPackage
+```typescript
+interface WatchRuleImportPackage {
+  kind: 'media-marshal.watch-rules'
+  schemaVersion: 1
+  appVersion: string | null
+  exportedAt: string | null
+  rules: WatchRuleImportRule[]
+}
+
+interface WatchRuleImportRule {
+  name: string
+  sourceDir: string
+  targetDir: string
+  mediaType: 'MOVIE' | 'TV_SHOW' | 'AUTO'
+  moviePathTemplate: string | null
+  tvPathTemplate: string | null
+  operation: 'MOVE' | 'COPY' | 'HARD_LINK' | 'SYMBOLIC_LINK'
+  enabled: boolean
+  moveAssociatedFiles: boolean
+  cleanupEmptyDirs: boolean
+  generateNfo: boolean
+  ignoredFilePatterns: string[] | null
+  discoveryMode: 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
+  scanIntervalMinutes: number
+  webhookEnabled: boolean
+}
+```
+
+> 导出包只包含监控规则字段，不包含 `id`、`userId`、`createdAt`、`updatedAt`、任务、候选、缓存、日志、TMDB Key、代理、邮件、置信度或其它系统配置。`moviePathTemplate` / `tvPathTemplate` 为 `null` 时，表示导入目标实例继续使用其当前全局默认模板。
+
+### WatchRuleImportRequest
+```typescript
+interface WatchRuleImportRequest {
+  package: WatchRuleImportPackage
+  preserveEnabledState: boolean // 默认 false；false 时新增规则全部导入为 disabled
+}
+```
+
+> `POST /api/watch-rules/import/preview` 与 `POST /api/watch-rules/import` 都使用 `WatchRuleImportRequest`。前端切换 `preserveEnabledState` 后必须重新预览；后端真正导入时会重新执行结构校验、重复判断、冲突判断和必要的路径预检，不信任前端预览结果。
+
+### WatchRuleImportPreview
+```typescript
+type WatchRuleImportPreviewStatus =
+  | 'READY'
+  | 'SKIPPED_DUPLICATE'
+  | 'CONFLICT'
+  | 'INVALID'
+  | 'WARNING'
+
+interface WatchRuleImportPreview {
+  kind: string | null
+  schemaVersion: number | null
+  appVersion: string | null
+  exportedAt: string | null
+  ruleCount: number
+  fileValid: boolean
+  hasBlockingIssues: boolean
+  fileMessage: string | null
+  preserveEnabledState: boolean
+  summary: WatchRuleImportSummary
+  items: WatchRuleImportPreviewItem[]
+}
+
+interface WatchRuleImportSummary {
+  importable: number
+  ready: number
+  skipped: number
+  conflicts: number
+  invalid: number
+  warnings: number
+}
+
+interface WatchRuleImportPreviewItem {
+  index: number
+  status: WatchRuleImportPreviewStatus
+  message: string
+  warnings: string[]
+  rule: WatchRuleImportRule | null
+}
+```
+
+### WatchRuleImportResult
+```typescript
+interface WatchRuleImportResult {
+  preserveEnabledState: boolean
+  reloadTriggered: boolean
+  createdCount: number
+  skippedCount: number
+  conflictCount: number
+  invalidCount: number
+  warningCount: number
+  createdRules: WatchRule[]
+  items: WatchRuleImportPreviewItem[]
+}
+```
+
+### ADR-026 导入规则
+- 第一版仅支持追加导入，不删除、不覆盖、不修改现有规则，不修改任何现有 `MediaTask.ruleId`。
+- 默认导入时新增规则全部写入 `enabled=false`；只有 `preserveEnabledState=true` 时，新增规则才按导出文件中的 `enabled` 写入。
+- 完全重复规则跳过。重复判断基于 `sourceDir`、`targetDir`、`mediaType`、`moviePathTemplate`、`tvPathTemplate`、`operation`、`moveAssociatedFiles`、`cleanupEmptyDirs`、`generateNfo`、`ignoredFilePatterns`、`discoveryMode`、`scanIntervalMinutes`、`webhookEnabled`；不包含 `name` 和 `enabled`。
+- 路径重复判断只做轻量字符串规范化：去空白、反斜杠转 `/`、去除非根路径末尾 `/`，不访问文件系统、不解析符号链接。
+- `ignoredFilePatterns` 比较保持顺序语义，只去除空白项和行尾换行差异，不重新排序。
+- 同 `sourceDir` 但行为不同的导入规则会标记为 `CONFLICT`；导入文件内部相同 `sourceDir` 但行为不同也会标记为 `CONFLICT`。
+- 导入文件内部完全重复规则：第一条按正常规则预览，后续相同项标记为 `SKIPPED_DUPLICATE`。
+- 默认禁用导入时，路径不可用仅作为 `WARNING` 展示，不阻止创建禁用规则。
+- `preserveEnabledState=true` 时，如果导入后会出现启用规则之间的父子 `sourceDir` 包含关系，标记为 `CONFLICT`。
+- `preserveEnabledState=true` 且导入规则将以 `enabled=true` 写入时，真正导入阶段会复用保存前完整路径预检；预检失败则本次导入失败并回滚。
+- 导入事务内创建所有可导入规则；任意创建失败或启用预检失败则回滚。本次导入创建了新规则时，后端只触发一次 `FileDiscoveryService.reload()`。
 
 校验规则：
 - `MOVE`：`sourceDir` 必须存在且可读写；`targetDir` 必须可创建 / 可写。目录写权限以真实临时文件写入/删除探测为准，避免 Windows 网络盘下 `Files.isWritable()` 误判。

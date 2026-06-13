@@ -4,6 +4,7 @@ export default {
       enabledTemplateVariables: '路径模板可使用编码、发布组和原语种标题，整理结果更贴近你的命名习惯。',
       tmdbTemplateVariables: '路径模板可按 TMDB 分类、国家和剧集单集标题组织文件。',
       backendTemplatePreview: '保存自定义模板前会先预览并提示问题，减少保存后才发现模板不可用的情况。',
+      watchRuleImportExport: '路径设置支持导入导出监控规则，升级或迁移服务器前可以备份和恢复整理策略。',
       tmdbProxyComposeEnv: '使用 Docker Compose 配置 TMDB 代理时，代理开关和地址会正确生效。',
       debugLoggingSwitch: '开启调试模式后，后端会正确输出调试日志，排查网络和匹配问题更直接。',
       safeTemplateRendering: '危险路径模板会被拦截，避免文件被整理到目标目录之外。',

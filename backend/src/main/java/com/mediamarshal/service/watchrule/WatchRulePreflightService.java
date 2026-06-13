@@ -1,7 +1,7 @@
 package com.mediamarshal.service.watchrule;
 
-import com.mediamarshal.controller.WatchRuleController;
 import com.mediamarshal.model.dto.WatchRuleValidationResult;
+import com.mediamarshal.model.dto.WatchRuleRequest;
 import com.mediamarshal.service.rename.FileOperationStrategy;
 import com.mediamarshal.service.settings.SettingsService;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ public class WatchRulePreflightService {
 
     private final SettingsService settingsService;
 
-    public WatchRuleValidationResult validate(WatchRuleController.RuleRequest request) {
+    public WatchRuleValidationResult validate(WatchRuleRequest request) {
         if (!isPreflightEnabled()) {
             log.warn("WatchRule preflight validation is disabled by configuration");
             return WatchRuleValidationResult.ok();
