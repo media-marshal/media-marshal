@@ -265,8 +265,9 @@ public class FileDiscoveryService {
             if (inspectMissingSources) {
                 failMissingPendingTasks(rule, counter);
             }
-            log.info("{} completed: ruleId={}, scanned={}, queued={}, skipped={}, missingFailed={}",
-                    label, rule.getId(), counter.scanned, counter.queued, counter.skipped, counter.missingFailed);
+            log.info("{} completed: ruleId={}, scanned={}, queued={}, skipped={}, duplicates={}, missingFailed={}",
+                    label, rule.getId(), counter.scanned, counter.queued, counter.skipped, counter.duplicates,
+                    counter.missingFailed);
         } catch (IOException e) {
             log.error("{} failed: ruleId={}, root={}", label, rule.getId(), root, e);
         } finally {
@@ -289,9 +290,11 @@ public class FileDiscoveryService {
                     counter.scanned++;
                     var asset = mediaAssetDetectionService.detect(normalized, rule);
                     if (asset.isPresent()) {
-                        boolean queued = processAssetIfNotDuplicated(asset.get(), rule);
-                        if (queued) {
+                        DiscoveryProcessResult result = processAssetIfNotDuplicated(asset.get(), rule);
+                        if (result == DiscoveryProcessResult.QUEUED) {
                             counter.queued++;
+                        } else if (result == DiscoveryProcessResult.DUPLICATE) {
+                            counter.duplicates++;
                         } else {
                             counter.skipped++;
                         }
@@ -320,9 +323,11 @@ public class FileDiscoveryService {
 
         var asset = mediaAssetDetectionService.detect(path, rule);
         if (asset.isPresent()) {
-            boolean queued = processAssetIfNotDuplicated(asset.get(), rule);
-            if (queued) {
+            DiscoveryProcessResult result = processAssetIfNotDuplicated(asset.get(), rule);
+            if (result == DiscoveryProcessResult.QUEUED) {
                 counter.queued++;
+            } else if (result == DiscoveryProcessResult.DUPLICATE) {
+                counter.duplicates++;
             } else {
                 counter.skipped++;
             }
@@ -335,14 +340,16 @@ public class FileDiscoveryService {
             return;
         }
 
-        boolean queued = recordSkippedIfNotDuplicated(
+        DiscoveryProcessResult result = recordSkippedIfNotDuplicated(
                 path,
                 rule,
                 MediaAssetType.VIDEO_FILE,
                 "非视频文件，已跳过处理"
         );
-        if (queued) {
+        if (result == DiscoveryProcessResult.QUEUED) {
             counter.queued++;
+        } else if (result == DiscoveryProcessResult.DUPLICATE) {
+            counter.duplicates++;
         } else {
             counter.skipped++;
         }
@@ -617,16 +624,16 @@ public class FileDiscoveryService {
      * ADR-005 第二层防护：数据库查重。
      * 同一路径存在非 FAILED 任务时跳过，避免重复入库。
      */
-    private boolean processDetectedPathIfNotDuplicated(Path path, WatchRule rule) {
+    private DiscoveryProcessResult processDetectedPathIfNotDuplicated(Path path, WatchRule rule) {
         var asset = mediaAssetDetectionService.detect(path, rule);
         if (asset.isEmpty()) {
             log.debug("No media asset detected after stability check, skipping: {}", path);
-            return false;
+            return DiscoveryProcessResult.SKIPPED;
         }
         return processAssetIfNotDuplicated(asset.get(), rule);
     }
 
-    private boolean processAssetIfNotDuplicated(MediaAsset asset, WatchRule rule) {
+    private DiscoveryProcessResult processAssetIfNotDuplicated(MediaAsset asset, WatchRule rule) {
         MediaAsset effectiveAsset = applyRuleSupportScope(asset, rule);
         String sourcePath = effectiveAsset.rootPath().toString();
         boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
@@ -635,8 +642,8 @@ public class FileDiscoveryService {
         );
 
         if (exists) {
-            log.warn("Duplicate media task skipped: sourcePath={}", sourcePath);
-            return false;
+            log.debug("Duplicate media task skipped: sourcePath={}", sourcePath);
+            return DiscoveryProcessResult.DUPLICATE;
         }
 
         if (effectiveAsset.shouldSkip()) {
@@ -652,10 +659,10 @@ public class FileDiscoveryService {
             log.info("Stable media asset discovered: path={}, type={}, rule='{}'",
                     effectiveAsset.rootPath(), effectiveAsset.type(), rule.getName());
             pipeline.process(effectiveAsset, rule);
-            return true;
+            return DiscoveryProcessResult.QUEUED;
         } catch (Exception e) {
             log.error("Pipeline execution failed for media asset: {}", effectiveAsset.rootPath(), e);
-            return false;
+            return DiscoveryProcessResult.SKIPPED;
         }
     }
 
@@ -674,7 +681,7 @@ public class FileDiscoveryService {
         return asset;
     }
 
-    private boolean recordSkippedIfNotDuplicated(
+    private DiscoveryProcessResult recordSkippedIfNotDuplicated(
             Path path,
             WatchRule rule,
             MediaAssetType assetType,
@@ -688,7 +695,7 @@ public class FileDiscoveryService {
 
         if (exists) {
             log.debug("Duplicate skipped task ignored: sourcePath={}", sourcePath);
-            return false;
+            return DiscoveryProcessResult.DUPLICATE;
         }
 
         MediaTask task = new MediaTask();
@@ -701,7 +708,7 @@ public class FileDiscoveryService {
         mediaTaskRepository.save(task);
         log.info("Media asset skipped: path={}, type={}, rule='{}', reason={}",
                 path, assetType, rule.getName(), skipReason);
-        return true;
+        return DiscoveryProcessResult.QUEUED;
     }
 
     private void failMissingPendingTasks(WatchRule rule, ScanCounter counter) {
@@ -921,7 +928,14 @@ public class FileDiscoveryService {
         private int scanned;
         private int queued;
         private int skipped;
+        private int duplicates;
         private int missingFailed;
+    }
+
+    private enum DiscoveryProcessResult {
+        QUEUED,
+        SKIPPED,
+        DUPLICATE
     }
 
     private enum FileCategory {
