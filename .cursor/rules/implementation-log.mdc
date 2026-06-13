@@ -2949,11 +2949,13 @@ alwaysApply: false
 - `TmdbMetadataMatcher` 在 `media-marshal.debug=true` 时，对 TMDB search / detail / episode detail 请求明确输出访问路径：`proxy=true` 时显示代理地址，`proxy=false` 时显示直连和当前配置的代理地址。
 - 系统设置页临时隐藏未开放的邮件通知面板，保留代码开关，后续邮件功能完成后可重新开放。
 - 同步更新 v0.2.9 ReleaseNote，记录 Docker Compose 代理配置生效修复和系统设置页收口。
+- 修复 `MEDIA_MARSHAL_DEBUG=true` 只进入代码 debug 分支、但日志级别仍为 INFO 导致 `log.debug` 不输出的问题；启动时会将 `com.mediamarshal` logger 提升为 DEBUG。
 
 ### 影响文件
 - `docker-compose.yml`
 - `docker-compose.alpha.yml`
 - `docker-compose.beta.yml`
+- `backend/src/main/java/com/mediamarshal/config/DebugLoggingConfigurer.java`
 - `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
 - `frontend/src/views/SystemSettingsView.vue`
 - `frontend/src/meta/releaseNotes.ts`
