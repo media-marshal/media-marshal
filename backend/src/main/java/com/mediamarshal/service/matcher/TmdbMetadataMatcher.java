@@ -174,6 +174,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
     @SuppressWarnings("null")
     private MatchResult getByIdUncached(String sourceId, String endpoint) {
         TmdbRequestContext context = createRequestContext();
+        logRequestRoute("TMDB detail request", context);
         JsonNode root = executeTmdbRequest(context, context.client().get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/{endpoint}/{id}")
@@ -190,6 +191,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
     @SuppressWarnings("null")
     private String getEpisodeTitleUncached(String sourceId, int seasonNumber, int episodeNumber) {
         TmdbRequestContext context = createRequestContext();
+        logRequestRoute("TMDB episode detail request", context);
         JsonNode root = executeTmdbRequest(context, context.client().get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/tv/{id}/season/{season}/episode/{episode}")
@@ -246,6 +248,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
     @SuppressWarnings("null")
     private JsonNode callTmdbSearchUncached(String endpoint, String query, Integer year) {
         TmdbRequestContext context = createRequestContext();
+        logRequestRoute("TMDB search request", context);
         return executeTmdbRequest(
                 context,
                 context.client().get().uri(uriBuilder -> {
@@ -302,6 +305,21 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
         }
     }
 
+    private void logRequestRoute(String label, TmdbRequestContext context) {
+        if (!Boolean.parseBoolean(settingsService.get("debug", "false"))) {
+            return;
+        }
+
+        TmdbProxySettingsService.TmdbProxyConfig proxyConfig = context.proxyConfig();
+        if (proxyConfig.enabled()) {
+            log.debug("{} route: proxy=true, proxyUrl={}, baseUrl={}, timeoutSeconds={}",
+                    label, proxyConfig.httpUrl(), getBaseUrl(), context.timeoutSeconds());
+        } else {
+            log.debug("{} route: proxy=false, baseUrl={}, configuredProxyUrl={}, timeoutSeconds={}",
+                    label, getBaseUrl(), proxyConfig.httpUrl(), context.timeoutSeconds());
+        }
+    }
+
     private TmdbRequestContext createRequestContext() {
         long timeoutSeconds = getTimeoutSeconds();
         Duration timeout = Duration.ofSeconds(timeoutSeconds);
@@ -316,9 +334,6 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                     .type(ProxyProvider.Proxy.HTTP)
                     .host(proxyConfig.host())
                     .port(proxyConfig.port()));
-            if (Boolean.parseBoolean(settingsService.get("debug", "false"))) {
-                log.debug("TMDB HTTP proxy enabled: {}", proxyConfig.httpUrl());
-            }
         }
 
         WebClient client = webClientBuilder.clone()

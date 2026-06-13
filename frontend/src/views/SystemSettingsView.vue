@@ -66,7 +66,7 @@
         </el-form-item>
       </el-card>
 
-      <el-card shadow="never" class="settings-section">
+      <el-card v-if="SHOW_EMAIL_SETTINGS" shadow="never" class="settings-section">
         <template #header>{{ t('settings.emailSection') }}</template>
         <el-form-item :label="t('settings.emailEnabled')">
           <div class="field-stack">
@@ -102,6 +102,8 @@ import { settingsApi } from '@/api/settings'
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const { loading } = storeToRefs(settingsStore)
+
+const SHOW_EMAIL_SETTINGS = false
 
 const TMDB_LANGUAGE_OPTIONS = [
   { value: 'zh-CN', labelKey: 'settings.tmdbLanguageOptions.zhCN' },

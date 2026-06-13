@@ -2737,6 +2737,9 @@ alwaysApply: false
 - `mvn -q test`
 - `npm.cmd run type-check`
 - `npm.cmd run build`
+- `docker compose -f docker-compose.yml config --quiet`
+- `docker compose -f docker-compose.alpha.yml config --quiet`
+- `docker compose -f docker-compose.beta.yml config --quiet`
 
 ### 遗留问题
 - 第一版不支持 SOCKS 代理、HTTPS 代理、代理认证和海报图片代理，按 ADR-024 后续规划处理。
@@ -2927,6 +2930,35 @@ alwaysApply: false
 - `frontend/src/i18n/releaseNotes/zh.ts`
 - `frontend/src/i18n/releaseNotes/en.ts`
 - `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
+
+---
+
+## [TMDB 代理环境变量与系统设置收口] 2026-06-13
+
+### 完成内容
+- 修复 Docker Compose 部署未将 `MEDIA_MARSHAL_TMDB_PROXY_ENABLED`、`MEDIA_MARSHAL_TMDB_PROXY_HTTP_URL` 注入后端容器的问题，生产、alpha、beta compose 文件保持一致。
+- `TmdbMetadataMatcher` 在 `media-marshal.debug=true` 时，对 TMDB search / detail / episode detail 请求明确输出访问路径：`proxy=true` 时显示代理地址，`proxy=false` 时显示直连和当前配置的代理地址。
+- 系统设置页临时隐藏未开放的邮件通知面板，保留代码开关，后续邮件功能完成后可重新开放。
+- 同步更新 v0.2.9 ReleaseNote，记录 Docker Compose 代理配置生效修复和系统设置页收口。
+
+### 影响文件
+- `docker-compose.yml`
+- `docker-compose.alpha.yml`
+- `docker-compose.beta.yml`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
 - `.cursor/rules/implementation-log.mdc`
 
 ### 验证
