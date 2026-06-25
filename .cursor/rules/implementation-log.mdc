@@ -3043,3 +3043,55 @@ alwaysApply: false
 
 ### 遗留问题
 - 第一版不支持覆盖导入、路径前缀批量替换、导入时逐条编辑或完整系统备份。
+
+---
+
+## [ADR-027 Sample 视频识别与扫描剪枝] 2026-06-25
+
+### 完成内容
+- 将 WatchRule 忽略匹配抽取到 `DiscoveryIgnoreService`，系统默认忽略规则新增 `sample/`、`samples/`；实时监听目录注册、周期扫描、手动全量扫描和新目录补扫均复用该服务，并在命中目录时剪枝整个子树。
+- 新增 `SampleVideoDetector`：仅识别受支持的视频文件，basename 必须以 `.sample`、`-sample` 或 `_sample` 独立后缀结尾，并且同目录存在去除后缀后 basename 完全相同的正片；正片与样片允许使用不同视频扩展名，比较大小写不敏感。
+- Sample 后缀关联判断位于媒体资产识别、数据库查重、guessit 和 pipeline 之前；命中后静默返回，不创建 `SKIPPED`、`FAILED` 或待确认任务，扫描汇总计入普通 `skipped`。
+- 同目录 Sample 后缀识别仅在 `ignoredFilePatterns=null`、即使用系统默认忽略行为时生效；空列表和自定义规则不强制继承。Debug 日志记录样片路径与对应正片路径。
+- 路径设置页默认忽略规则展示同步新增 `sample/`、`samples/`；自定义或空规则显示非阻断风险提示，并提供只在列表末尾追加缺失 Sample 目录规则的便捷操作，不覆盖、不排序、不删除已有规则。
+- 用户手册补充 Sample 目录剪枝、同目录后缀识别和自定义规则不继承新增默认项的说明；API 契约同步记录 ADR-027 的忽略规则语义。
+- 新增 v0.2.10 ReleaseNote，并将根版本号、后端 Maven、前端包元数据和 Parser fallback 版本统一同步到 v0.2.10。
+- 新增 `scripts/sync-version.mjs`，补齐开发规则要求的单一版本源同步工具。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/service/discovery/DiscoveryIgnoreService.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/SampleVideoDetector.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/test/java/com/mediamarshal/service/discovery/DiscoveryIgnoreServiceTest.java`
+- `backend/src/test/java/com/mediamarshal/service/discovery/SampleVideoDetectorTest.java`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `docs/user-guide.md`
+- `VERSION`
+- `backend/pom.xml`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `parser/main.py`
+- `scripts/sync-version.mjs`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无新增 REST API 或 WatchRule 字段；仅更新 `ignoredFilePatterns=null` 对应的系统默认行为说明。
+
+### 测试覆盖
+- 默认 Sample / Samples 目录任意层级大小写不敏感剪枝。
+- 空规则和自定义规则不强制继承 Sample 默认规则。
+- `.sample`、`-sample`、`_sample` 后缀识别。
+- 正片与样片使用不同视频扩展名时的关联。
+- 无对应正片、basename 仅部分相似、标题正文包含 Sample 和非视频文件的误伤保护。
+
+### 偏离设计的地方
+- 无。
+
+### 遗留问题 / 需 PM 决策
+- 无。

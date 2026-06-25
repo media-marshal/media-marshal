@@ -22,7 +22,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardWatchEventKinds;
@@ -31,7 +30,6 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -67,26 +65,14 @@ public class FileDiscoveryService {
             "poster.jpg", "folder.jpg", "cover.jpg"
     );
 
-    private static final List<String> DEFAULT_IGNORED_PATTERNS = List.of(
-            ".DS_Store",
-            "Thumbs.db",
-            "desktop.ini",
-            "*.part",
-            "*.tmp",
-            "*.crdownload",
-            "*.lock",
-            "~$*",
-            ".*",
-            "__MACOSX/",
-            "@eaDir/"
-    );
-
     private final WatchRuleRepository watchRuleRepository;
     private final MediaTaskRepository mediaTaskRepository;
     private final MediaProcessPipeline pipeline;
     private final SettingsService settingsService;
     private final EventPublisher eventPublisher;
     private final MediaAssetDetectionService mediaAssetDetectionService;
+    private final DiscoveryIgnoreService discoveryIgnoreService;
+    private final SampleVideoDetector sampleVideoDetector;
 
     private WatchService watchService;
     private volatile boolean running = false;
@@ -281,7 +267,7 @@ public class FileDiscoveryService {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                 Path normalized = dir.toAbsolutePath().normalize();
-                if (!normalized.equals(normalizedRoot) && isIgnored(normalized, rule)) {
+                if (!normalized.equals(normalizedRoot) && discoveryIgnoreService.isIgnored(normalized, rule)) {
                     counter.skipped++;
                     log.debug("Scan ignored directory subtree: {}", normalized);
                     return FileVisitResult.SKIP_SUBTREE;
@@ -316,7 +302,11 @@ public class FileDiscoveryService {
 
     private void discoverPath(Path path, WatchRule rule, ScanCounter counter) {
         counter.scanned++;
-        if (isIgnored(path, rule)) {
+        if (discoveryIgnoreService.isIgnored(path, rule)) {
+            counter.skipped++;
+            return;
+        }
+        if (isDefaultSampleVideo(path, rule)) {
             counter.skipped++;
             return;
         }
@@ -405,7 +395,7 @@ public class FileDiscoveryService {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                     Path normalized = dir.toAbsolutePath().normalize();
-                    if (!normalized.equals(normalizedRoot) && isIgnored(normalized, rule)) {
+                    if (!normalized.equals(normalizedRoot) && discoveryIgnoreService.isIgnored(normalized, rule)) {
                         log.debug("Ignored watch directory subtree, not registering: {}", normalized);
                         return FileVisitResult.SKIP_SUBTREE;
                     }
@@ -500,7 +490,7 @@ public class FileDiscoveryService {
             return;
         }
 
-        if (isIgnored(fullPath, rule)) {
+        if (discoveryIgnoreService.isIgnored(fullPath, rule)) {
             log.debug("Ignoring path by WatchRule ignoredFilePatterns: {}", fullPath);
             return;
         }
@@ -625,6 +615,9 @@ public class FileDiscoveryService {
      * 同一路径存在非 FAILED 任务时跳过，避免重复入库。
      */
     private DiscoveryProcessResult processDetectedPathIfNotDuplicated(Path path, WatchRule rule) {
+        if (isDefaultSampleVideo(path, rule)) {
+            return DiscoveryProcessResult.SKIPPED;
+        }
         var asset = mediaAssetDetectionService.detect(path, rule);
         if (asset.isEmpty()) {
             log.debug("No media asset detected after stability check, skipping: {}", path);
@@ -850,78 +843,16 @@ public class FileDiscoveryService {
         return dot > 0 ? filename.substring(0, dot) : filename;
     }
 
-    private boolean isIgnored(Path path, WatchRule rule) {
-        List<String> patterns = effectiveIgnoredPatterns(rule);
-        if (patterns.isEmpty()) {
+    private boolean isDefaultSampleVideo(Path path, WatchRule rule) {
+        if (!discoveryIgnoreService.usesSystemDefaults(rule)) {
             return false;
         }
-
-        Path root = Paths.get(rule.getSourceDir()).toAbsolutePath().normalize();
-        Path normalized = path.toAbsolutePath().normalize();
-        Path relative = root.equals(normalized) || !normalized.startsWith(root)
-                ? normalized.getFileName()
-                : root.relativize(normalized);
-
-        if (relative == null) {
-            return false;
-        }
-
-        for (String pattern : patterns) {
-            if (matchesIgnorePattern(relative, pattern)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private List<String> effectiveIgnoredPatterns(WatchRule rule) {
-        List<String> patterns = rule.getIgnoredFilePatterns();
-        if (patterns == null) {
-            return DEFAULT_IGNORED_PATTERNS;
-        }
-        return patterns.stream()
-                .map(String::trim)
-                .filter(pattern -> !pattern.isBlank())
-                .toList();
-    }
-
-    private boolean matchesIgnorePattern(Path relativePath, String pattern) {
-        String normalizedPattern = pattern.replace("\\", "/").trim();
-        if (normalizedPattern.isBlank()) {
-            return false;
-        }
-
-        if (normalizedPattern.endsWith("/")) {
-            String directoryPattern = normalizedPattern.substring(0, normalizedPattern.length() - 1);
-            return pathSegments(relativePath).stream()
-                    .anyMatch(segment -> matchesNamePattern(segment, directoryPattern));
-        }
-
-        Path fileName = relativePath.getFileName();
-        return fileName != null && matchesNamePattern(fileName.toString(), normalizedPattern);
-    }
-
-    private List<String> pathSegments(Path relativePath) {
-        List<String> segments = new ArrayList<>();
-        for (Path segment : relativePath) {
-            segments.add(segment.toString());
-        }
-        return segments;
-    }
-
-    private boolean matchesNamePattern(String name, String pattern) {
-        String normalizedName = name.toLowerCase();
-        String normalizedPattern = pattern.toLowerCase();
-        if (normalizedPattern.equals(normalizedName)) {
-            return true;
-        }
-        try {
-            PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + normalizedPattern);
-            return matcher.matches(Paths.get(normalizedName));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid ignored file pattern skipped: pattern='{}', error={}", pattern, e.getMessage());
-            return false;
-        }
+        return sampleVideoDetector.findMainVideo(path)
+                .map(mainVideo -> {
+                    log.debug("Sample video ignored: samplePath={}, mainVideoPath={}", path, mainVideo);
+                    return true;
+                })
+                .orElse(false);
     }
 
     private static class ScanCounter {

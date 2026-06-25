@@ -1,4 +1,10 @@
 export default {
+  v0_2_10: {
+    items: {
+      sampleConflictPrevention: '系统会识别同目录正片对应的 Sample 视频，避免样片与正片整理到同一路径后产生冲突。',
+      sampleScanPruning: '使用系统默认忽略规则时，Sample 和 Samples 目录会被静默跳过，减少无效识别和 TMDB 请求。',
+    },
+  },
   v0_2_9: {
     items: {
       enabledTemplateVariables: '路径模板可使用编码、发布组和原语种标题，整理结果更贴近你的命名习惯。',

@@ -1,4 +1,10 @@
 export default {
+  v0_2_10: {
+    items: {
+      sampleConflictPrevention: 'Sample videos paired with a main video in the same folder are now ignored, preventing both files from targeting the same library path.',
+      sampleScanPruning: 'With system default ignore rules, Sample and Samples folders are skipped silently to reduce unnecessary recognition and TMDB requests.',
+    },
+  },
   v0_2_9: {
     items: {
       enabledTemplateVariables: 'Path templates can now use codec, release group, and original title for names that better match your library style.',

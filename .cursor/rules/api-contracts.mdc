@@ -330,6 +330,7 @@ interface RuleRequest {
 
 > v0.2.x 前端路径设置页开放 `MOVE`、`COPY`、`HARD_LINK`、`SYMBOLIC_LINK`。保存规则前必须先调用 `POST /api/watch-rules/validate`，校验失败时不得保存。后端可通过配置 `watch-rule.preflight.enabled=false`（环境变量 `MEDIA_MARSHAL_WATCH_RULE_PREFLIGHT_ENABLED=false`）关闭保存前校验；关闭后该接口直接返回 `valid=true`。
 > 忽略规则支持文件名、通配符和目录规则（如 `sample/`）；命中规则的文件或目录会被静默忽略，不生成 `SKIPPED` 任务。
+> ADR-027 起，系统默认忽略规则包含 `sample/`、`samples/`，并在实时监听注册、周期扫描和手动全量扫描时剪枝整个目录子树。仅当 `ignoredFilePatterns=null` 时，系统还会识别同目录中以 `.sample`、`-sample`、`_sample` 结尾且存在 basename 完全相同正片的视频；命中后静默忽略，不创建任务。`ignoredFilePatterns=[]` 或自定义列表不会被强制追加默认项，也不会启用同目录 Sample 后缀识别。
 
 ### WatchRuleValidationResult
 ```typescript
