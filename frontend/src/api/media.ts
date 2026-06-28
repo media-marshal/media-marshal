@@ -1,5 +1,20 @@
 import http from './http'
-import type { ApiResponse, BatchConfirmItem, BatchConfirmResponse, MatchResult, MediaTask, MediaType, QueueRecognitionRequest, QueueRecognitionResponse, TaskCandidate, TaskStatus } from '@/types'
+import type {
+  ApiResponse,
+  BatchConfirmItem,
+  BatchConfirmResponse,
+  MatchResult,
+  MediaTask,
+  MediaType,
+  QueueRecognitionRequest,
+  QueueRecognitionResponse,
+  TaskCandidate,
+  TaskCorrectionApplyResponse,
+  TaskCorrectionPreview,
+  TaskCorrectionRematchResponse,
+  TaskCorrectionRequest,
+  TaskStatus,
+} from '@/types'
 
 export const mediaApi = {
   listTasks(status?: TaskStatus) {
@@ -54,5 +69,17 @@ export const mediaApi = {
 
   skipTask(id: number) {
     return http.post<ApiResponse<void>>(`/api/queue/${id}/skip`)
+  },
+
+  rematchTaskCorrection(id: number, request: TaskCorrectionRequest) {
+    return http.post<ApiResponse<TaskCorrectionRematchResponse>>(`/api/tasks/${id}/correction/rematch`, request)
+  },
+
+  previewTaskCorrection(id: number, request: TaskCorrectionRequest) {
+    return http.post<ApiResponse<TaskCorrectionPreview>>(`/api/tasks/${id}/correction/preview`, request)
+  },
+
+  applyTaskCorrection(id: number, request: TaskCorrectionRequest) {
+    return http.post<ApiResponse<TaskCorrectionApplyResponse>>(`/api/tasks/${id}/correction/apply`, request)
   },
 }

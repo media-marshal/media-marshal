@@ -3095,3 +3095,79 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无。
+
+---
+
+## [ADR-028 已完成任务匹配纠错、目标资产重命名与修正历史链路] 2026-06-28
+
+### 完成内容
+- Dashboard `DONE` 任务新增“修正”入口；`ISO_IMAGE` 显示暂不支持提示，`CORRECTED` 作为历史状态展示，不进入再次修正流程。
+- 新增任务纠错接口：
+  - `POST /api/tasks/{id}/correction/rematch`
+  - `POST /api/tasks/{id}/correction/preview`
+  - `POST /api/tasks/{id}/correction/apply`
+- `MediaTask` 新增 `CORRECTED` 状态、`MANUAL_CORRECTION` 确认来源，以及 `correctedFromTaskId`、`correctedToTaskId`、`correctedAt` 修正链路字段。
+- 新增 `TaskCorrectionService`，纠错流程只操作当前 `targetPath` 指向的目标媒体库资产；不检查、不读取、不移动原始 `sourcePath`。
+- `apply` 会重新拉取所选 TMDB ID 的详情并重新计算计划，不信任前端传回的预览结果。
+- 文件操作顺序：
+  1. 校验旧任务为 `DONE` 且目标资产存在。
+  2. 获取 TMDB 详情并补齐模板变量所需字段。
+  3. 重新计算目标路径、附属文件、NFO 和旧目标空目录清理计划。
+  4. 重新执行路径安全和冲突检查。
+  5. 移动 / 重命名当前目标主资产及同名附属文件。
+  6. 用户显式选择时重新生成 NFO。
+  7. 文件操作成功后创建新的 `DONE` 修正任务，保存最终候选快照。
+  8. 将旧任务标记为 `CORRECTED` 并写入修正链路。
+  9. 尝试清理旧目标空目录；失败仅记录 warning，不回滚已完成修正。
+- 普通视频纠错时，同目录同 basename 的字幕、NFO、封面和 `.md5` 会按新 basename 移动；`.md5` 只移动/改名，不修改内容。
+- 蓝光目录纠错按电影蓝光处理，移动/重命名当前目标根目录；剧集蓝光修正在预览阶段阻断。
+- 文件发现查重口径更新为：`PENDING` / `PROCESSING` / `AWAITING_CONFIRMATION` / `DONE` / `SKIPPED` 才视为当前有效记录，`FAILED` / `CORRECTED` 不阻止后续重新扫描。
+- 前端修正弹窗支持识别信息编辑、重新匹配、手动搜索、候选选择、影响预览和二次确认应用。
+- 同步更新中英文 i18n、API 契约、用户手册与 v0.2.10 ReleaseNote。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/controller/TaskCorrectionController.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TaskCorrectionApplyResponse.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TaskCorrectionOperation.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TaskCorrectionPreview.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TaskCorrectionRematchResponse.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TaskCorrectionRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/repository/MediaTaskRepository.java`
+- `backend/src/main/java/com/mediamarshal/service/correction/TaskCorrectionService.java`
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/websocket/EventPublisher.java`
+- `backend/src/test/java/com/mediamarshal/service/correction/TaskCorrectionServiceTest.java`
+- `frontend/src/api/media.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `docs/user-guide.md`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 新增 `TaskCorrectionRequest`、`TaskCorrectionPreview`、`TaskCorrectionOperation`、`TaskCorrectionRematchResponse`、`TaskCorrectionApplyResponse`。
+- `MediaTask.status` 新增 `CORRECTED`。
+- `MediaTask.confirmationSource` 新增 `MANUAL_CORRECTION`。
+- `MediaTask` 返回字段新增 `correctedFromTaskId`、`correctedToTaskId`、`correctedAt`。
+- WebSocket 任务事件新增 `task.corrected`。
+
+### 测试覆盖
+- 目标路径不变时仍创建新的 `DONE` 修正任务，并将旧任务标记为 `CORRECTED`。
+- 普通视频纠错会移动同 basename 附属文件和 `.md5`，通用封面保持原位。
+- 剧集蓝光原盘纠错在预览阶段阻断。
+
+### 偏离设计的地方
+- 按本次需求确认，纠错文件操作不沿用旧 WatchRule 的 `operation`，统一对当前目标资产执行移动/重命名；WatchRule 仍用于目标目录和路径模板计算。
+- 按本次需求确认，`poster.jpg`、`folder.jpg`、`cover.jpg` 通用封面在纠错流程中不自动移动。
+- 当前仅在 Dashboard 列表展示 `CORRECTED` 历史，不提供“查看修正后记录”的单独入口或详情弹窗。
+
+### 遗留问题 / 需 PM 决策
+- 后续可补充已修正任务详情页 / 修正历史链路弹窗。
+- 后续可评估 ISO 镜像、剧集蓝光原盘、批量修正和自动回滚入口。

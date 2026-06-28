@@ -1,6 +1,8 @@
 export default {
   v0_2_10: {
     items: {
+      completedTaskCorrection: 'Completed tasks can now be corrected from the Dashboard, moving or renaming the organized media library target.',
+      correctionPreview: 'Corrections preview target paths, associated files, NFO changes, and empty-folder cleanup before conflicts can block the action.',
       sampleConflictPrevention: 'Sample videos paired with a main video in the same folder are now ignored, preventing both files from targeting the same library path.',
       sampleScanPruning: 'With system default ignore rules, Sample and Samples folders are skipped silently to reduce unnecessary recognition and TMDB requests.',
     },

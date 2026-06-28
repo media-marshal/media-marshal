@@ -20,6 +20,7 @@ import java.util.Map;
  *   - task.confirm       需要人工确认
  *   - task.done          处理完成
  *   - task.failed        处理失败
+ *   - task.corrected     已完成任务被修正为历史记录
  */
 @Slf4j
 @Component
@@ -44,6 +45,10 @@ public class EventPublisher {
 
     public void publishTaskFailed(MediaTask task) {
         publish("task.failed", task);
+    }
+
+    public void publishTaskCorrected(MediaTask task) {
+        publish("task.corrected", task);
     }
 
     public void publishAwaitingConfirmation(MediaTask task) {

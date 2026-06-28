@@ -65,6 +65,14 @@ public class FileDiscoveryService {
             "poster.jpg", "folder.jpg", "cover.jpg"
     );
 
+    private static final List<MediaTask.TaskStatus> ACTIVE_DEDUP_STATUSES = List.of(
+            MediaTask.TaskStatus.PENDING,
+            MediaTask.TaskStatus.PROCESSING,
+            MediaTask.TaskStatus.AWAITING_CONFIRMATION,
+            MediaTask.TaskStatus.DONE,
+            MediaTask.TaskStatus.SKIPPED
+    );
+
     private final WatchRuleRepository watchRuleRepository;
     private final MediaTaskRepository mediaTaskRepository;
     private final MediaProcessPipeline pipeline;
@@ -629,10 +637,7 @@ public class FileDiscoveryService {
     private DiscoveryProcessResult processAssetIfNotDuplicated(MediaAsset asset, WatchRule rule) {
         MediaAsset effectiveAsset = applyRuleSupportScope(asset, rule);
         String sourcePath = effectiveAsset.rootPath().toString();
-        boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
-                sourcePath,
-                MediaTask.TaskStatus.FAILED
-        );
+        boolean exists = mediaTaskRepository.existsBySourcePathAndStatusIn(sourcePath, ACTIVE_DEDUP_STATUSES);
 
         if (exists) {
             log.debug("Duplicate media task skipped: sourcePath={}", sourcePath);
@@ -681,10 +686,7 @@ public class FileDiscoveryService {
             String skipReason
     ) {
         String sourcePath = path.toString();
-        boolean exists = mediaTaskRepository.existsBySourcePathAndStatusNot(
-                sourcePath,
-                MediaTask.TaskStatus.FAILED
-        );
+        boolean exists = mediaTaskRepository.existsBySourcePathAndStatusIn(sourcePath, ACTIVE_DEDUP_STATUSES);
 
         if (exists) {
             log.debug("Duplicate skipped task ignored: sourcePath={}", sourcePath);

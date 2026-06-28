@@ -3,8 +3,10 @@ import type { ReleaseNote } from '@/types'
 export const releaseNotes: ReleaseNote[] = [
   {
     version: 'v0.2.10',
-    date: '2026-06-25',
+    date: '2026-06-28',
     items: [
+      { type: 'feature', key: 'releaseNotes.v0_2_10.items.completedTaskCorrection' },
+      { type: 'feature', key: 'releaseNotes.v0_2_10.items.correctionPreview' },
       { type: 'fix', key: 'releaseNotes.v0_2_10.items.sampleConflictPrevention' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.sampleScanPruning' },
     ],

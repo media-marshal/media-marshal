@@ -18,9 +18,12 @@ alwaysApply: false
 | 方法 | 路径 | 说明 | 请求体 | 响应 `data` |
 |---|---|---|---|---|
 | GET | `/api/tasks` | 查询所有任务，可按状态过滤 | — | `MediaTask[]` |
-| GET | `/api/tasks?status={status}` | 过滤状态（PENDING/PROCESSING/AWAITING_CONFIRMATION/DONE/FAILED/SKIPPED） | — | `MediaTask[]` |
+| GET | `/api/tasks?status={status}` | 过滤状态（PENDING/PROCESSING/AWAITING_CONFIRMATION/DONE/FAILED/SKIPPED/CORRECTED） | — | `MediaTask[]` |
 | GET | `/api/tasks/{id}` | 查询单个任务详情 | — | `MediaTask` |
 | DELETE | `/api/tasks/{id}` | 删除任务记录及其候选记录（不影响文件） | — | — |
+| POST | `/api/tasks/{id}/correction/rematch` | ADR-028：按已完成任务的编辑后识别信息重新获取 TMDB 候选；不修改数据库、不操作文件 | `TaskCorrectionRequest` | `TaskCorrectionRematchResponse` |
+| POST | `/api/tasks/{id}/correction/preview` | ADR-028：预览已完成任务纠错计划；不修改数据库、不操作文件 | `TaskCorrectionRequest` | `TaskCorrectionPreview` |
+| POST | `/api/tasks/{id}/correction/apply` | ADR-028：重新校验并应用纠错；移动/重命名当前目标资产，创建修正历史链路 | `TaskCorrectionRequest` | `TaskCorrectionApplyResponse` |
 
 ### MediaTask 字段
 ```typescript
@@ -29,7 +32,7 @@ interface MediaTask {
   sourcePath: string                  // 源媒体资产路径；普通视频/ISO 为文件路径，蓝光原盘为外层根目录
   targetPath: string | null           // 目标媒体资产路径；目录型资产表示目标根目录
   assetType: 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
-  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED'
+  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED' | 'CORRECTED'
   mediaType: 'MOVIE' | 'TV_SHOW' | null
   parsedTitle: string | null
   parsedYear: number | null
@@ -49,7 +52,7 @@ interface MediaTask {
   confirmedGenre4: string | null        // TMDB genres[3].name，用于 {genre_4} 模板变量
   confirmedCountry: string | null       // TMDB origin_country[0]，回退 production_countries[0].iso_3166_1，用于 {country}
   confirmedEpisodeTitle: string | null  // TV 单集 TMDB episode name，用于 {episode_title}
-  confirmationSource: 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | null
+  confirmationSource: 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | 'MANUAL_CORRECTION' | null
   matchConfidence: number | null   // 0.0 ~ 1.0
   operationType: string | null
   errorCode: 'TARGET_CONFLICT' | 'UNSAFE_TARGET_PATH' | 'SOURCE_MISSING' | 'PIPELINE_FAILED' | null // status=FAILED 时用于系统内部判定和重复失败聚合
@@ -57,6 +60,9 @@ interface MediaTask {
   lastFailedAt: string | null      // 最近一次失败时间，ISO 8601
   errorMessage: string | null       // status=FAILED 时说明失败原因，如目标文件冲突
   skipReason: string | null         // status=SKIPPED 时说明跳过原因
+  correctedFromTaskId: number | null // status=DONE 且来自纠错时，指向被修正的旧任务
+  correctedToTaskId: number | null   // status=CORRECTED 时，指向修正后的新 DONE 任务；关联记录被删除时可能悬空
+  correctedAt: string | null         // 旧任务被修正的时间，ISO 8601
   ruleId: number | null            // 触发此任务的 WatchRule ID
   createdAt: string                // ISO 8601
   updatedAt: string
@@ -64,8 +70,68 @@ interface MediaTask {
 ```
 
 > 前端任务列表“详情”列组合展示：`FAILED` 读取 `failureCount` + `errorMessage`，`SKIPPED` 读取 `skipReason`。
+> `CORRECTED` 表示旧的已完成任务已经被用户手动修正，仅作为历史记录展示，不代表当前有效媒体资产；当前有效资产由新的 `DONE` 任务承载，且 `confirmationSource=MANUAL_CORRECTION`。
 > 系统内部判断同类失败必须使用 `errorCode`，不能依赖 `errorMessage` 文案；重复失败聚合维度为 `sourcePath + ruleId + errorCode`，命中后只递增 `failureCount` 并刷新 `lastFailedAt` / `errorMessage`，不新增失败任务记录。扫描成功后历史失败记录保留，用于用户溯源。
+> 当前有效任务查重口径：同一路径存在 `PENDING` / `PROCESSING` / `AWAITING_CONFIRMATION` / `DONE` / `SKIPPED` 时视为已有有效记录；只有 `FAILED` / `CORRECTED` 历史记录时，不阻止后续发现或重新扫描。
 > `assetType` 文案：`VIDEO_FILE`=普通视频，`ISO_IMAGE`=ISO 镜像，`BLURAY_DIRECTORY`=蓝光原盘。v0.2.x 当前仅完整支持 `VIDEO_FILE` 和电影蓝光原盘；扫描到 ISO、裸 `sourceDir/BDMV`、剧集蓝光原盘时会记录为 `SKIPPED`，并通过 `skipReason` 返回原因。
+
+### 已完成任务纠错
+
+```typescript
+interface TaskCorrectionRequest {
+  mediaType: 'MOVIE' | 'TV_SHOW'
+  parsedTitle: string
+  parsedYear: number | null
+  parsedSeason: number | null
+  parsedEpisode: number | null
+  parsedEpisodeEnd: number | null
+  tmdbId?: number | null        // preview/apply 必填；rematch 可为空
+  regenerateNfo?: boolean       // true 时应用成功后按修正后的 TMDB 详情重生成 NFO
+}
+
+interface TaskCorrectionRematchResponse {
+  candidates: MatchResult[]
+}
+
+interface TaskCorrectionPreview {
+  currentTargetPath: string | null
+  correctedTargetPath: string | null
+  sameTargetPath: boolean
+  selectedMatch: MatchResult | null
+  operations: TaskCorrectionOperation[]
+  blockers: string[]            // 非空时 canApply=false
+  warnings: string[]             // 非阻断提示
+  canApply: boolean
+}
+
+interface TaskCorrectionOperation {
+  type:
+    | 'MOVE_MAIN_ASSET'
+    | 'MOVE_ASSOCIATED_FILE'
+    | 'GENERATE_NFO'
+    | 'CLEAN_EMPTY_DIR'
+    | 'CREATE_CORRECTION_TASK'
+    | 'MARK_ORIGINAL_CORRECTED'
+  sourcePath: string | null
+  targetPath: string | null
+  description: string | null
+}
+
+interface TaskCorrectionApplyResponse {
+  originalTask: MediaTask        // status=CORRECTED
+  correctedTask: MediaTask       // status=DONE, confirmationSource=MANUAL_CORRECTION
+  preview: TaskCorrectionPreview
+}
+```
+
+> 纠错入口只面向 `status=DONE` 且 `assetType=VIDEO_FILE | BLURAY_DIRECTORY` 的任务；`ISO_IMAGE`、`CORRECTED`、待确认、失败和跳过任务不允许应用纠错。
+> 纠错流程只操作当前 `targetPath` 指向的目标媒体库资产，不检查、不读取、不移动原始 `sourcePath`。`sourcePath` 仅作为历史来源展示。
+> 应用纠错时不按原 WatchRule 的 `operation` 重新执行 COPY/HARD_LINK/SYMBOLIC_LINK；当前版本统一移动/重命名目标资产本身。路径模板仍使用任务所属 WatchRule 的 `targetDir` 与电影/剧集模板计算修正后的目标路径；WatchRule 缺失时预览阻断。
+> `preview` 和 `apply` 都会由后端重新拉取所选 TMDB ID 的详情并重新计算目标路径、附属文件、NFO 和空目录清理计划。`apply` 不信任前端传回的预览结果。
+> 普通视频纠错时，当前目标同目录中与当前目标文件同 basename 的 `.srt`、`.ass`、`.ssa`、`.sub`、`.idx`、`.nfo`、`.jpg`、`.jpeg`、`.png`、`.webp`、`.md5` 会按新 basename 预览并移动；`.md5` 文件只移动/改名，不修改内容。`poster.jpg`、`folder.jpg`、`cover.jpg` 通用封面当前版本不自动移动，仅返回 warning。
+> 蓝光原盘纠错只支持电影蓝光目录，移动/重命名当前 `targetPath` 指向的蓝光目标根目录；内部 `BDMV/`、`CERTIFICATE/` 结构不修改。`mediaType=TV_SHOW` 时预览阻断。
+> 即使修正前后目标路径完全相同，`apply` 成功后也会创建新的 `DONE` 修正记录，并将旧任务标记为 `CORRECTED`，用于保存新的 TMDB 快照和历史链路。
+> 删除旧 `CORRECTED` 或新 `DONE` 修正任务仍是单条删除，不做级联删除；另一端链路可能悬空，前端仅按现有任务展示。
 
 ---
 
@@ -131,7 +197,7 @@ interface QueueRecognitionResponse {
 }
 ```
 
-> ADR-021 识别信息编辑接口只允许 `AWAITING_CONFIRMATION` 任务调用；`PENDING` / `PROCESSING` / `DONE` / `FAILED` / `SKIPPED` 均返回 `success=false`。
+> ADR-021 识别信息编辑接口只允许 `AWAITING_CONFIRMATION` 任务调用；`PENDING` / `PROCESSING` / `DONE` / `FAILED` / `SKIPPED` / `CORRECTED` 均返回 `success=false`。
 > `PUT /api/queue/{id}/recognition` 只更新 `MediaTask.mediaType`、`parsedTitle`、`parsedYear`、`parsedSeason`、`parsedEpisode`，不会修改 `task_candidate`。
 > `POST /api/queue/{id}/recognition/rematch` 会先保存上述字段，再使用新的识别信息调用 TMDB 匹配并替换该任务旧候选；`matchConfidence` 更新为新首位候选置信度，若无候选则为 `null`。该接口不会触发高置信度自动确认。
 
@@ -554,8 +620,9 @@ interface BrowseResult {
 ### TaskEvent
 ```typescript
 interface TaskEvent {
+  type: 'task.created' | 'task.processing' | 'task.confirm' | 'task.done' | 'task.failed' | 'task.corrected'
   taskId: number
-  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED'
+  status: 'PENDING' | 'PROCESSING' | 'AWAITING_CONFIRMATION' | 'DONE' | 'FAILED' | 'SKIPPED' | 'CORRECTED'
   sourcePath: string
   errorMessage?: string
 }
