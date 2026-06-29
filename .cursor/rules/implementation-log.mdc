@@ -3122,7 +3122,7 @@ alwaysApply: false
 - 普通视频纠错时，同目录同 basename 的字幕、NFO、封面和 `.md5` 会按新 basename 移动；`.md5` 只移动/改名，不修改内容。
 - 蓝光目录纠错按电影蓝光处理，移动/重命名当前目标根目录；剧集蓝光修正在预览阶段阻断。
 - 文件发现查重口径更新为：`PENDING` / `PROCESSING` / `AWAITING_CONFIRMATION` / `DONE` / `SKIPPED` 才视为当前有效记录，`FAILED` / `CORRECTED` 不阻止后续重新扫描。
-- 前端修正弹窗支持识别信息编辑、重新匹配、手动搜索、候选选择、影响预览和二次确认应用。
+- 前端修正弹窗支持识别信息编辑、重新匹配、候选选择、影响预览和二次确认应用。
 - 同步更新中英文 i18n、API 契约、用户手册与 v0.2.10 ReleaseNote。
 
 ### 影响文件
@@ -3179,14 +3179,15 @@ alwaysApply: false
 ### 完成内容
 - 修正面板改为居中弹窗，并调整为上方任务信息、下方左右分栏的紧凑布局，减少打开面板后的纵向滚动需求。
 - 任务信息表中“源路径（历史来源）”和“当前目标路径”分别独占一行，其它信息仍保持一行两个字段。
-- 修复修正面板手动搜索按钮未触发搜索的问题：`DashboardView.vue` 补充导入 `mediaApi`，并将搜索、重新匹配、预览按钮显式标记为普通按钮。
-- v0.2.10 ReleaseNote 补充修正面板搜索修复和布局优化说明。
+- 修复修正面板表单内操作按钮可能触发表单默认行为的问题：`DashboardView.vue` 补充导入 `mediaApi`，并将重新匹配、预览按钮显式标记为普通按钮。
+- v0.2.10 ReleaseNote 补充修正面板布局优化说明。
 
 ### 影响文件
 - `frontend/src/views/DashboardView.vue`
 - `frontend/src/meta/releaseNotes.ts`
 - `frontend/src/i18n/releaseNotes/zh.ts`
 - `frontend/src/i18n/releaseNotes/en.ts`
+- `docs/user-guide.md`
 - `.cursor/rules/implementation-log.mdc`
 
 ### 验证
@@ -3195,3 +3196,37 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 如果后续候选数量较多仍需要进一步压缩面板高度，可考虑为候选列表增加分页或“只展示前 N 条 + 展开”交互。
+
+---
+
+## [ADR-028 旧库枚举约束迁移与修正流程收敛] 2026-06-29
+
+### 完成内容
+- 修复旧版本 SQLite 数据库升级后，应用修正时因 `media_task.confirmation_source` 仍只允许 `AUTO_MATCH` / `MANUAL_SINGLE` / `MANUAL_BATCH` 导致 `MANUAL_CORRECTION` 写入失败的问题。
+- 启动时检测 `media_task` 旧版 CHECK 约束，必要时重建表结构并保留已有任务记录，使 `MANUAL_CORRECTION` 和 `CORRECTED` 在旧库中可正常写入。
+- 修正面板去掉候选区的手动输入框和搜索按钮，只保留“重新匹配”，点击后按当前编辑后的识别信息刷新候选。
+- 将“重新匹配”按钮移动到“重新生成 NFO”前，候选区只负责展示和选择候选结果。
+- v0.2.10 ReleaseNote 同步调整为用户视角说明旧库修正失败修复与修正流程优化。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/config/SqliteMediaTaskSchemaMigration.java`
+- `backend/src/test/java/com/mediamarshal/config/SqliteMediaTaskSchemaMigrationTest.java`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无新增或变更 REST API；仅修复旧数据库 schema 兼容和前端交互入口。
+
+### 验证
+- `mvn -q -Dtest=SqliteMediaTaskSchemaMigrationTest test`
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题 / 需 PM 决策
+- 无。

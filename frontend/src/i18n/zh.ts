@@ -78,8 +78,6 @@ export default {
       regenerateNfo: '重新生成 NFO',
       candidates: '候选',
       rematch: '重新匹配',
-      searchPlaceholder: '输入 TMDB 搜索关键词或 TMDB ID',
-      searchKeywordRequired: '请先输入搜索关键词',
       noCandidates: '暂无候选',
       preview: '影响预览',
       previewAction: '预览',

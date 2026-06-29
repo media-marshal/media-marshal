@@ -78,8 +78,6 @@ export default {
       regenerateNfo: 'Regenerate NFO',
       candidates: 'Candidates',
       rematch: 'Rematch',
-      searchPlaceholder: 'Enter a TMDB keyword or ID',
-      searchKeywordRequired: 'Enter a search keyword first',
       noCandidates: 'No candidates',
       preview: 'Impact Preview',
       previewAction: 'Preview',

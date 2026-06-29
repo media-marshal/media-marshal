@@ -325,32 +325,20 @@
                     </el-form-item>
                   </el-col>
                 </el-row>
-                <el-checkbox v-model="correctionForm.regenerateNfo" @change="invalidateCorrectionPreview">
-                  {{ t('dashboard.correction.regenerateNfo') }}
-                </el-checkbox>
+                <div class="correction-form-actions">
+                  <el-button native-type="button" size="small" :icon="Refresh" :loading="correctionRematching" @click="rematchCorrection">
+                    {{ t('dashboard.correction.rematch') }}
+                  </el-button>
+                  <el-checkbox v-model="correctionForm.regenerateNfo" @change="invalidateCorrectionPreview">
+                    {{ t('dashboard.correction.regenerateNfo') }}
+                  </el-checkbox>
+                </div>
               </el-form>
             </section>
 
             <section class="correction-section">
               <div class="section-title-row">
                 <h3>{{ t('dashboard.correction.candidates') }}</h3>
-                <div class="section-actions">
-                  <el-button native-type="button" size="small" :icon="Refresh" :loading="correctionRematching" @click="rematchCorrection">
-                    {{ t('dashboard.correction.rematch') }}
-                  </el-button>
-                </div>
-              </div>
-              <div class="manual-search-row">
-                <el-input
-                  v-model="correctionSearchKeyword"
-                  size="small"
-                  clearable
-                  :placeholder="t('dashboard.correction.searchPlaceholder')"
-                  @keyup.enter="searchCorrectionCandidate"
-                />
-                <el-button native-type="button" size="small" :icon="Search" :loading="correctionSearching" @click="searchCorrectionCandidate">
-                  {{ t('queue.search') }}
-                </el-button>
               </div>
               <el-empty v-if="correctionCandidates.length === 0" :description="t('dashboard.correction.noCandidates')" :image-size="56" />
               <div v-else class="candidate-list">
@@ -491,9 +479,7 @@ const correctionForm = reactive({
 const correctionCandidates = ref<MatchResult[]>([])
 const selectedCorrectionCandidate = ref<MatchResult | null>(null)
 const correctionPreview = ref<TaskCorrectionPreview | null>(null)
-const correctionSearchKeyword = ref('')
 const correctionRematching = ref(false)
-const correctionSearching = ref(false)
 const correctionPreviewing = ref(false)
 const correctionApplying = ref(false)
 
@@ -691,7 +677,6 @@ function openCorrectionDialog(task: MediaTask) {
   correctionForm.parsedEpisode = task.parsedEpisode
   correctionForm.parsedEpisodeEnd = task.parsedEpisodeEnd
   correctionForm.regenerateNfo = false
-  correctionSearchKeyword.value = ''
   correctionPreview.value = null
   selectedCorrectionCandidate.value = task.tmdbId ? taskToMatchResult(task) : null
   correctionCandidates.value = selectedCorrectionCandidate.value ? [selectedCorrectionCandidate.value] : []
@@ -760,27 +745,6 @@ async function rematchCorrection() {
     }
   } finally {
     correctionRematching.value = false
-  }
-}
-
-async function searchCorrectionCandidate() {
-  if (!correctionTask.value || !validateCorrectionForm()) return
-  const keyword = correctionSearchKeyword.value.trim()
-  if (!keyword) {
-    ElMessage.warning(t('dashboard.correction.searchKeywordRequired'))
-    return
-  }
-  correctionSearching.value = true
-  try {
-    const res = await mediaApi.searchMetadata(keyword, correctionForm.mediaType)
-    correctionCandidates.value = res.data.data
-    selectedCorrectionCandidate.value = correctionCandidates.value[0] || null
-    correctionPreview.value = null
-    if (correctionCandidates.value.length === 0) {
-      ElMessage.info(t('dashboard.correction.noCandidates'))
-    }
-  } finally {
-    correctionSearching.value = false
   }
 }
 
@@ -1035,23 +999,22 @@ h2 {
   margin-bottom: 10px;
 }
 
+.correction-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 32px;
+}
+
 .muted-path {
   color: #606266;
   word-break: break-all;
   line-height: 1.35;
 }
 
-.manual-search-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
 .candidate-list {
   display: grid;
   gap: 6px;
-  max-height: 160px;
-  overflow: auto;
 }
 
 .candidate-row {
@@ -1130,12 +1093,10 @@ h2 {
     flex-direction: column;
   }
 
-  .dashboard-filter,
-  .manual-search-row {
+  .dashboard-filter {
     width: 100%;
   }
 
-  .manual-search-row,
   .candidate-row {
     grid-template-columns: 1fr;
   }

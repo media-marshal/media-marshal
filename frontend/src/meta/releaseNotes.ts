@@ -7,9 +7,10 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       { type: 'feature', key: 'releaseNotes.v0_2_10.items.completedTaskCorrection' },
       { type: 'feature', key: 'releaseNotes.v0_2_10.items.correctionPreview' },
-      { type: 'fix', key: 'releaseNotes.v0_2_10.items.correctionSearchAction' },
+      { type: 'fix', key: 'releaseNotes.v0_2_10.items.correctionSchemaUpgrade' },
       { type: 'fix', key: 'releaseNotes.v0_2_10.items.sampleConflictPrevention' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionPanelLayout' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionRematchFlow' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.sampleScanPruning' },
     ],
   },
