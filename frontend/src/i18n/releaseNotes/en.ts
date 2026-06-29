@@ -7,6 +7,7 @@ export default {
       sampleConflictPrevention: 'Sample videos paired with a main video in the same folder are now ignored, preventing both files from targeting the same library path.',
       correctionPanelLayout: 'The correction panel is now centered and more compact, with source and target paths easier to read.',
       correctionRematchFlow: 'The correction panel now keeps candidate refresh focused on the edited recognition info.',
+      correctionHistoryOrdering: 'Dashboard now keeps the corrected current task above its corrected history record.',
       sampleScanPruning: 'With system default ignore rules, Sample and Samples folders are skipped silently to reduce unnecessary recognition and TMDB requests.',
     },
   },

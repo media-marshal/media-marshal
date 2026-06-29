@@ -3230,3 +3230,32 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无。
+
+---
+
+## [ADR-028 修正任务更新时间排序优化] 2026-06-29
+
+### 完成内容
+- 明确 Dashboard 当前任务排序逻辑：仍按 `updatedAt || createdAt` 倒序展示，不新增修正链路专用排序规则。
+- 调整应用修正后的数据更新时间：旧任务保存为 `CORRECTED` 后，再刷新新的 `DONE + MANUAL_CORRECTION` 修正任务更新时间，使当前有效任务在普通时间倒序中自然排在已修正历史上方。
+- v0.2.10 ReleaseNote 补充修正历史排序优化说明。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/service/correction/TaskCorrectionService.java`
+- `backend/src/test/java/com/mediamarshal/service/correction/TaskCorrectionServiceTest.java`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无。
+
+### 验证
+- `mvn -q -Dtest=TaskCorrectionServiceTest test`
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题 / 需 PM 决策
+- 无。

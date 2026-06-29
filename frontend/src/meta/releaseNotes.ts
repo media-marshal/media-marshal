@@ -11,6 +11,7 @@ export const releaseNotes: ReleaseNote[] = [
       { type: 'fix', key: 'releaseNotes.v0_2_10.items.sampleConflictPrevention' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionPanelLayout' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionRematchFlow' },
+      { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionHistoryOrdering' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.sampleScanPruning' },
     ],
   },

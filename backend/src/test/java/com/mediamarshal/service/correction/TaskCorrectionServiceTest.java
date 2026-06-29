@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 
@@ -77,13 +78,28 @@ class TaskCorrectionServiceTest {
                 eventPublisher
         );
 
-        when(taskRepository.save(any(MediaTask.class))).thenAnswer(invocation -> {
-            MediaTask task = invocation.getArgument(0);
-            if (task.getId() == null) {
-                task.setId(2L);
-            }
-            return task;
-        });
+        when(taskRepository.saveAndFlush(any(MediaTask.class))).thenAnswer(invocation -> saveTask(invocation.getArgument(0)));
+    }
+
+    @Test
+    void applyTouchesCorrectedTaskAfterMarkingOriginalCorrected() throws Exception {
+        Path target = tempDir.resolve("library/Movie (2024)/Movie (2024).mkv");
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, "video");
+
+        MediaTask original = doneTask(target);
+        WatchRule rule = movieRule("{title} ({year})/{title} ({year}){ext}");
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(original));
+        when(watchRuleRepository.findById(9L)).thenReturn(Optional.of(rule));
+        when(metadataMatcher.getById("100", "MOVIE")).thenReturn(movieMatch(100L, "Movie", 2024));
+
+        service.apply(1L, movieRequest("Movie", 2024, 100L, false));
+
+        ArgumentCaptor<MediaTask> taskCaptor = ArgumentCaptor.forClass(MediaTask.class);
+        verify(taskRepository, org.mockito.Mockito.times(3)).saveAndFlush(taskCaptor.capture());
+        assertThat(taskCaptor.getAllValues().get(1).getStatus()).isEqualTo(MediaTask.TaskStatus.CORRECTED);
+        assertThat(taskCaptor.getAllValues().get(2).getConfirmationSource())
+                .isEqualTo(MediaTask.ConfirmationSource.MANUAL_CORRECTION);
     }
 
     @Test
@@ -101,7 +117,7 @@ class TaskCorrectionServiceTest {
         service.apply(1L, movieRequest("Movie", 2024, 100L, false));
 
         ArgumentCaptor<MediaTask> taskCaptor = ArgumentCaptor.forClass(MediaTask.class);
-        verify(taskRepository, org.mockito.Mockito.atLeast(2)).save(taskCaptor.capture());
+        verify(taskRepository, org.mockito.Mockito.atLeast(3)).saveAndFlush(taskCaptor.capture());
         MediaTask corrected = taskCaptor.getAllValues().stream()
                 .filter(task -> MediaTask.ConfirmationSource.MANUAL_CORRECTION.equals(task.getConfirmationSource()))
                 .findFirst()
@@ -167,6 +183,14 @@ class TaskCorrectionServiceTest {
 
         assertThat(preview.isCanApply()).isFalse();
         assertThat(preview.getBlockers()).contains("第一版暂不支持剧集蓝光原盘修正");
+    }
+
+    private MediaTask saveTask(MediaTask task) {
+        if (task.getId() == null) {
+            task.setId(2L);
+        }
+        task.setUpdatedAt(LocalDateTime.now());
+        return task;
     }
 
     private MediaTask doneTask(Path target) {

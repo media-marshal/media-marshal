@@ -102,14 +102,17 @@ public class TaskCorrectionService {
             throw new IllegalStateException("修正文件操作失败，数据库记录未更新：" + e.getMessage(), e);
         }
 
-        MediaTask correctedTask = taskRepository.save(plan.correctedTask());
+        MediaTask correctedTask = taskRepository.saveAndFlush(plan.correctedTask());
         saveSelectedCandidate(correctedTask, plan.selectedMatch());
 
         MediaTask originalTask = plan.originalTask();
         originalTask.setStatus(MediaTask.TaskStatus.CORRECTED);
         originalTask.setCorrectedToTaskId(correctedTask.getId());
         originalTask.setCorrectedAt(LocalDateTime.now());
-        taskRepository.save(originalTask);
+        taskRepository.saveAndFlush(originalTask);
+
+        correctedTask.setUpdatedAt(LocalDateTime.now());
+        correctedTask = taskRepository.saveAndFlush(correctedTask);
 
         cleanupEmptyTargetDirs(plan.cleanupStartDir(), plan.cleanupStopDir(), plan.preview().getWarnings());
 
