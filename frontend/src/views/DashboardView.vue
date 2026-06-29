@@ -243,18 +243,19 @@
     <el-dialog
       v-model="correctionDialogVisible"
       :title="t('dashboard.correction.title')"
-      width="980px"
+      width="min(1180px, calc(100vw - 64px))"
+      align-center
       destroy-on-close
       class="correction-dialog"
     >
       <div v-if="correctionTask" class="correction-layout">
-        <section class="correction-section">
+        <section class="correction-section current-info-section">
           <h3>{{ t('dashboard.correction.currentInfo') }}</h3>
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item :label="t('dashboard.correction.sourcePath')">
+            <el-descriptions-item :label="t('dashboard.correction.sourcePath')" :span="2">
               <span class="muted-path">{{ correctionTask.sourcePath }}</span>
             </el-descriptions-item>
-            <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')">
+            <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')" :span="2">
               <span class="muted-path">{{ correctionTask.targetPath || '-' }}</span>
             </el-descriptions-item>
             <el-descriptions-item :label="t('dashboard.assetType')">
@@ -272,156 +273,161 @@
           </el-descriptions>
         </section>
 
-        <section class="correction-section">
-          <h3>{{ t('dashboard.correction.editRecognition') }}</h3>
-          <el-form label-position="top" class="correction-form">
-            <el-row :gutter="12">
-              <el-col :span="8">
-                <el-form-item :label="t('queue.mediaType')">
-                  <el-select v-model="correctionForm.mediaType" @change="invalidateCorrectionPreview">
-                    <el-option :label="t('task.mediaType.MOVIE')" value="MOVIE" />
-                    <el-option
-                      :label="t('task.mediaType.TV_SHOW')"
-                      value="TV_SHOW"
-                      :disabled="correctionTask.assetType === 'BLURAY_DIRECTORY'"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="10">
-                <el-form-item :label="t('queue.parsedTitle')">
-                  <el-input v-model="correctionForm.parsedTitle" @input="invalidateCorrectionPreview" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item :label="t('queue.parsedYear')">
-                  <el-input-number
-                    v-model="correctionForm.parsedYear"
-                    :min="1888"
-                    :max="2100"
-                    controls-position="right"
-                    @change="invalidateCorrectionPreview"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row v-if="correctionForm.mediaType === 'TV_SHOW'" :gutter="12">
-              <el-col :span="8">
-                <el-form-item :label="t('queue.parsedSeason')">
-                  <el-input-number v-model="correctionForm.parsedSeason" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="t('queue.parsedEpisode')">
-                  <el-input-number v-model="correctionForm.parsedEpisode" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="t('dashboard.correction.parsedEpisodeEnd')">
-                  <el-input-number v-model="correctionForm.parsedEpisodeEnd" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-checkbox v-model="correctionForm.regenerateNfo" @change="invalidateCorrectionPreview">
-              {{ t('dashboard.correction.regenerateNfo') }}
-            </el-checkbox>
-          </el-form>
-        </section>
+        <div class="correction-main-grid">
+          <div class="correction-left-column">
+            <section class="correction-section">
+              <h3>{{ t('dashboard.correction.editRecognition') }}</h3>
+              <el-form label-position="top" class="correction-form">
+                <el-row :gutter="12">
+                  <el-col :span="8">
+                    <el-form-item :label="t('queue.mediaType')">
+                      <el-select v-model="correctionForm.mediaType" @change="invalidateCorrectionPreview">
+                        <el-option :label="t('task.mediaType.MOVIE')" value="MOVIE" />
+                        <el-option
+                          :label="t('task.mediaType.TV_SHOW')"
+                          value="TV_SHOW"
+                          :disabled="correctionTask.assetType === 'BLURAY_DIRECTORY'"
+                        />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="10">
+                    <el-form-item :label="t('queue.parsedTitle')">
+                      <el-input v-model="correctionForm.parsedTitle" @input="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="6">
+                    <el-form-item :label="t('queue.parsedYear')">
+                      <el-input-number
+                        v-model="correctionForm.parsedYear"
+                        :min="1888"
+                        :max="2100"
+                        controls-position="right"
+                        @change="invalidateCorrectionPreview"
+                      />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-row v-if="correctionForm.mediaType === 'TV_SHOW'" :gutter="12">
+                  <el-col :span="8">
+                    <el-form-item :label="t('queue.parsedSeason')">
+                      <el-input-number v-model="correctionForm.parsedSeason" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item :label="t('queue.parsedEpisode')">
+                      <el-input-number v-model="correctionForm.parsedEpisode" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item :label="t('dashboard.correction.parsedEpisodeEnd')">
+                      <el-input-number v-model="correctionForm.parsedEpisodeEnd" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-checkbox v-model="correctionForm.regenerateNfo" @change="invalidateCorrectionPreview">
+                  {{ t('dashboard.correction.regenerateNfo') }}
+                </el-checkbox>
+              </el-form>
+            </section>
 
-        <section class="correction-section">
-          <div class="section-title-row">
-            <h3>{{ t('dashboard.correction.candidates') }}</h3>
-            <div class="section-actions">
-              <el-button size="small" :icon="Refresh" :loading="correctionRematching" @click="rematchCorrection">
-                {{ t('dashboard.correction.rematch') }}
+            <section class="correction-section">
+              <div class="section-title-row">
+                <h3>{{ t('dashboard.correction.candidates') }}</h3>
+                <div class="section-actions">
+                  <el-button native-type="button" size="small" :icon="Refresh" :loading="correctionRematching" @click="rematchCorrection">
+                    {{ t('dashboard.correction.rematch') }}
+                  </el-button>
+                </div>
+              </div>
+              <div class="manual-search-row">
+                <el-input
+                  v-model="correctionSearchKeyword"
+                  size="small"
+                  clearable
+                  :placeholder="t('dashboard.correction.searchPlaceholder')"
+                  @keyup.enter="searchCorrectionCandidate"
+                />
+                <el-button native-type="button" size="small" :icon="Search" :loading="correctionSearching" @click="searchCorrectionCandidate">
+                  {{ t('queue.search') }}
+                </el-button>
+              </div>
+              <el-empty v-if="correctionCandidates.length === 0" :description="t('dashboard.correction.noCandidates')" :image-size="56" />
+              <div v-else class="candidate-list">
+                <button
+                  v-for="candidate in correctionCandidates"
+                  :key="candidateKey(candidate)"
+                  class="candidate-row"
+                  :class="{ selected: isCorrectionCandidateSelected(candidate) }"
+                  type="button"
+                  @click="selectCorrectionCandidate(candidate)"
+                >
+                  <span class="candidate-title">{{ candidateTitle(candidate) }}</span>
+                  <span class="candidate-meta">
+                    {{ candidate.year || '-' }} · {{ t(`task.mediaType.${candidate.mediaType}`) }} · {{ formatConfidence(candidate.confidence) }}
+                  </span>
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <section class="correction-section preview-section">
+            <div class="section-title-row">
+              <h3>{{ t('dashboard.correction.preview') }}</h3>
+              <el-button
+                native-type="button"
+                size="small"
+                type="primary"
+                :icon="View"
+                :disabled="!selectedCorrectionCandidate"
+                :loading="correctionPreviewing"
+                @click="previewCorrection"
+              >
+                {{ t('dashboard.correction.previewAction') }}
               </el-button>
             </div>
-          </div>
-          <div class="manual-search-row">
-            <el-input
-              v-model="correctionSearchKeyword"
-              size="small"
-              clearable
-              :placeholder="t('dashboard.correction.searchPlaceholder')"
-              @keyup.enter="searchCorrectionCandidate"
-            />
-            <el-button size="small" :icon="Search" :loading="correctionSearching" @click="searchCorrectionCandidate">
-              {{ t('queue.search') }}
-            </el-button>
-          </div>
-          <el-empty v-if="correctionCandidates.length === 0" :description="t('dashboard.correction.noCandidates')" />
-          <div v-else class="candidate-list">
-            <button
-              v-for="candidate in correctionCandidates"
-              :key="candidateKey(candidate)"
-              class="candidate-row"
-              :class="{ selected: isCorrectionCandidateSelected(candidate) }"
-              type="button"
-              @click="selectCorrectionCandidate(candidate)"
-            >
-              <span class="candidate-title">{{ candidateTitle(candidate) }}</span>
-              <span class="candidate-meta">
-                {{ candidate.year || '-' }} · {{ t(`task.mediaType.${candidate.mediaType}`) }} · {{ formatConfidence(candidate.confidence) }}
-              </span>
-            </button>
-          </div>
-        </section>
-
-        <section class="correction-section">
-          <div class="section-title-row">
-            <h3>{{ t('dashboard.correction.preview') }}</h3>
-            <el-button
-              size="small"
-              type="primary"
-              :icon="View"
-              :disabled="!selectedCorrectionCandidate"
-              :loading="correctionPreviewing"
-              @click="previewCorrection"
-            >
-              {{ t('dashboard.correction.previewAction') }}
-            </el-button>
-          </div>
-          <div v-if="correctionPreview" class="preview-panel">
-            <el-descriptions :column="1" border size="small">
-              <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')">
-                <span class="muted-path">{{ correctionPreview.currentTargetPath || '-' }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item :label="t('dashboard.correction.correctedTargetPath')">
-                <span class="muted-path">{{ correctionPreview.correctedTargetPath || '-' }}</span>
-              </el-descriptions-item>
-            </el-descriptions>
-            <div v-if="correctionPreview.blockers.length" class="message-stack">
-              <el-alert
-                v-for="blocker in correctionPreview.blockers"
-                :key="blocker"
-                type="error"
-                :title="blocker"
-                show-icon
-                :closable="false"
-              />
+            <div v-if="correctionPreview" class="preview-panel">
+              <el-descriptions :column="1" border size="small">
+                <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')">
+                  <span class="muted-path">{{ correctionPreview.currentTargetPath || '-' }}</span>
+                </el-descriptions-item>
+                <el-descriptions-item :label="t('dashboard.correction.correctedTargetPath')">
+                  <span class="muted-path">{{ correctionPreview.correctedTargetPath || '-' }}</span>
+                </el-descriptions-item>
+              </el-descriptions>
+              <div v-if="correctionPreview.blockers.length" class="message-stack">
+                <el-alert
+                  v-for="blocker in correctionPreview.blockers"
+                  :key="blocker"
+                  type="error"
+                  :title="blocker"
+                  show-icon
+                  :closable="false"
+                />
+              </div>
+              <div v-if="correctionPreview.warnings.length" class="message-stack">
+                <el-alert
+                  v-for="warning in correctionPreview.warnings"
+                  :key="warning"
+                  type="warning"
+                  :title="warning"
+                  show-icon
+                  :closable="false"
+                />
+              </div>
+              <el-table :data="correctionPreview.operations" size="small" border class="operation-table">
+                <el-table-column :label="t('dashboard.correction.operationType')" width="136">
+                  <template #default="{ row }">
+                    {{ t(`dashboard.correction.operation.${row.type}`) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="sourcePath" :label="t('dashboard.correction.operationSource')" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="targetPath" :label="t('dashboard.correction.operationTarget')" min-width="180" show-overflow-tooltip />
+              </el-table>
             </div>
-            <div v-if="correctionPreview.warnings.length" class="message-stack">
-              <el-alert
-                v-for="warning in correctionPreview.warnings"
-                :key="warning"
-                type="warning"
-                :title="warning"
-                show-icon
-                :closable="false"
-              />
-            </div>
-            <el-table :data="correctionPreview.operations" size="small" border class="operation-table">
-              <el-table-column :label="t('dashboard.correction.operationType')" width="150">
-                <template #default="{ row }">
-                  {{ t(`dashboard.correction.operation.${row.type}`) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="sourcePath" :label="t('dashboard.correction.operationSource')" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="targetPath" :label="t('dashboard.correction.operationTarget')" min-width="220" show-overflow-tooltip />
-            </el-table>
-          </div>
-          <el-empty v-else :description="t('dashboard.correction.previewEmpty')" />
-        </section>
+            <el-empty v-else :description="t('dashboard.correction.previewEmpty')" :image-size="72" />
+          </section>
+        </div>
       </div>
       <template #footer>
         <el-button @click="correctionDialogVisible = false">{{ t('common.cancel') }}</el-button>
@@ -443,6 +449,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
+import { mediaApi } from '@/api/media'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check, EditPen, Refresh, Search, View } from '@element-plus/icons-vue'
@@ -961,22 +968,50 @@ h2 {
   font-size: 12px;
 }
 
+.correction-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.correction-dialog :deep(.el-dialog__footer) {
+  padding-top: 10px;
+}
+
 .correction-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.correction-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.correction-left-column {
+  display: grid;
+  gap: 12px;
 }
 
 .correction-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .correction-section h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   color: #303133;
+}
+
+.current-info-section :deep(.el-descriptions__label) {
+  width: 132px;
+}
+
+.current-info-section :deep(.el-descriptions__content) {
+  max-width: 0;
 }
 
 .section-title-row {
@@ -996,9 +1031,14 @@ h2 {
   width: 100%;
 }
 
+.correction-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
 .muted-path {
   color: #606266;
   word-break: break-all;
+  line-height: 1.35;
 }
 
 .manual-search-row {
@@ -1009,7 +1049,9 @@ h2 {
 
 .candidate-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
 }
 
 .candidate-row {
@@ -1018,8 +1060,8 @@ h2 {
   gap: 12px;
   align-items: center;
   width: 100%;
-  min-height: 38px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 6px 10px;
   border: 1px solid #dcdfe6;
   border-radius: 6px;
   background: #fff;
@@ -1050,21 +1092,29 @@ h2 {
 .preview-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .message-stack {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .operation-table {
   width: 100%;
 }
 
+.preview-section {
+  min-width: 0;
+}
+
 @media (max-width: 1200px) {
   .stat-cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .correction-main-grid {
+    grid-template-columns: 1fr;
   }
 }
 

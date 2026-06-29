@@ -3,7 +3,9 @@ export default {
     items: {
       completedTaskCorrection: '已整理完成的任务可以在仪表盘中修正匹配结果，并移动或重命名媒体库里的目标文件。',
       correctionPreview: '应用修正前会预览目标路径、附属文件、NFO 和空目录清理计划，冲突会先阻断。',
+      correctionSearchAction: '修复修正面板中手动搜索按钮没有发起搜索的问题。',
       sampleConflictPrevention: '系统会识别同目录正片对应的 Sample 视频，避免样片与正片整理到同一路径后产生冲突。',
+      correctionPanelLayout: '修正面板改为居中紧凑布局，源路径和当前目标路径更容易查看。',
       sampleScanPruning: '使用系统默认忽略规则时，Sample 和 Samples 目录会被静默跳过，减少无效识别和 TMDB 请求。',
     },
   },
