@@ -1,14 +1,8 @@
 export default {
   v0_2_10: {
     items: {
-      completedTaskCorrection: '已整理完成的任务可以在仪表盘中修正匹配结果，并移动或重命名媒体库里的目标文件。',
-      correctionPreview: '应用修正前会预览目标路径、附属文件、NFO 和空目录清理计划，冲突会先阻断。',
-      correctionSchemaUpgrade: '升级旧版本数据后，应用修正不会再因为历史数据库约束失败。',
-      sampleConflictPrevention: '系统会识别同目录正片对应的 Sample 视频，避免样片与正片整理到同一路径后产生冲突。',
-      correctionPanelLayout: '修正面板改为居中紧凑布局，源路径和当前目标路径更容易查看。',
-      correctionRematchFlow: '修正面板只保留按编辑信息重新匹配候选，操作流程更清楚。',
-      correctionHistoryOrdering: '仪表盘会把修正后的当前任务排在已修正历史记录上方，回看修正结果更直观。',
-      sampleScanPruning: '使用系统默认忽略规则时，Sample 和 Samples 目录会被静默跳过，减少无效识别和 TMDB 请求。',
+      completedTaskCorrection: '已完成任务支持修正匹配，并同步移动或重命名媒体库文件。',
+      sampleScanPruning: '默认忽略 Sample 目录，减少无效识别和 TMDB 请求。',
     },
   },
   v0_2_9: {

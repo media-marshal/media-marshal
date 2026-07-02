@@ -329,7 +329,7 @@
                   <el-button native-type="button" size="small" :icon="Refresh" :loading="correctionRematching" @click="rematchCorrection">
                     {{ t('dashboard.correction.rematch') }}
                   </el-button>
-                  <el-checkbox v-model="correctionForm.regenerateNfo" @change="invalidateCorrectionPreview">
+                  <el-checkbox v-model="correctionForm.regenerateNfo" @change="handleRegenerateNfoChange">
                     {{ t('dashboard.correction.regenerateNfo') }}
                   </el-checkbox>
                 </div>
@@ -359,23 +359,12 @@
             </section>
           </div>
 
-          <section class="correction-section preview-section">
+          <section class="correction-section preview-section" v-loading="correctionPreviewing">
             <div class="section-title-row">
               <h3>{{ t('dashboard.correction.preview') }}</h3>
-              <el-button
-                native-type="button"
-                size="small"
-                type="primary"
-                :icon="View"
-                :disabled="!selectedCorrectionCandidate"
-                :loading="correctionPreviewing"
-                @click="previewCorrection"
-              >
-                {{ t('dashboard.correction.previewAction') }}
-              </el-button>
             </div>
             <div v-if="correctionPreview" class="preview-panel">
-              <el-descriptions :column="1" border size="small">
+              <el-descriptions :column="1" border size="small" class="preview-path-descriptions">
                 <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')">
                   <span class="muted-path">{{ correctionPreview.currentTargetPath || '-' }}</span>
                 </el-descriptions-item>
@@ -440,7 +429,7 @@ import { useMediaStore } from '@/stores/mediaStore'
 import { mediaApi } from '@/api/media'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, EditPen, Refresh, Search, View } from '@element-plus/icons-vue'
+import { Check, EditPen, Refresh, Search } from '@element-plus/icons-vue'
 import type { MatchResult, MediaAssetType, MediaTask, MediaType, TaskCorrectionPreview, TaskCorrectionRequest, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
@@ -482,6 +471,7 @@ const correctionPreview = ref<TaskCorrectionPreview | null>(null)
 const correctionRematching = ref(false)
 const correctionPreviewing = ref(false)
 const correctionApplying = ref(false)
+let correctionPreviewRequestSeq = 0
 
 const normalizedFileNameKeyword = computed(() => fileNameKeyword.value.trim().toLocaleLowerCase())
 const normalizedMatchedTitleKeyword = computed(() => matchedTitleKeyword.value.trim().toLocaleLowerCase())
@@ -677,10 +667,13 @@ function openCorrectionDialog(task: MediaTask) {
   correctionForm.parsedEpisode = task.parsedEpisode
   correctionForm.parsedEpisodeEnd = task.parsedEpisodeEnd
   correctionForm.regenerateNfo = false
-  correctionPreview.value = null
+  invalidateCorrectionPreview()
   selectedCorrectionCandidate.value = task.tmdbId ? taskToMatchResult(task) : null
   correctionCandidates.value = selectedCorrectionCandidate.value ? [selectedCorrectionCandidate.value] : []
   correctionDialogVisible.value = true
+  if (selectedCorrectionCandidate.value) {
+    void nextTick().then(() => refreshCorrectionPreview())
+  }
 }
 
 function taskToMatchResult(task: MediaTask): MatchResult {
@@ -727,7 +720,16 @@ function validateCorrectionForm() {
 }
 
 function invalidateCorrectionPreview() {
+  correctionPreviewRequestSeq += 1
   correctionPreview.value = null
+  correctionPreviewing.value = false
+}
+
+function handleRegenerateNfoChange() {
+  invalidateCorrectionPreview()
+  if (selectedCorrectionCandidate.value) {
+    void refreshCorrectionPreview()
+  }
 }
 
 async function rematchCorrection() {
@@ -739,18 +741,21 @@ async function rematchCorrection() {
     const res = await mediaApi.rematchTaskCorrection(correctionTask.value.id, request)
     correctionCandidates.value = res.data.data.candidates
     selectedCorrectionCandidate.value = correctionCandidates.value[0] || null
-    correctionPreview.value = null
+    invalidateCorrectionPreview()
     if (correctionCandidates.value.length === 0) {
       ElMessage.info(t('dashboard.correction.noCandidates'))
+    } else {
+      await refreshCorrectionPreview()
     }
   } finally {
     correctionRematching.value = false
   }
 }
 
-function selectCorrectionCandidate(candidate: MatchResult) {
+async function selectCorrectionCandidate(candidate: MatchResult) {
   selectedCorrectionCandidate.value = candidate
-  correctionPreview.value = null
+  invalidateCorrectionPreview()
+  await refreshCorrectionPreview()
 }
 
 function isCorrectionCandidateSelected(candidate: MatchResult) {
@@ -771,16 +776,21 @@ function formatConfidence(confidence: number | null) {
   return confidence != null ? `${Math.round(confidence * 100)}%` : '-'
 }
 
-async function previewCorrection() {
+async function refreshCorrectionPreview() {
   if (!correctionTask.value || !selectedCorrectionCandidate.value || !validateCorrectionForm()) return
   const request = buildCorrectionRequest()
   if (!request) return
+  const requestSeq = ++correctionPreviewRequestSeq
   correctionPreviewing.value = true
   try {
     const res = await mediaApi.previewTaskCorrection(correctionTask.value.id, request)
-    correctionPreview.value = res.data.data
+    if (requestSeq === correctionPreviewRequestSeq) {
+      correctionPreview.value = res.data.data
+    }
   } finally {
-    correctionPreviewing.value = false
+    if (requestSeq === correctionPreviewRequestSeq) {
+      correctionPreviewing.value = false
+    }
   }
 }
 
@@ -943,19 +953,23 @@ h2 {
 
 .correction-layout {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .correction-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 14px;
+  gap: 16px;
   align-items: start;
 }
 
 .correction-left-column {
   display: grid;
   gap: 12px;
+  padding: 14px;
+  border-radius: 6px;
+  background: #fcfdff;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.16), 0 8px 18px rgba(31, 45, 61, 0.05);
 }
 
 .correction-section {
@@ -970,11 +984,27 @@ h2 {
   color: #303133;
 }
 
+.current-info-section {
+  padding: 14px;
+  border-radius: 6px;
+  background: #f7fbff;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.14), 0 8px 18px rgba(31, 45, 61, 0.06);
+}
+
 .current-info-section :deep(.el-descriptions__label) {
   width: 132px;
 }
 
 .current-info-section :deep(.el-descriptions__content) {
+  max-width: 0;
+}
+
+.preview-path-descriptions :deep(.el-descriptions__label) {
+  width: 154px;
+  white-space: nowrap;
+}
+
+.preview-path-descriptions :deep(.el-descriptions__content) {
   max-width: 0;
 }
 
@@ -1069,6 +1099,10 @@ h2 {
 
 .preview-section {
   min-width: 0;
+  padding: 14px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.12), 0 8px 20px rgba(31, 45, 61, 0.07);
 }
 
 @media (max-width: 1200px) {
@@ -1078,6 +1112,10 @@ h2 {
 
   .correction-main-grid {
     grid-template-columns: 1fr;
+  }
+
+  .correction-left-column {
+    padding: 12px;
   }
 }
 

@@ -6,12 +6,6 @@ export const releaseNotes: ReleaseNote[] = [
     date: '2026-06-29',
     items: [
       { type: 'feature', key: 'releaseNotes.v0_2_10.items.completedTaskCorrection' },
-      { type: 'feature', key: 'releaseNotes.v0_2_10.items.correctionPreview' },
-      { type: 'fix', key: 'releaseNotes.v0_2_10.items.correctionSchemaUpgrade' },
-      { type: 'fix', key: 'releaseNotes.v0_2_10.items.sampleConflictPrevention' },
-      { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionPanelLayout' },
-      { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionRematchFlow' },
-      { type: 'optimization', key: 'releaseNotes.v0_2_10.items.correctionHistoryOrdering' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.sampleScanPruning' },
     ],
   },

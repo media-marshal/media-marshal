@@ -3259,3 +3259,58 @@ alwaysApply: false
 
 ### 遗留问题 / 需 PM 决策
 - 无。
+
+---
+
+## [ADR-028 修正面板视觉分区与候选自动预览] 2026-07-01
+
+### 完成内容
+- 影响预览中的“当前目标路径”和“修正后目标路径”描述表格加宽 label 区域，并禁止 label 换行，保证表头保持单行展示。
+- 使用浅色高亮背景和轻阴影区分“当前任务信息”“编辑识别信息 / 候选”和“影响预览”三个区域，替代生硬分割线。
+- 去掉影响预览区域的“预览”按钮；打开弹窗已有候选、重新匹配选中候选、点击候选项时会自动刷新并展示预览内容。
+- 勾选“重新生成 NFO”时，如果已有候选会自动刷新预览，避免去掉按钮后没有重新生成预览的入口。
+- v0.2.10 ReleaseNote 同步更新候选自动预览和修正面板分区优化说明。
+
+### 影响文件
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无。
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+- `git diff --check`
+
+### 遗留问题 / 需 PM 决策
+- 无。
+
+---
+
+## [v0.2.10 ReleaseNote 收敛] 2026-07-01
+
+### 完成内容
+- v0.2.10 ReleaseNote 从多条实现细节收敛为两条用户可感知的核心改动：已完成任务修正、Sample 目录默认静默跳过。
+- 简化中英文描述，避免把预览、旧库兼容、布局、排序等支撑性细节拆成独立更新项。
+
+### 影响文件
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无。
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+- `git diff --check`
+
+### 遗留问题 / 需 PM 决策
+- 无。
