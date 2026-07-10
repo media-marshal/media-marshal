@@ -383,6 +383,29 @@
                       {{ t('watchRule.noIgnoredPatterns') }}
                     </el-text>
                   </div>
+                  <el-alert
+                    v-if="form.ignoredFilePatterns !== null"
+                    class="sample-ignore-warning"
+                    type="warning"
+                    :closable="false"
+                    show-icon
+                  >
+                    <template #title>
+                      {{ t('watchRule.sampleIgnoreWarningTitle') }}
+                    </template>
+                    <div class="sample-ignore-warning-content">
+                      <span>{{ t('watchRule.sampleIgnoreWarning') }}</span>
+                      <el-button
+                        size="small"
+                        link
+                        type="warning"
+                        :icon="Plus"
+                        @click="mergeSampleIgnoredPatterns"
+                      >
+                        {{ t('watchRule.mergeSampleIgnoredPatterns') }}
+                      </el-button>
+                    </div>
+                  </el-alert>
                   <div v-if="ignoredPatternsEditing" class="ignored-editor">
                     <div class="ignored-input-row">
                       <el-input
@@ -944,7 +967,22 @@ const discoveryModeOptions: Array<{ value: DiscoveryMode }> = [
   { value: 'PERIODIC_SCAN' },
   { value: 'HYBRID' },
 ]
-const defaultIgnoredPatterns = ['.DS_Store', 'Thumbs.db', 'desktop.ini', '*.part', '*.tmp', '*.crdownload', '*.lock', '~$*', '.*', '__MACOSX/', '@eaDir/']
+const defaultIgnoredPatterns = [
+  '.DS_Store',
+  'Thumbs.db',
+  'desktop.ini',
+  '*.part',
+  '*.tmp',
+  '*.crdownload',
+  '*.lock',
+  '~$*',
+  '.*',
+  '__MACOSX/',
+  '@eaDir/',
+  'sample/',
+  'samples/',
+]
+const sampleIgnoredPatterns = ['sample/', 'samples/']
 
 const effectiveIgnoredPatterns = computed(() => form.ignoredFilePatterns ?? defaultIgnoredPatterns)
 
@@ -1318,6 +1356,21 @@ function removeIgnoredPattern(pattern: string) {
 function restoreDefaultIgnoredPatterns() {
   form.ignoredFilePatterns = null
   ignoredPatternInput.value = ''
+}
+
+function mergeSampleIgnoredPatterns() {
+  if (form.ignoredFilePatterns === null) return
+
+  const current = [...form.ignoredFilePatterns]
+  const normalized = new Set(current.map(pattern => pattern.trim().replace(/\\/g, '/').toLowerCase()))
+  for (const pattern of sampleIgnoredPatterns) {
+    if (!normalized.has(pattern)) {
+      current.push(pattern)
+      normalized.add(pattern)
+    }
+  }
+  form.ignoredFilePatterns = current
+  ElMessage.success(t('watchRule.mergeSampleIgnoredPatternsSuccess'))
 }
 
 function mediaTypeTagType(type: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined {
@@ -1846,6 +1899,19 @@ h2 {
 
 .ignored-editor {
   margin-top: 10px;
+}
+
+.sample-ignore-warning {
+  margin-top: 10px;
+}
+
+.sample-ignore-warning-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  line-height: 1.5;
 }
 
 .template-variable-panel {

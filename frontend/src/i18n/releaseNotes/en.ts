@@ -1,4 +1,10 @@
 export default {
+  v0_2_10: {
+    items: {
+      completedTaskCorrection: 'Correct completed tasks and move or rename media library files from Dashboard.',
+      sampleScanPruning: 'Sample folders are ignored by default to reduce unnecessary recognition and TMDB requests.',
+    },
+  },
   v0_2_9: {
     items: {
       enabledTemplateVariables: 'Path templates can now use codec, release group, and original title for names that better match your library style.',

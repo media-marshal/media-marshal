@@ -13,10 +13,11 @@ export type TaskStatus =
   | 'DONE'
   | 'FAILED'
   | 'SKIPPED'
+  | 'CORRECTED'
 
 export type MediaType = 'MOVIE' | 'TV_SHOW'
 export type MediaAssetType = 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
-export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH'
+export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH' | 'MANUAL_CORRECTION'
 export type TaskErrorCode = 'TARGET_CONFLICT' | 'UNSAFE_TARGET_PATH' | 'SOURCE_MISSING' | 'PIPELINE_FAILED'
 export type DiscoveryMode = 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
 
@@ -53,6 +54,9 @@ export interface MediaTask {
   operationType: string | null
   errorMessage: string | null
   skipReason: string | null
+  correctedFromTaskId: number | null
+  correctedToTaskId: number | null
+  correctedAt: string | null
   ruleId: number | null
   createdAt: string
   updatedAt: string
@@ -141,6 +145,53 @@ export interface QueueRecognitionResponse {
   candidates: TaskCandidate[]
 }
 
+export interface TaskCorrectionRequest {
+  mediaType: MediaType
+  parsedTitle: string
+  parsedYear: number | null
+  parsedSeason: number | null
+  parsedEpisode: number | null
+  parsedEpisodeEnd: number | null
+  tmdbId?: number | null
+  regenerateNfo?: boolean
+}
+
+export type TaskCorrectionOperationType =
+  | 'MOVE_MAIN_ASSET'
+  | 'MOVE_ASSOCIATED_FILE'
+  | 'GENERATE_NFO'
+  | 'CLEAN_EMPTY_DIR'
+  | 'CREATE_CORRECTION_TASK'
+  | 'MARK_ORIGINAL_CORRECTED'
+
+export interface TaskCorrectionOperation {
+  type: TaskCorrectionOperationType
+  sourcePath: string | null
+  targetPath: string | null
+  description: string | null
+}
+
+export interface TaskCorrectionPreview {
+  currentTargetPath: string | null
+  correctedTargetPath: string | null
+  sameTargetPath: boolean
+  selectedMatch: MatchResult | null
+  operations: TaskCorrectionOperation[]
+  blockers: string[]
+  warnings: string[]
+  canApply: boolean
+}
+
+export interface TaskCorrectionRematchResponse {
+  candidates: MatchResult[]
+}
+
+export interface TaskCorrectionApplyResponse {
+  originalTask: MediaTask
+  correctedTask: MediaTask
+  preview: TaskCorrectionPreview
+}
+
 // ─── 模板变量帮助 ──────────────────────────────────────────────────
 export type TemplateVariableStatus = 'AVAILABLE' | 'RESERVED' | 'DEPRECATED' | 'UNAVAILABLE'
 
@@ -199,6 +250,7 @@ export type WsEventType =
   | 'task.confirm'
   | 'task.done'
   | 'task.failed'
+  | 'task.corrected'
 
 export interface WsTaskEvent {
   type: WsEventType

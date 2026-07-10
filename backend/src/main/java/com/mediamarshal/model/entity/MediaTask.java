@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 /**
  * 媒体处理任务实体
  *
- * 生命周期：文件被监控发现 -> PENDING -> PROCESSING -> DONE / AWAITING_CONFIRMATION / FAILED
+ * 生命周期：文件被监控发现 -> PENDING -> PROCESSING -> DONE / AWAITING_CONFIRMATION / FAILED。
+ * DONE 任务被用户纠错后会转为 CORRECTED，并由新的 DONE 任务承载当前有效资产。
  */
 @Data
 @Entity
@@ -125,6 +126,15 @@ public class MediaTask {
     @Column(length = 500)
     private String skipReason;
 
+    /** 新修正任务指向被修正的旧任务。 */
+    private Long correctedFromTaskId;
+
+    /** 旧任务指向修正后的新任务。 */
+    private Long correctedToTaskId;
+
+    /** 旧任务被修正的时间。 */
+    private LocalDateTime correctedAt;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -153,7 +163,9 @@ public class MediaTask {
         /** 处理失败 */
         FAILED,
         /** 已扫描但根据规则跳过，不属于错误 */
-        SKIPPED
+        SKIPPED,
+        /** 曾经完成整理，后续已被用户手动修正。 */
+        CORRECTED
     }
 
     public enum MediaType {
@@ -164,7 +176,8 @@ public class MediaTask {
     public enum ConfirmationSource {
         AUTO_MATCH,
         MANUAL_SINGLE,
-        MANUAL_BATCH
+        MANUAL_BATCH,
+        MANUAL_CORRECTION
     }
 
     public enum TaskErrorCode {

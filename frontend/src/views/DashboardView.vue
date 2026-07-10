@@ -194,8 +194,29 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="90" fixed="right">
+        <el-table-column :label="t('common.actions')" width="150" fixed="right">
           <template #default="{ row }">
+            <el-tooltip
+              v-if="row.status === 'DONE' && row.assetType === 'ISO_IMAGE'"
+              :content="t('dashboard.correction.isoUnsupported')"
+              placement="top"
+            >
+              <span>
+                <el-button link type="warning" size="small" :icon="EditPen" disabled>
+                  {{ t('dashboard.correction.action') }}
+                </el-button>
+              </span>
+            </el-tooltip>
+            <el-button
+              v-else-if="row.status === 'DONE'"
+              link
+              type="warning"
+              size="small"
+              :icon="EditPen"
+              @click="openCorrectionDialog(row)"
+            >
+              {{ t('dashboard.correction.action') }}
+            </el-button>
             <el-button
               link
               type="danger"
@@ -218,17 +239,198 @@
         />
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="correctionDialogVisible"
+      :title="t('dashboard.correction.title')"
+      width="min(1180px, calc(100vw - 64px))"
+      align-center
+      destroy-on-close
+      class="correction-dialog"
+    >
+      <div v-if="correctionTask" class="correction-layout">
+        <section class="correction-section current-info-section">
+          <h3>{{ t('dashboard.correction.currentInfo') }}</h3>
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item :label="t('dashboard.correction.sourcePath')" :span="2">
+              <span class="muted-path">{{ correctionTask.sourcePath }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')" :span="2">
+              <span class="muted-path">{{ correctionTask.targetPath || '-' }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('dashboard.assetType')">
+              {{ t(`task.assetType.${correctionTask.assetType || 'VIDEO_FILE'}`) }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('dashboard.mediaType')">
+              {{ correctionTask.mediaType ? t(`task.mediaType.${correctionTask.mediaType}`) : '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('dashboard.correction.currentTmdbId')">
+              {{ correctionTask.tmdbId || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('dashboard.correction.confirmationSource')">
+              {{ correctionTask.confirmationSource ? t(`task.confirmationSource.${correctionTask.confirmationSource}`) : '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <div class="correction-main-grid">
+          <div class="correction-left-column">
+            <section class="correction-section">
+              <h3>{{ t('dashboard.correction.editRecognition') }}</h3>
+              <el-form label-position="top" class="correction-form">
+                <el-row :gutter="12">
+                  <el-col :span="8">
+                    <el-form-item :label="t('queue.mediaType')">
+                      <el-select v-model="correctionForm.mediaType" @change="invalidateCorrectionPreview">
+                        <el-option :label="t('task.mediaType.MOVIE')" value="MOVIE" />
+                        <el-option
+                          :label="t('task.mediaType.TV_SHOW')"
+                          value="TV_SHOW"
+                          :disabled="correctionTask.assetType === 'BLURAY_DIRECTORY'"
+                        />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="10">
+                    <el-form-item :label="t('queue.parsedTitle')">
+                      <el-input v-model="correctionForm.parsedTitle" @input="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="6">
+                    <el-form-item :label="t('queue.parsedYear')">
+                      <el-input-number
+                        v-model="correctionForm.parsedYear"
+                        :min="1888"
+                        :max="2100"
+                        controls-position="right"
+                        @change="invalidateCorrectionPreview"
+                      />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-row v-if="correctionForm.mediaType === 'TV_SHOW'" :gutter="12">
+                  <el-col :span="8">
+                    <el-form-item :label="t('queue.parsedSeason')">
+                      <el-input-number v-model="correctionForm.parsedSeason" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item :label="t('queue.parsedEpisode')">
+                      <el-input-number v-model="correctionForm.parsedEpisode" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item :label="t('dashboard.correction.parsedEpisodeEnd')">
+                      <el-input-number v-model="correctionForm.parsedEpisodeEnd" :min="0" controls-position="right" @change="invalidateCorrectionPreview" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <div class="correction-form-actions">
+                  <el-button native-type="button" size="small" :icon="Refresh" :loading="correctionRematching" @click="rematchCorrection">
+                    {{ t('dashboard.correction.rematch') }}
+                  </el-button>
+                  <el-checkbox v-model="correctionForm.regenerateNfo" @change="handleRegenerateNfoChange">
+                    {{ t('dashboard.correction.regenerateNfo') }}
+                  </el-checkbox>
+                </div>
+              </el-form>
+            </section>
+
+            <section class="correction-section">
+              <div class="section-title-row">
+                <h3>{{ t('dashboard.correction.candidates') }}</h3>
+              </div>
+              <el-empty v-if="correctionCandidates.length === 0" :description="t('dashboard.correction.noCandidates')" :image-size="56" />
+              <div v-else class="candidate-list">
+                <button
+                  v-for="candidate in correctionCandidates"
+                  :key="candidateKey(candidate)"
+                  class="candidate-row"
+                  :class="{ selected: isCorrectionCandidateSelected(candidate) }"
+                  type="button"
+                  @click="selectCorrectionCandidate(candidate)"
+                >
+                  <span class="candidate-title">{{ candidateTitle(candidate) }}</span>
+                  <span class="candidate-meta">
+                    {{ candidate.year || '-' }} · {{ t(`task.mediaType.${candidate.mediaType}`) }} · {{ formatConfidence(candidate.confidence) }}
+                  </span>
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <section class="correction-section preview-section" v-loading="correctionPreviewing">
+            <div class="section-title-row">
+              <h3>{{ t('dashboard.correction.preview') }}</h3>
+            </div>
+            <div v-if="correctionPreview" class="preview-panel">
+              <el-descriptions :column="1" border size="small" class="preview-path-descriptions">
+                <el-descriptions-item :label="t('dashboard.correction.currentTargetPath')">
+                  <span class="muted-path">{{ correctionPreview.currentTargetPath || '-' }}</span>
+                </el-descriptions-item>
+                <el-descriptions-item :label="t('dashboard.correction.correctedTargetPath')">
+                  <span class="muted-path">{{ correctionPreview.correctedTargetPath || '-' }}</span>
+                </el-descriptions-item>
+              </el-descriptions>
+              <div v-if="correctionPreview.blockers.length" class="message-stack">
+                <el-alert
+                  v-for="blocker in correctionPreview.blockers"
+                  :key="blocker"
+                  type="error"
+                  :title="blocker"
+                  show-icon
+                  :closable="false"
+                />
+              </div>
+              <div v-if="correctionPreview.warnings.length" class="message-stack">
+                <el-alert
+                  v-for="warning in correctionPreview.warnings"
+                  :key="warning"
+                  type="warning"
+                  :title="warning"
+                  show-icon
+                  :closable="false"
+                />
+              </div>
+              <el-table :data="correctionPreview.operations" size="small" border class="operation-table">
+                <el-table-column :label="t('dashboard.correction.operationType')" width="136">
+                  <template #default="{ row }">
+                    {{ t(`dashboard.correction.operation.${row.type}`) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="sourcePath" :label="t('dashboard.correction.operationSource')" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="targetPath" :label="t('dashboard.correction.operationTarget')" min-width="180" show-overflow-tooltip />
+              </el-table>
+            </div>
+            <el-empty v-else :description="t('dashboard.correction.previewEmpty')" :image-size="72" />
+          </section>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="correctionDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :icon="Check"
+          :loading="correctionApplying"
+          :disabled="!correctionPreview?.canApply"
+          @click="applyCorrection"
+        >
+          {{ t('dashboard.correction.apply') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/mediaStore'
+import { mediaApi } from '@/api/media'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
-import type { MediaAssetType, MediaTask, MediaType, TaskStatus } from '@/types'
+import { Check, EditPen, Refresh, Search } from '@element-plus/icons-vue'
+import type { MatchResult, MediaAssetType, MediaTask, MediaType, TaskCorrectionPreview, TaskCorrectionRequest, TaskStatus } from '@/types'
 
 const { t, te } = useI18n()
 const mediaStore = useMediaStore()
@@ -237,7 +439,7 @@ const { fetchTasks, deleteTask } = mediaStore
 const deletingId = ref<number | null>(null)
 const selectedTasks = ref<MediaTask[]>([])
 const batchDeleting = ref(false)
-const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED']
+const statusOptions: TaskStatus[] = ['PENDING', 'PROCESSING', 'AWAITING_CONFIRMATION', 'DONE', 'FAILED', 'SKIPPED', 'CORRECTED']
 const assetTypeOptions: MediaAssetType[] = ['VIDEO_FILE', 'ISO_IMAGE', 'BLURAY_DIRECTORY']
 const mediaTypeOptions: MediaType[] = ['MOVIE', 'TV_SHOW']
 const statusFilter = ref<TaskStatus | 'ALL'>('ALL')
@@ -252,6 +454,24 @@ const matchedTitleSearchInputRef = ref<{ focus: () => void } | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+const correctionDialogVisible = ref(false)
+const correctionTask = ref<MediaTask | null>(null)
+const correctionForm = reactive({
+  mediaType: 'MOVIE' as MediaType,
+  parsedTitle: '',
+  parsedYear: null as number | null,
+  parsedSeason: null as number | null,
+  parsedEpisode: null as number | null,
+  parsedEpisodeEnd: null as number | null,
+  regenerateNfo: false,
+})
+const correctionCandidates = ref<MatchResult[]>([])
+const selectedCorrectionCandidate = ref<MatchResult | null>(null)
+const correctionPreview = ref<TaskCorrectionPreview | null>(null)
+const correctionRematching = ref(false)
+const correctionPreviewing = ref(false)
+const correctionApplying = ref(false)
+let correctionPreviewRequestSeq = 0
 
 const normalizedFileNameKeyword = computed(() => fileNameKeyword.value.trim().toLocaleLowerCase())
 const normalizedMatchedTitleKeyword = computed(() => matchedTitleKeyword.value.trim().toLocaleLowerCase())
@@ -355,6 +575,7 @@ function statusTagType(status: TaskStatus): TagType | undefined {
     DONE: 'success',
     FAILED: 'danger',
     SKIPPED: 'info',
+    CORRECTED: 'info',
   }
   return map[status] ?? 'info'
 }
@@ -387,6 +608,11 @@ function taskDetails(task: MediaTask) {
   }
   if (task.status === 'SKIPPED') {
     return localizedTaskDetail(task.skipReason)
+  }
+  if (task.status === 'CORRECTED') {
+    return task.correctedToTaskId
+      ? t('dashboard.correction.correctedTo', { id: task.correctedToTaskId })
+      : t('dashboard.correction.correctedHistory')
   }
   return '-'
 }
@@ -425,6 +651,172 @@ async function handleDeleteTask(task: MediaTask) {
     ElMessage.success(t('dashboard.deleteTaskSuccess'))
   } finally {
     deletingId.value = null
+  }
+}
+
+function openCorrectionDialog(task: MediaTask) {
+  if (task.assetType === 'ISO_IMAGE') {
+    ElMessage.warning(t('dashboard.correction.isoUnsupported'))
+    return
+  }
+  correctionTask.value = task
+  correctionForm.mediaType = task.mediaType || 'MOVIE'
+  correctionForm.parsedTitle = task.parsedTitle || task.confirmedTitle || sourceFileName(task.sourcePath)
+  correctionForm.parsedYear = task.parsedYear || task.confirmedYear
+  correctionForm.parsedSeason = task.parsedSeason
+  correctionForm.parsedEpisode = task.parsedEpisode
+  correctionForm.parsedEpisodeEnd = task.parsedEpisodeEnd
+  correctionForm.regenerateNfo = false
+  invalidateCorrectionPreview()
+  selectedCorrectionCandidate.value = task.tmdbId ? taskToMatchResult(task) : null
+  correctionCandidates.value = selectedCorrectionCandidate.value ? [selectedCorrectionCandidate.value] : []
+  correctionDialogVisible.value = true
+  if (selectedCorrectionCandidate.value) {
+    void nextTick().then(() => refreshCorrectionPreview())
+  }
+}
+
+function taskToMatchResult(task: MediaTask): MatchResult {
+  return {
+    source: 'tmdb',
+    sourceId: String(task.tmdbId || ''),
+    title: task.confirmedTitle,
+    originalTitle: task.confirmedOriginalTitle,
+    year: task.confirmedYear,
+    mediaType: task.mediaType || 'MOVIE',
+    overview: null,
+    posterUrl: null,
+    genres: [task.confirmedGenre1, task.confirmedGenre2, task.confirmedGenre3, task.confirmedGenre4].filter((value): value is string => Boolean(value)),
+    country: task.confirmedCountry,
+    episodeTitle: task.confirmedEpisodeTitle,
+    confidence: task.matchConfidence,
+  }
+}
+
+function buildCorrectionRequest(): TaskCorrectionRequest | null {
+  if (!correctionTask.value) return null
+  return {
+    mediaType: correctionForm.mediaType,
+    parsedTitle: correctionForm.parsedTitle.trim(),
+    parsedYear: correctionForm.parsedYear,
+    parsedSeason: correctionForm.mediaType === 'TV_SHOW' ? correctionForm.parsedSeason : null,
+    parsedEpisode: correctionForm.mediaType === 'TV_SHOW' ? correctionForm.parsedEpisode : null,
+    parsedEpisodeEnd: correctionForm.mediaType === 'TV_SHOW' ? correctionForm.parsedEpisodeEnd : null,
+    tmdbId: selectedCorrectionCandidate.value ? Number(selectedCorrectionCandidate.value.sourceId) : null,
+    regenerateNfo: correctionForm.regenerateNfo,
+  }
+}
+
+function validateCorrectionForm() {
+  if (!correctionForm.parsedTitle.trim()) {
+    ElMessage.warning(t('queue.validation.titleRequired'))
+    return false
+  }
+  if (correctionForm.mediaType === 'TV_SHOW' && (correctionForm.parsedSeason == null || correctionForm.parsedEpisode == null)) {
+    ElMessage.warning(t('queue.validation.seasonEpisodeRequired'))
+    return false
+  }
+  return true
+}
+
+function invalidateCorrectionPreview() {
+  correctionPreviewRequestSeq += 1
+  correctionPreview.value = null
+  correctionPreviewing.value = false
+}
+
+function handleRegenerateNfoChange() {
+  invalidateCorrectionPreview()
+  if (selectedCorrectionCandidate.value) {
+    void refreshCorrectionPreview()
+  }
+}
+
+async function rematchCorrection() {
+  if (!correctionTask.value || !validateCorrectionForm()) return
+  const request = buildCorrectionRequest()
+  if (!request) return
+  correctionRematching.value = true
+  try {
+    const res = await mediaApi.rematchTaskCorrection(correctionTask.value.id, request)
+    correctionCandidates.value = res.data.data.candidates
+    selectedCorrectionCandidate.value = correctionCandidates.value[0] || null
+    invalidateCorrectionPreview()
+    if (correctionCandidates.value.length === 0) {
+      ElMessage.info(t('dashboard.correction.noCandidates'))
+    } else {
+      await refreshCorrectionPreview()
+    }
+  } finally {
+    correctionRematching.value = false
+  }
+}
+
+async function selectCorrectionCandidate(candidate: MatchResult) {
+  selectedCorrectionCandidate.value = candidate
+  invalidateCorrectionPreview()
+  await refreshCorrectionPreview()
+}
+
+function isCorrectionCandidateSelected(candidate: MatchResult) {
+  return selectedCorrectionCandidate.value
+    ? candidateKey(selectedCorrectionCandidate.value) === candidateKey(candidate)
+    : false
+}
+
+function candidateKey(candidate: MatchResult) {
+  return `${candidate.mediaType}:${candidate.sourceId}`
+}
+
+function candidateTitle(candidate: MatchResult) {
+  return candidate.title || candidate.originalTitle || candidate.sourceId
+}
+
+function formatConfidence(confidence: number | null) {
+  return confidence != null ? `${Math.round(confidence * 100)}%` : '-'
+}
+
+async function refreshCorrectionPreview() {
+  if (!correctionTask.value || !selectedCorrectionCandidate.value || !validateCorrectionForm()) return
+  const request = buildCorrectionRequest()
+  if (!request) return
+  const requestSeq = ++correctionPreviewRequestSeq
+  correctionPreviewing.value = true
+  try {
+    const res = await mediaApi.previewTaskCorrection(correctionTask.value.id, request)
+    if (requestSeq === correctionPreviewRequestSeq) {
+      correctionPreview.value = res.data.data
+    }
+  } finally {
+    if (requestSeq === correctionPreviewRequestSeq) {
+      correctionPreviewing.value = false
+    }
+  }
+}
+
+async function applyCorrection() {
+  if (!correctionTask.value || !correctionPreview.value?.canApply || !selectedCorrectionCandidate.value) return
+  const request = buildCorrectionRequest()
+  if (!request) return
+
+  await ElMessageBox.confirm(
+    t('dashboard.correction.applyConfirmMessage'),
+    t('dashboard.correction.applyConfirmTitle'),
+    {
+      confirmButtonText: t('dashboard.correction.apply'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    },
+  )
+
+  correctionApplying.value = true
+  try {
+    await mediaApi.applyTaskCorrection(correctionTask.value.id, request)
+    ElMessage.success(t('dashboard.correction.applySuccess'))
+    correctionDialogVisible.value = false
+    await fetchTasks()
+  } finally {
+    correctionApplying.value = false
   }
 }
 
@@ -550,14 +942,200 @@ h2 {
   font-size: 12px;
 }
 
+.correction-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.correction-dialog :deep(.el-dialog__footer) {
+  padding-top: 10px;
+}
+
+.correction-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.correction-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.correction-left-column {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 6px;
+  background: #fcfdff;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.16), 0 8px 18px rgba(31, 45, 61, 0.05);
+}
+
+.correction-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.correction-section h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #303133;
+}
+
+.current-info-section {
+  padding: 14px;
+  border-radius: 6px;
+  background: #f7fbff;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.14), 0 8px 18px rgba(31, 45, 61, 0.06);
+}
+
+.current-info-section :deep(.el-descriptions__label) {
+  width: 132px;
+}
+
+.current-info-section :deep(.el-descriptions__content) {
+  max-width: 0;
+}
+
+.preview-path-descriptions :deep(.el-descriptions__label) {
+  width: 154px;
+  white-space: nowrap;
+}
+
+.preview-path-descriptions :deep(.el-descriptions__content) {
+  max-width: 0;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.correction-form :deep(.el-input-number) {
+  width: 100%;
+}
+
+.correction-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.correction-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 32px;
+}
+
+.muted-path {
+  color: #606266;
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+.candidate-list {
+  display: grid;
+  gap: 6px;
+}
+
+.candidate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fff;
+  color: #303133;
+  cursor: pointer;
+  text-align: left;
+}
+
+.candidate-row:hover,
+.candidate-row.selected {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.candidate-title,
+.candidate-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-meta {
+  color: #909399;
+  font-size: 12px;
+}
+
+.preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.operation-table {
+  width: 100%;
+}
+
+.preview-section {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.12), 0 8px 20px rgba(31, 45, 61, 0.07);
+}
+
 @media (max-width: 1200px) {
   .stat-cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .correction-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .correction-left-column {
+    padding: 12px;
   }
 }
 
 @media (max-width: 720px) {
   .stat-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .card-header,
+  .header-actions,
+  .section-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-filter {
+    width: 100%;
+  }
+
+  .candidate-row {
     grid-template-columns: 1fr;
   }
 }

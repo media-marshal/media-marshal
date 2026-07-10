@@ -1,4 +1,10 @@
 export default {
+  v0_2_10: {
+    items: {
+      completedTaskCorrection: '已完成任务支持修正匹配，并同步移动或重命名媒体库文件。',
+      sampleScanPruning: '默认忽略 Sample 目录，减少无效识别和 TMDB 请求。',
+    },
+  },
   v0_2_9: {
     items: {
       enabledTemplateVariables: '路径模板可使用编码、发布组和原语种标题，整理结果更贴近你的命名习惯。',

@@ -23,6 +23,11 @@ services:
     depends_on:
       parser:
         condition: service_healthy
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - mm_net
 
@@ -34,6 +39,11 @@ services:
       - "${MEDIA_MARSHAL_PORTAL_PORT:-3000}:80"
     depends_on:
       - media-marshal
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - mm_net
 
@@ -47,6 +57,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - mm_net
 

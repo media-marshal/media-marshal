@@ -105,7 +105,7 @@ public class RenameService {
     /**
      * 模板选取优先级：对应媒体类型的规则自定义模板 > 全局配置模板 > 内置默认模板
      */
-    String resolveTemplate(WatchRule rule, MediaTask.MediaType mediaType) {
+    public String resolveTemplate(WatchRule rule, MediaTask.MediaType mediaType) {
         if (mediaType == MediaTask.MediaType.MOVIE) {
             String ruleTemplate = rule.getMoviePathTemplate();
             if (ruleTemplate != null && !ruleTemplate.isBlank()) {
@@ -139,7 +139,7 @@ public class RenameService {
         return false;
     }
 
-    String renderRelativePath(MediaTask task, WatchRule rule, String extOverride) {
+    public String renderRelativePath(MediaTask task, WatchRule rule, String extOverride) {
         String template = resolveTemplate(rule, task.getMediaType());
         boolean isDebug = Boolean.parseBoolean(settingsService.get("debug", "false"));
         if (isDebug) {
@@ -149,7 +149,7 @@ public class RenameService {
         return templateRenderer.render(template, buildVariables(task, extOverride));
     }
 
-    Path resolveSafeTargetPath(String targetDir, String renderedRelativePath) {
+    public Path resolveSafeTargetPath(String targetDir, String renderedRelativePath) {
         return templatePathSafetyService.resolveSafeTargetPath(targetDir, renderedRelativePath);
     }
 
@@ -157,7 +157,7 @@ public class RenameService {
      * 从 MediaTask 构建 TemplateVariables 变量袋
      * task 中的字段在 Pipeline Step 4 完成后应已全部填充
      */
-    TemplateVariables buildVariables(MediaTask task, String extOverride) {
+    public TemplateVariables buildVariables(MediaTask task, String extOverride) {
         String sourcePath = task.getSourcePath();
         String ext = extOverride != null
                 ? extOverride
