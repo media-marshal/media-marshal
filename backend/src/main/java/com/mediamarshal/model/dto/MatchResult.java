@@ -2,6 +2,8 @@ package com.mediamarshal.model.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 元数据匹配结果 DTO
  *
@@ -33,6 +35,15 @@ public class MatchResult {
 
     /** 海报 URL */
     private String posterUrl;
+
+    /** TMDB 分类标签，最多保留 4 个 */
+    private List<String> genres;
+
+    /** TMDB 原产国 / 出品国 ISO 3166-1 alpha-2 代码 */
+    private String country;
+
+    /** TV 单集分集标题，多集范围为空 */
+    private String episodeTitle;
 
     /** 匹配置信度 0.0-1.0 */
     private Double confidence;

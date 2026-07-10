@@ -4,17 +4,27 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.mediamarshal.model.dto.MatchResult;
 import com.mediamarshal.model.dto.ParseResult;
 import com.mediamarshal.service.settings.SettingsService;
+import com.mediamarshal.service.settings.TmdbProxySettingsService;
+import io.netty.channel.ChannelOption;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.transport.ProxyProvider;
 
+import java.net.ConnectException;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /**
  * TMDB API v3 元数据匹配实现
@@ -35,6 +45,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
     private static final String BASE_URL = "https://api.themoviedb.org/3";
 
     private final SettingsService settingsService;
+    private final TmdbProxySettingsService tmdbProxySettingsService;
     private final WebClient.Builder webClientBuilder;
     private final TitleSearchPlanBuilder titleSearchPlanBuilder;
     private final TmdbInMemoryCache cache;
@@ -131,27 +142,67 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
     public MatchResult getById(String sourceId, String mediaType) {
         String endpoint = "TV_SHOW".equalsIgnoreCase(mediaType) ? "tv" : "movie";
         String cacheKey = String.join("|", "detail", endpoint, sourceId, getLanguage());
-        return cache.get(cacheKey, () -> getByIdUncached(sourceId, endpoint), ignored -> getDuration("tmdb.detail-cache-ttl-minutes", 1440));
+        TmdbInMemoryCache.CacheLookup<MatchResult> lookup = cache.getWithStatus(
+                cacheKey,
+                () -> getByIdUncached(sourceId, endpoint),
+                ignored -> getDuration("tmdb.detail-cache-ttl-minutes", 1440)
+        );
+        logCacheStatus("TMDB detail", cacheKey, lookup.status());
+        return lookup.value();
+    }
+
+    @Override
+    @SuppressWarnings("null")
+    public String getEpisodeTitle(String sourceId, int seasonNumber, int episodeNumber) {
+        String cacheKey = String.join("|",
+                "tv",
+                sourceId,
+                "season",
+                String.valueOf(seasonNumber),
+                "episode",
+                String.valueOf(episodeNumber),
+                getLanguage());
+        TmdbInMemoryCache.CacheLookup<String> lookup = cache.getWithStatus(
+                cacheKey,
+                () -> getEpisodeTitleUncached(sourceId, seasonNumber, episodeNumber),
+                ignored -> getDuration("tmdb.detail-cache-ttl-minutes", 1440)
+        );
+        logCacheStatus("TMDB episode detail", cacheKey, lookup.status());
+        return lookup.value();
     }
 
     @SuppressWarnings("null")
     private MatchResult getByIdUncached(String sourceId, String endpoint) {
-        JsonNode root = webClientBuilder.baseUrl(getBaseUrl())
-                .build()
-                .get()
+        TmdbRequestContext context = createRequestContext();
+        logRequestRoute("TMDB detail request", context);
+        JsonNode root = executeTmdbRequest(context, context.client().get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/{endpoint}/{id}")
                         .queryParam("api_key", getApiKey())
                         .queryParam("language", getLanguage())
-                        .build(endpoint, sourceId))
-                .retrieve()
-                .bodyToMono(JsonNode.class)
-                .block(Duration.ofSeconds(getTimeoutSeconds()));
+                        .build(endpoint, sourceId)));
 
         if (root == null || root.isMissingNode()) {
             throw new IllegalStateException("TMDB detail response is empty: id=" + sourceId);
         }
         return mapDetail(root, endpoint);
+    }
+
+    @SuppressWarnings("null")
+    private String getEpisodeTitleUncached(String sourceId, int seasonNumber, int episodeNumber) {
+        TmdbRequestContext context = createRequestContext();
+        logRequestRoute("TMDB episode detail request", context);
+        JsonNode root = executeTmdbRequest(context, context.client().get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/tv/{id}/season/{season}/episode/{episode}")
+                        .queryParam("api_key", getApiKey())
+                        .queryParam("language", getLanguage())
+                        .build(sourceId, seasonNumber, episodeNumber)));
+
+        if (root == null || root.isMissingNode()) {
+            throw new IllegalStateException("TMDB episode detail response is empty: id=" + sourceId);
+        }
+        return text(root, "name");
     }
 
     @Override
@@ -196,9 +247,11 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
 
     @SuppressWarnings("null")
     private JsonNode callTmdbSearchUncached(String endpoint, String query, Integer year) {
-        WebClient client = webClientBuilder.baseUrl(getBaseUrl()).build();
-        return client.get()
-                .uri(uriBuilder -> {
+        TmdbRequestContext context = createRequestContext();
+        logRequestRoute("TMDB search request", context);
+        return executeTmdbRequest(
+                context,
+                context.client().get().uri(uriBuilder -> {
                     var builder = uriBuilder
                             .path("/search/{endpoint}")
                             .queryParam("api_key", getApiKey())
@@ -214,9 +267,7 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
                     }
                     return builder.build(endpoint);
                 })
-                .retrieve()
-                .bodyToMono(JsonNode.class)
-                .block(Duration.ofSeconds(getTimeoutSeconds()));
+        );
     }
 
     private boolean isEmptySearch(JsonNode root) {
@@ -246,6 +297,142 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
             log.warn("Invalid {}='{}', fallback to {} minutes", key, value, fallbackMinutes);
             return Duration.ofMinutes(fallbackMinutes);
         }
+    }
+
+    private void logCacheStatus(String label, String cacheKey, TmdbInMemoryCache.CacheStatus status) {
+        if (Boolean.parseBoolean(settingsService.get("debug", "false"))) {
+            log.debug("{} cache status: key={}, status={}", label, cacheKey, status);
+        }
+    }
+
+    private void logRequestRoute(String label, TmdbRequestContext context) {
+        if (!Boolean.parseBoolean(settingsService.get("debug", "false"))) {
+            return;
+        }
+
+        TmdbProxySettingsService.TmdbProxyConfig proxyConfig = context.proxyConfig();
+        if (proxyConfig.enabled()) {
+            log.debug("{} route: proxy=true, proxyUrl={}, baseUrl={}, timeoutSeconds={}",
+                    label, proxyConfig.httpUrl(), getBaseUrl(), context.timeoutSeconds());
+        } else {
+            log.debug("{} route: proxy=false, baseUrl={}, configuredProxyUrl={}, timeoutSeconds={}",
+                    label, getBaseUrl(), proxyConfig.httpUrl(), context.timeoutSeconds());
+        }
+    }
+
+    private TmdbRequestContext createRequestContext() {
+        long timeoutSeconds = getTimeoutSeconds();
+        Duration timeout = Duration.ofSeconds(timeoutSeconds);
+        TmdbProxySettingsService.TmdbProxyConfig proxyConfig = tmdbProxySettingsService.resolve();
+
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMillis(timeoutSeconds))
+                .responseTimeout(timeout);
+
+        if (proxyConfig.enabled()) {
+            httpClient = httpClient.proxy(proxy -> proxy
+                    .type(ProxyProvider.Proxy.HTTP)
+                    .host(proxyConfig.host())
+                    .port(proxyConfig.port()));
+        }
+
+        WebClient client = webClientBuilder.clone()
+                .baseUrl(getBaseUrl())
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .build();
+        return new TmdbRequestContext(client, proxyConfig, timeoutSeconds);
+    }
+
+    private int connectTimeoutMillis(long timeoutSeconds) {
+        long cappedSeconds = Math.min(timeoutSeconds, Integer.MAX_VALUE / 1000L);
+        return (int) Math.max(cappedSeconds * 1000L, 1000L);
+    }
+
+    private JsonNode executeTmdbRequest(TmdbRequestContext context, WebClient.RequestHeadersSpec<?> request) {
+        try {
+            return request.retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block(Duration.ofSeconds(context.timeoutSeconds()));
+        } catch (RuntimeException e) {
+            throw new IllegalStateException(resolveTmdbFailureMessage(e, context.proxyConfig()), e);
+        }
+    }
+
+    private String resolveTmdbFailureMessage(
+            RuntimeException error,
+            TmdbProxySettingsService.TmdbProxyConfig proxyConfig
+    ) {
+        if (error instanceof WebClientResponseException responseException) {
+            int status = responseException.getStatusCode().value();
+            if (status == 407) {
+                return "TMDB 代理认证失败：当前版本不支持需要认证的 HTTP 代理";
+            }
+            if (status == 401 || status == 403) {
+                return "TMDB 请求失败：请检查 TMDB API Key 是否有效";
+            }
+            return "TMDB 请求失败：HTTP " + status;
+        }
+
+        if (isTimeout(error)) {
+            return "TMDB 连接超时：请检查网络连通性或代理配置";
+        }
+
+        if (proxyConfig.enabled() && (hasCause(error, ConnectException.class)
+                || hasCause(error, UnknownHostException.class)
+                || hasCauseClassName(error, "ProxyConnectException")
+                || hasMessage(error, "proxy"))) {
+            return "TMDB 代理连接失败：请检查代理地址、端口和代理服务是否可用";
+        }
+
+        if (hasCause(error, WebClientRequestException.class)
+                || hasCause(error, ConnectException.class)
+                || hasCause(error, UnknownHostException.class)) {
+            return "TMDB 连接失败：请检查网络连通性或 TMDB 代理配置";
+        }
+
+        String message = error.getMessage();
+        return message == null || message.isBlank() ? "TMDB 请求失败" : "TMDB 请求失败：" + message;
+    }
+
+    private boolean isTimeout(Throwable error) {
+        return hasCause(error, TimeoutException.class)
+                || hasMessage(error, "Timeout on blocking read")
+                || hasMessage(error, "timed out");
+    }
+
+    private boolean hasCause(Throwable error, Class<?> type) {
+        Throwable current = error;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean hasCauseClassName(Throwable error, String className) {
+        Throwable current = error;
+        while (current != null) {
+            if (current.getClass().getSimpleName().contains(className)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean hasMessage(Throwable error, String needle) {
+        Throwable current = error;
+        String normalizedNeedle = needle.toLowerCase();
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.toLowerCase().contains(normalizedNeedle)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private MatchResult mapSearchItem(JsonNode item, String endpoint) {
@@ -279,8 +466,48 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
         result.setMediaType("movie".equals(endpoint) ? "MOVIE" : "TV_SHOW");
         result.setOverview(text(root, "overview"));
         result.setPosterUrl(buildPosterUrl(text(root, "poster_path")));
+        result.setGenres(extractGenres(root));
+        result.setCountry(extractCountry(root));
         result.setConfidence(1.0);
         return result;
+    }
+
+    private List<String> extractGenres(JsonNode root) {
+        JsonNode genres = root.path("genres");
+        if (!genres.isArray()) {
+            return List.of();
+        }
+
+        List<String> values = new ArrayList<>();
+        for (JsonNode genre : genres) {
+            String name = text(genre, "name");
+            if (name != null && !name.isBlank()) {
+                values.add(name);
+            }
+            if (values.size() >= 4) {
+                break;
+            }
+        }
+        return values;
+    }
+
+    private String extractCountry(JsonNode root) {
+        JsonNode originCountry = root.path("origin_country");
+        if (originCountry.isArray() && !originCountry.isEmpty()) {
+            String value = originCountry.get(0).asText(null);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+
+        JsonNode productionCountries = root.path("production_countries");
+        if (productionCountries.isArray() && !productionCountries.isEmpty()) {
+            String value = text(productionCountries.get(0), "iso_3166_1");
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String text(JsonNode node, String field) {
@@ -327,5 +554,12 @@ public class TmdbMetadataMatcher implements MetadataMatcher {
 
     private record SearchCall(String endpoint, String query, Integer year,
                               TmdbInMemoryCache.CacheStatus cacheStatus, int resultCount) {
+    }
+
+    private record TmdbRequestContext(
+            WebClient client,
+            TmdbProxySettingsService.TmdbProxyConfig proxyConfig,
+            long timeoutSeconds
+    ) {
     }
 }

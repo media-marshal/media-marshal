@@ -20,6 +20,7 @@ import com.mediamarshal.service.nfo.NfoGeneratorService;
 import com.mediamarshal.service.parser.GuessitParserClient;
 import com.mediamarshal.service.rename.AssetOrganizerService;
 import com.mediamarshal.service.rename.FileOperationStrategy;
+import com.mediamarshal.service.rename.RenameService;
 import com.mediamarshal.service.settings.SettingsService;
 import com.mediamarshal.websocket.EventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +75,7 @@ public class MediaProcessPipeline {
     private final GuessitParserClient parserClient;
     private final MetadataMatcher metadataMatcher;
     private final AssetOrganizerService assetOrganizerService;
+    private final RenameService renameService;
     private final NfoGeneratorService nfoGeneratorService;
     private final MediaTaskRepository taskRepository;
     private final TaskCandidateRepository candidateRepository;
@@ -173,9 +176,7 @@ public class MediaProcessPipeline {
             }
 
             // 高置信度自动采纳 rank=1 候选，继续 Step 6-8
-            topCandidate.setSelected(true);
-            candidateRepository.save(topCandidate);
-            MatchResult topMatch = toMatchResult(topCandidate);
+            MatchResult topMatch = enrichSelectedMatch(task, topCandidate);
             applyMatchToTask(task, topMatch);
             task.setConfirmationSource(MediaTask.ConfirmationSource.AUTO_MATCH);
             taskRepository.save(task);
@@ -224,9 +225,8 @@ public class MediaProcessPipeline {
                 .findByTask_IdAndTmdbIdAndMediaType(taskId, tmdbId, confirmedType)
                 .orElseGet(() -> createManualCandidate(task, tmdbId, confirmedType));
 
+        MatchResult match = enrichSelectedMatch(task, selectedCandidate);
         markCandidateSelected(taskId, selectedCandidate);
-
-        MatchResult match = toMatchResult(selectedCandidate);
         applyMatchToTask(task, match);
         task.setConfirmationSource(confirmationSource);
         taskRepository.save(task);
@@ -335,6 +335,8 @@ public class MediaProcessPipeline {
         parseResult.setEpisode(task.getParsedEpisode());
         parseResult.setEpisodeEnd(task.getParsedEpisodeEnd());
         parseResult.setScreenSize(task.getParsedResolution());
+        parseResult.setVideoCodec(task.getParsedCodec());
+        parseResult.setReleaseGroup(task.getParsedReleaseGroup());
         applyMediaTypeToParseResult(parseResult, task.getMediaType());
         return parseResult;
     }
@@ -355,9 +357,8 @@ public class MediaProcessPipeline {
                     .findByTask_IdAndTmdbIdAndMediaType(taskId, tmdbId, confirmedType)
                     .orElseGet(() -> createManualCandidate(task, tmdbId, confirmedType));
 
+            MatchResult match = enrichSelectedMatch(task, selectedCandidate);
             markCandidateSelected(taskId, selectedCandidate);
-
-            MatchResult match = toMatchResult(selectedCandidate);
             applyMatchToTask(task, match);
             task.setConfirmationSource(confirmationSource);
             taskRepository.save(task);
@@ -459,6 +460,8 @@ public class MediaProcessPipeline {
         task.setParsedEpisode(parseResult.getEpisode());
         task.setParsedEpisodeEnd(parseResult.getEpisodeEnd());
         task.setParsedResolution(parseResult.getScreenSize());
+        task.setParsedCodec(parseResult.getVideoCodec());
+        task.setParsedReleaseGroup(parseResult.getReleaseGroup());
         taskRepository.save(task);
     }
 
@@ -519,6 +522,12 @@ public class MediaProcessPipeline {
             candidate.setConfidence(match.getConfidence());
             candidate.setPosterUrl(match.getPosterUrl());
             candidate.setOverview(match.getOverview());
+            candidate.setGenre1(genreAt(match, 0));
+            candidate.setGenre2(genreAt(match, 1));
+            candidate.setGenre3(genreAt(match, 2));
+            candidate.setGenre4(genreAt(match, 3));
+            candidate.setCountry(match.getCountry());
+            candidate.setEpisodeTitle(match.getEpisodeTitle());
             candidate.setRank(rank++);
             candidate.setSelected(false);
             candidateRepository.save(candidate);
@@ -550,7 +559,14 @@ public class MediaProcessPipeline {
         task.setTmdbId(Long.valueOf(match.getSourceId()));
         task.setMediaType(MediaTask.MediaType.valueOf(match.getMediaType()));
         task.setConfirmedTitle(match.getTitle());
+        task.setConfirmedOriginalTitle(match.getOriginalTitle());
         task.setConfirmedYear(match.getYear());
+        task.setConfirmedGenre1(genreAt(match, 0));
+        task.setConfirmedGenre2(genreAt(match, 1));
+        task.setConfirmedGenre3(genreAt(match, 2));
+        task.setConfirmedGenre4(genreAt(match, 3));
+        task.setConfirmedCountry(match.getCountry());
+        task.setConfirmedEpisodeTitle(match.getEpisodeTitle());
         task.setMatchConfidence(match.getConfidence());
         taskRepository.save(task);
     }
@@ -734,16 +750,68 @@ public class MediaProcessPipeline {
         TaskCandidate candidate = new TaskCandidate();
         candidate.setTask(task);
         candidate.setTmdbId(tmdbId);
+        applyMatchSnapshotToCandidate(candidate, match, mediaType, match.getConfidence());
+        candidate.setRank(nextRank);
+        candidate.setSelected(true);
+        return candidateRepository.save(candidate);
+    }
+
+    private MatchResult enrichSelectedMatch(MediaTask task, TaskCandidate selectedCandidate) {
+        MediaTask.MediaType mediaType = selectedCandidate.getMediaType();
+        task.setMediaType(mediaType);
+        MatchResult detail = getByIdWithRetry(selectedCandidate.getTmdbId(), mediaType);
+        detail.setConfidence(selectedCandidate.getConfidence());
+        fillEpisodeTitleIfNeeded(task, detail);
+        applyMatchSnapshotToCandidate(selectedCandidate, detail, mediaType, selectedCandidate.getConfidence());
+        selectedCandidate.setSelected(true);
+        candidateRepository.save(selectedCandidate);
+        return detail;
+    }
+
+    private void fillEpisodeTitleIfNeeded(MediaTask task, MatchResult detail) {
+        if (!MediaTask.MediaType.TV_SHOW.name().equals(detail.getMediaType())
+                || task.getParsedSeason() == null
+                || task.getParsedEpisode() == null
+                || task.getParsedEpisodeEnd() != null) {
+            detail.setEpisodeTitle(null);
+            return;
+        }
+
+        try {
+            detail.setEpisodeTitle(metadataMatcher.getEpisodeTitle(
+                    detail.getSourceId(),
+                    task.getParsedSeason(),
+                    task.getParsedEpisode()
+            ));
+        } catch (RuntimeException e) {
+            if (renameService.templateUsesVariable(task, "episode_title")) {
+                throw new IllegalStateException("TMDB 分集详情不可用，无法填充 {episode_title}", e);
+            }
+            log.warn("TMDB episode detail lookup failed but template does not use episode_title: taskId={}, tmdbId={}, season={}, episode={}, error={}",
+                    task.getId(), detail.getSourceId(), task.getParsedSeason(), task.getParsedEpisode(), e.getMessage());
+            detail.setEpisodeTitle(null);
+        }
+    }
+
+    private void applyMatchSnapshotToCandidate(
+            TaskCandidate candidate,
+            MatchResult match,
+            MediaTask.MediaType mediaType,
+            Double confidence
+    ) {
         candidate.setTitle(match.getTitle());
         candidate.setOriginalTitle(match.getOriginalTitle());
         candidate.setYear(match.getYear());
         candidate.setMediaType(mediaType);
-        candidate.setConfidence(match.getConfidence());
+        candidate.setConfidence(confidence);
         candidate.setPosterUrl(match.getPosterUrl());
         candidate.setOverview(match.getOverview());
-        candidate.setRank(nextRank);
-        candidate.setSelected(true);
-        return candidateRepository.save(candidate);
+        candidate.setGenre1(genreAt(match, 0));
+        candidate.setGenre2(genreAt(match, 1));
+        candidate.setGenre3(genreAt(match, 2));
+        candidate.setGenre4(genreAt(match, 3));
+        candidate.setCountry(match.getCountry());
+        candidate.setEpisodeTitle(match.getEpisodeTitle());
     }
 
     private MatchResult getByIdWithRetry(Long tmdbId, MediaTask.MediaType mediaType) {
@@ -793,6 +861,30 @@ public class MediaProcessPipeline {
         candidateRepository.saveAll(candidates);
     }
 
+    private String genreAt(MatchResult match, int index) {
+        List<String> genres = match.getGenres();
+        if (genres == null || genres.size() <= index) {
+            return null;
+        }
+        String value = genres.get(index);
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    private List<String> genresFromCandidate(TaskCandidate candidate) {
+        List<String> genres = new ArrayList<>();
+        addGenre(genres, candidate.getGenre1());
+        addGenre(genres, candidate.getGenre2());
+        addGenre(genres, candidate.getGenre3());
+        addGenre(genres, candidate.getGenre4());
+        return genres;
+    }
+
+    private void addGenre(List<String> genres, String value) {
+        if (value != null && !value.isBlank()) {
+            genres.add(value);
+        }
+    }
+
     private MatchResult toMatchResult(TaskCandidate candidate) {
         MatchResult result = new MatchResult();
         result.setSource("tmdb");
@@ -803,6 +895,9 @@ public class MediaProcessPipeline {
         result.setMediaType(candidate.getMediaType().name());
         result.setOverview(candidate.getOverview());
         result.setPosterUrl(candidate.getPosterUrl());
+        result.setGenres(genresFromCandidate(candidate));
+        result.setCountry(candidate.getCountry());
+        result.setEpisodeTitle(candidate.getEpisodeTitle());
         result.setConfidence(candidate.getConfidence());
         return result;
     }

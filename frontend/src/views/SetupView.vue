@@ -69,6 +69,25 @@
           </div>
         </el-form-item>
 
+        <el-form-item :label="t('settings.tmdbProxyEnabled')">
+          <div class="field-stack">
+            <el-switch v-model="form.tmdbProxyEnabled" />
+            <div class="form-hint">{{ t('settings.tmdbProxyHelp') }}</div>
+          </div>
+        </el-form-item>
+
+        <el-form-item :label="t('settings.tmdbProxyHttpUrl')">
+          <div class="field-stack">
+            <el-input
+              v-model="form.tmdbProxyHttpUrl"
+              :disabled="!form.tmdbProxyEnabled"
+              :placeholder="t('settings.tmdbProxyHttpUrlPlaceholder')"
+              @keyup.enter="handleSave"
+            />
+            <div class="form-hint">{{ t('settings.tmdbProxyHttpUrlHelp') }}</div>
+          </div>
+        </el-form-item>
+
         <el-button
           class="setup-submit"
           type="primary"
@@ -90,6 +109,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { setLocale } from '@/i18n'
+import { settingsApi } from '@/api/settings'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -118,10 +138,13 @@ const TMDB_LANGUAGE_OPTIONS = [
 const form = reactive({
   tmdbApiKey: '',
   tmdbLanguage: 'zh-CN',
+  tmdbProxyEnabled: false,
+  tmdbProxyHttpUrl: '',
 })
 
-onMounted(() => {
+onMounted(async () => {
   form.tmdbLanguage = settingsStore.getSetting('tmdb.language') || 'zh-CN'
+  await loadEffectiveTmdbProxy()
 })
 
 function switchLocale(lang: 'zh' | 'en') {
@@ -134,18 +157,30 @@ async function handleSave() {
     ElMessage.warning(t('setup.tmdbApiKeyRequired'))
     return
   }
+  if (form.tmdbProxyEnabled && !form.tmdbProxyHttpUrl.trim()) {
+    ElMessage.warning(t('settings.tmdbProxyUrlRequired'))
+    return
+  }
 
   saving.value = true
   try {
     await Promise.all([
       settingsStore.updateSetting('tmdb.api-key', apiKey, undefined, true),
       settingsStore.updateSetting('tmdb.language', form.tmdbLanguage),
+      settingsApi.updateTmdbProxy(form.tmdbProxyEnabled, form.tmdbProxyHttpUrl.trim()),
     ])
     ElMessage.success(t('setup.saveSuccess'))
     await router.replace('/settings/paths')
   } finally {
     saving.value = false
   }
+}
+
+async function loadEffectiveTmdbProxy() {
+  const res = await settingsApi.getEffective(['tmdb.proxy.enabled', 'tmdb.proxy.http-url'])
+  const values = Object.fromEntries(res.data.data.map((item) => [item.key, item.value]))
+  form.tmdbProxyEnabled = values['tmdb.proxy.enabled'] === 'true'
+  form.tmdbProxyHttpUrl = values['tmdb.proxy.http-url'] || ''
 }
 </script>
 

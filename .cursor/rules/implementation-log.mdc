@@ -188,7 +188,7 @@ alwaysApply: false
   - 文件消失、读取失败或大小仍变化时跳过并记录日志
 - 新增数据库查重
   - `MediaTaskRepository` 新增 `existsBySourcePathAndStatusNot(sourcePath, FAILED)`
-  - 同一路径存在非 FAILED 任务时跳过，并打印 WARN 日志
+  - 同一路径存在非 FAILED 任务时跳过；重复路径仅在 debug 日志中展开，扫描完成日志汇总重复数量
 - 增强健壮性
   - pipeline 异常不会杀死 WatchService 事件线程或防抖线程
   - 仅视频扩展名进入防抖流程，目录事件只用于递归注册
@@ -2699,7 +2699,73 @@ alwaysApply: false
 ### 遗留问题
 - 无
 
+## [扫描重复任务日志收敛与 ReleaseNote 整理] 2026-06-13
+
+### 完成内容
+- 文件发现扫描遇到已有非 FAILED 任务时，不再逐条输出 `WARN`，仅在 debug 日志中保留具体重复路径。
+- 扫描完成日志新增 `duplicates` 汇总字段，用于查看本次扫描命中的重复任务数量。
+- 重复的杂项/跳过任务也纳入 `duplicates` 汇总，避免和普通忽略项混在 `skipped` 里。
+- 整理 v0.2.9 ReleaseNote，补充调试日志生效、TMDB 代理诊断和重复扫描日志收敛等近期用户可感知变化。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/service/discovery/FileDiscoveryService.java`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
+
 ---
+
+## [ADR-024 TMDB HTTP 代理配置] 2026-06-09
+
+### 完成内容
+- 新增 TMDB HTTP 代理运行时配置：`tmdb.proxy.enabled`、`tmdb.proxy.http-url`，并在 `application.yml` / `.env.example` 中补充 `MEDIA_MARSHAL_TMDB_PROXY_ENABLED`、`MEDIA_MARSHAL_TMDB_PROXY_HTTP_URL`。
+- 新增 `TmdbProxySettingsService`，按 ADR-024 实现代理配置优先级：数据库代理配置优先；未被数据库接管时，再按环境变量、`application.yml`、默认值读取；数据库保存 `tmdb.proxy.enabled=false` 时强制直连。
+- 新增 `GET /api/settings/effective` 回显有效配置，支持初始化页自动带入环境变量 / `application.yml` 中的代理地址。
+- 新增 `PUT /api/settings/tmdb-proxy` 原子保存代理开关和地址，避免单项保存产生半配置状态；`tmdb.proxy.enabled` / `tmdb.proxy.http-url` 不再通过通用单项设置接口分别保存。
+- `TmdbMetadataMatcher` 搜索、详情查询、手动搜索、TMDB ID 详情查询和人工确认详情请求统一使用 scoped WebClient 代理配置；页面保存后，新发起的 TMDB 请求无需重启即可使用最新代理配置。
+- 代理错误信息补齐：地址格式错误、启用但地址为空、代理连接失败、TMDB 连接超时、代理认证失败等场景会返回可排查的错误信息。
+- 初始化页和系统设置页新增 TMDB HTTP 代理配置入口；关闭代理并保存后可覆盖错误的环境变量 / 配置文件代理。
+- 部署文档补充 TMDB HTTP 代理说明，明确第一版仅代理 TMDB API，不支持海报代理、SOCKS / HTTPS 代理和代理认证。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/service/settings/SettingsService.java`
+- `backend/src/main/java/com/mediamarshal/service/settings/TmdbProxySettingsService.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/EffectiveSettingResponse.java`
+- `backend/src/main/java/com/mediamarshal/controller/SettingsController.java`
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/resources/application.yml`
+- `backend/src/test/java/com/mediamarshal/service/settings/TmdbProxySettingsServiceTest.java`
+- `frontend/src/api/settings.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/SetupView.vue`
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.env.example`
+- `docs/deployment.md`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+- `docker compose -f docker-compose.yml config --quiet`
+- `docker compose -f docker-compose.alpha.yml config --quiet`
+- `docker compose -f docker-compose.beta.yml config --quiet`
+
+### 遗留问题
+- 第一版不支持 SOCKS 代理、HTTPS 代理、代理认证和海报图片代理，按 ADR-024 后续规划处理。
 
 ## [失败任务错误码与重复失败聚合] 2026-05-09
 
@@ -2774,3 +2840,206 @@ alwaysApply: false
 
 ### 遗留问题
 - 无
+
+---
+
+## [ADR-023 路径模板变量正式启用与安全渲染补齐] 2026-06-09
+
+### 完成内容
+- `MediaTask` 新增 `parsedCodec`、`parsedReleaseGroup`、`confirmedOriginalTitle`，分别持久化 guessit `video_codec`、`release_group` 和确认候选的 TMDB `original_title` / `original_name`。
+- `RenameService.buildVariables()` 正式填充 `{codec}`、`{release_group}`、`{original_title}`，`TemplateVariableCatalogService` 将三者状态调整为 `AVAILABLE`。
+- `TemplateRenderer` 对变量值执行路径非法字符清洗，用户模板中的 `/` 仍表示目录层级；清洗为空的变量按缺失变量处理，可选片段按 ADR-017 移除。
+- 新增 `TemplatePathSafetyService`，真实文件操作和模板预览共用路径安全校验：阻止绝对路径、Windows 盘符路径、UNC 路径、`..` 路径段以及 normalize 后逃逸 `targetDir` 的路径。
+- 新增错误码 `UNSAFE_TARGET_PATH`，路径模板渲染结果不安全时任务进入 `FAILED`，不执行文件操作。
+- 新增 `POST /api/template-variables/preview`，使用后端 `TemplateRenderer` 和同一套路径安全规则返回 `output`、`warnings`、`errors`、`usedVariables`、`unknownVariables`、`reservedVariables`、`unsafePath`。
+- 路径设置页自定义模板预览改为调用后端预览接口；保存自定义模板前会阻断未知变量、预留变量、媒体类型不适用变量和不安全路径。
+- 清理路径设置页旧的“后续从 GET /api/template-variables 获取变量”硬编码 TODO。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TemplatePreviewRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/TemplatePreviewResponse.java`
+- `backend/src/main/java/com/mediamarshal/controller/TemplateVariableController.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateRenderer.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/BluRayDirectoryAssetOrganizer.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplatePathSafetyService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplatePreviewService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariableCatalogService.java`
+- `frontend/src/api/templateVariables.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- `{episode_title}`、`{genre_1}`~`{genre_4}`、`{country}` 仍按 ADR-023 保持 `RESERVED`，后续启用时需补充真实数据来源、持久化字段和前端展示策略。
+
+---
+
+## [v0.2.9 版本号与 ReleaseNote 更新] 2026-06-09
+
+### 完成内容
+- 根目录 `VERSION` 更新为 `v0.2.9`。
+- 后端 Maven 版本更新为 `v0.2.9-SNAPSHOT`。
+- 前端 `package.json` / `package-lock.json` 版本更新为 `0.2.9`。
+- Parser sidecar 本地 fallback 版本更新为 `0.2.9`。
+- ReleaseNote 新增 `v0.2.9`，记录 ADR-023 路径模板变量启用、后端模板预览、路径安全渲染和变量值清洗。
+- 重新优化所有 ReleaseNote 文案，改为用户视角的简洁描述，并移除会被 vue-i18n 当作插值变量解析的模板占位符写法。
+
+### 影响文件
+- `VERSION`
+- `backend/pom.xml`
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `parser/main.py`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q -DskipTests compile`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
+
+---
+
+## [ADR-025 剩余 TMDB 模板变量补齐] 2026-06-11
+
+### 完成内容
+- `MediaTask` 新增 `confirmedGenre1`~`confirmedGenre4`、`confirmedCountry`、`confirmedEpisodeTitle`，用于路径模板正式渲染 TMDB 分类、国家和 TV 单集标题。
+- `TaskCandidate` 新增 `genre1`~`genre4`、`country`、`episodeTitle` 快照字段；`MatchResult` 新增 `genres`、`country`、`episodeTitle`。
+- TMDB 确认链路在最终选中候选时拉取详情：补齐 `genres` 与 `country`，TV 单集任务额外拉取 episode 详情补齐单集标题；搜索候选列表不批量拉详情。
+- 所有确认路径共用详情补齐逻辑：自动高置信度、人工单条、批量确认、全局搜索候选确认和 TMDB ID 直接确认。
+- TMDB 详情失败会导致确认失败；TV episode 详情失败时，若当前路径模板使用 `{episode_title}` 则失败，否则继续整理并保持单集标题为空。
+- `TemplateVariableCatalogService` 将 `{genre_1}`~`{genre_4}`、`{country}`、`{episode_title}` 调整为 `AVAILABLE`，并补充数据来源说明和样例。
+- `TemplatePreviewService` 样例上下文补齐 ADR-025 变量；路径设置页变量帮助按电影 / 剧集模板过滤变量，并新增国家 / 分类、单集标题模板预设。
+- `TemplateRenderer` 对格式参数值也执行路径非法字符清洗，避免 `prefix`、`suffix`、`separator` 注入非法路径字符。
+- 同步更新 API 契约、前端类型定义和 v0.2.9 ReleaseNote 条目。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/model/dto/MatchResult.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/MediaTask.java`
+- `backend/src/main/java/com/mediamarshal/model/entity/TaskCandidate.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/MetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/ParentFolderMatchEnhancer.java`
+- `backend/src/main/java/com/mediamarshal/service/pipeline/MediaProcessPipeline.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/RenameService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplatePreviewService.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateRenderer.java`
+- `backend/src/main/java/com/mediamarshal/service/rename/TemplateVariableCatalogService.java`
+- `backend/src/test/java/com/mediamarshal/service/pipeline/MediaProcessPipelineRecognitionTest.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/RenameServiceTest.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/TemplatePreviewServiceTest.java`
+- `backend/src/test/java/com/mediamarshal/service/rename/TemplateRendererTest.java`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
+
+---
+
+## [TMDB 代理环境变量与系统设置收口] 2026-06-13
+
+### 完成内容
+- 修复 Docker Compose 部署未将 `MEDIA_MARSHAL_TMDB_PROXY_ENABLED`、`MEDIA_MARSHAL_TMDB_PROXY_HTTP_URL` 注入后端容器的问题，生产、alpha、beta compose 文件保持一致。
+- `TmdbMetadataMatcher` 在 `media-marshal.debug=true` 时，对 TMDB search / detail / episode detail 请求明确输出访问路径：`proxy=true` 时显示代理地址，`proxy=false` 时显示直连和当前配置的代理地址。
+- 系统设置页临时隐藏未开放的邮件通知面板，保留代码开关，后续邮件功能完成后可重新开放。
+- 同步更新 v0.2.9 ReleaseNote，记录 Docker Compose 代理配置生效修复和系统设置页收口。
+- 修复 `MEDIA_MARSHAL_DEBUG=true` 只进入代码 debug 分支、但日志级别仍为 INFO 导致 `log.debug` 不输出的问题；启动时会将 `com.mediamarshal` logger 提升为 DEBUG。
+
+### 影响文件
+- `docker-compose.yml`
+- `docker-compose.alpha.yml`
+- `docker-compose.beta.yml`
+- `backend/src/main/java/com/mediamarshal/config/DebugLoggingConfigurer.java`
+- `backend/src/main/java/com/mediamarshal/service/matcher/TmdbMetadataMatcher.java`
+- `frontend/src/views/SystemSettingsView.vue`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 无
+
+---
+
+## [ADR-026 监控路径导入导出] 2026-06-13
+
+### 完成内容
+- 新增监控路径配置包导出能力：`GET /api/watch-rules/export` 返回 `kind=media-marshal.watch-rules`、`schemaVersion=1`、`appVersion`、`exportedAt` 与规则列表。
+- 导出规则仅包含 WatchRule 行为配置字段，不包含 `id`、`userId`、时间戳、任务、候选、缓存、TMDB Key、代理或其它系统配置。
+- 新增导入预览接口 `POST /api/watch-rules/import/preview`，请求体包含导入包与 `preserveEnabledState`，前端切换“保持导出时的启用状态”时会重新预览。
+- 新增导入执行接口 `POST /api/watch-rules/import`，后端重新执行结构校验、重复判断、冲突判断和必要预检，不信任前端预览结果。
+- 默认导入新增规则为 `enabled=false`；仅 `preserveEnabledState=true` 时按导出文件中的 `enabled` 写入。
+- 完全重复规则基于行为字段指纹判断并跳过，指纹不包含 `name` 与 `enabled`；路径比较只做轻量字符串规范化，不访问文件系统或解析符号链接。
+- 同 `sourceDir` 但行为不同的规则标记为 `CONFLICT`；导入文件内部同源目录不同行为同样阻断。
+- 导入文件内部完全重复规则按“第一条参与导入，后续跳过重复”处理。
+- 默认禁用导入时，路径不可用仅作为 warning 展示；保持启用状态时，如会形成启用规则父子源目录包含关系则标记为 `CONFLICT`。
+- 真正导入启用规则时复用 WatchRule 保存前完整预检；导入事务内创建所有可导入规则，任意失败则回滚，创建成功后 Controller 只触发一次 `FileDiscoveryService.reload()`。
+- 路径设置页新增“导出 / 导入”入口；导入弹窗包含上传、预览确认、完成结果三步，明确提示本功能只导入监控路径规则，不导入系统配置和任务数据。
+- 同步更新中英文 i18n、API 契约与 v0.2.9 ReleaseNote。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/controller/WatchRuleController.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPackage.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPreview.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPreviewItem.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportPreviewRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportResult.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportRule.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/WatchRuleImportSummary.java`
+- `backend/src/main/java/com/mediamarshal/service/watchrule/WatchRuleImportExportService.java`
+- `backend/src/main/java/com/mediamarshal/service/watchrule/WatchRulePreflightService.java`
+- `backend/src/test/java/com/mediamarshal/service/watchrule/WatchRuleImportExportServiceTest.java`
+- `frontend/src/api/watchRule.ts`
+- `frontend/src/views/PathsView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 验证
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题
+- 第一版不支持覆盖导入、路径前缀批量替换、导入时逐条编辑或完整系统备份。

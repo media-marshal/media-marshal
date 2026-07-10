@@ -31,6 +31,22 @@
             <div class="form-hint">{{ t('settings.tmdbLanguageHelp') }}</div>
           </div>
         </el-form-item>
+        <el-form-item :label="t('settings.tmdbProxyEnabled')">
+          <div class="field-stack">
+            <el-switch v-model="form.tmdbProxyEnabled" />
+            <div class="form-hint">{{ t('settings.tmdbProxyHelp') }}</div>
+          </div>
+        </el-form-item>
+        <el-form-item :label="t('settings.tmdbProxyHttpUrl')">
+          <div class="field-stack">
+            <el-input
+              v-model="form.tmdbProxyHttpUrl"
+              :disabled="!form.tmdbProxyEnabled"
+              :placeholder="t('settings.tmdbProxyHttpUrlPlaceholder')"
+            />
+            <div class="form-hint">{{ t('settings.tmdbProxyHttpUrlHelp') }}</div>
+          </div>
+        </el-form-item>
       </el-card>
 
       <el-card shadow="never" class="settings-section">
@@ -50,7 +66,7 @@
         </el-form-item>
       </el-card>
 
-      <el-card shadow="never" class="settings-section">
+      <el-card v-if="SHOW_EMAIL_SETTINGS" shadow="never" class="settings-section">
         <template #header>{{ t('settings.emailSection') }}</template>
         <el-form-item :label="t('settings.emailEnabled')">
           <div class="field-stack">
@@ -81,10 +97,13 @@ import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
+import { settingsApi } from '@/api/settings'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const { loading } = storeToRefs(settingsStore)
+
+const SHOW_EMAIL_SETTINGS = false
 
 const TMDB_LANGUAGE_OPTIONS = [
   { value: 'zh-CN', labelKey: 'settings.tmdbLanguageOptions.zhCN' },
@@ -108,6 +127,8 @@ const TMDB_LANGUAGE_OPTIONS = [
 const form = reactive({
   tmdbApiKey: '',
   tmdbLanguage: 'zh-CN',
+  tmdbProxyEnabled: false,
+  tmdbProxyHttpUrl: '',
   confidenceThreshold: 80,
   emailEnabled: false,
   emailRecipient: '',
@@ -117,6 +138,7 @@ onMounted(async () => {
   await settingsStore.fetchSettings()
   form.tmdbApiKey = settingsStore.getSetting('tmdb.api-key')
   form.tmdbLanguage = settingsStore.getSetting('tmdb.language') || 'zh-CN'
+  await loadEffectiveTmdbProxy()
   form.confidenceThreshold = Math.round(
     Number(settingsStore.getSetting('watcher.confidence-threshold') || 0.8) * 100,
   )
@@ -125,8 +147,14 @@ onMounted(async () => {
 })
 
 async function handleSave() {
+  if (form.tmdbProxyEnabled && !form.tmdbProxyHttpUrl.trim()) {
+    ElMessage.warning(t('settings.tmdbProxyUrlRequired'))
+    return
+  }
+
   const updates = [
     settingsStore.updateSetting('tmdb.language', form.tmdbLanguage),
+    settingsApi.updateTmdbProxy(form.tmdbProxyEnabled, form.tmdbProxyHttpUrl.trim()),
     settingsStore.updateSetting(
       'watcher.confidence-threshold',
       String(form.confidenceThreshold / 100),
@@ -139,6 +167,13 @@ async function handleSave() {
 
   await Promise.all(updates)
   ElMessage.success(t('settings.saved'))
+}
+
+async function loadEffectiveTmdbProxy() {
+  const res = await settingsApi.getEffective(['tmdb.proxy.enabled', 'tmdb.proxy.http-url'])
+  const values = Object.fromEntries(res.data.data.map((item) => [item.key, item.value]))
+  form.tmdbProxyEnabled = values['tmdb.proxy.enabled'] === 'true'
+  form.tmdbProxyHttpUrl = values['tmdb.proxy.http-url'] || ''
 }
 </script>
 

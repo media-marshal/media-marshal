@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 重命名服务（ADR-001 + ADR-002 整合）
@@ -37,6 +39,8 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class RenameService {
 
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_][a-z0-9_]*)(?::([^;}]+))?(?:;([^}]+))?}");
+
     /** 全局默认电影模板 */
     private static final String DEFAULT_MOVIE_TEMPLATE =
             "{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}";
@@ -49,6 +53,7 @@ public class RenameService {
     private final WatchRuleRepository watchRuleRepository;
     private final SettingsService settingsService;
     private final TemplateRenderer templateRenderer;
+    private final TemplatePathSafetyService templatePathSafetyService;
 
     /**
      * 根据 MediaTask 执行重命名操作，返回目标文件绝对路径
@@ -78,7 +83,7 @@ public class RenameService {
         }
 
         // 5. 拼接目标绝对路径
-        Path target = Paths.get(rule.getTargetDir()).resolve(relativePath).normalize();
+        Path target = templatePathSafetyService.resolveSafeTargetPath(rule.getTargetDir(), relativePath);
 
         log.info("Rename plan: source='{}' -> target='{}'", task.getSourcePath(), target);
 
@@ -120,6 +125,20 @@ public class RenameService {
         throw new IllegalArgumentException("Media type is required before rendering target path");
     }
 
+    public boolean templateUsesVariable(MediaTask task, String variableName) {
+        Long ruleId = Objects.requireNonNull(task.getRuleId(), "MediaTask.ruleId is required for template lookup");
+        WatchRule rule = watchRuleRepository.findById(ruleId)
+                .orElseThrow(() -> new IllegalArgumentException("WatchRule not found: ruleId=" + ruleId));
+        String template = resolveTemplate(rule, task.getMediaType());
+        Matcher matcher = PLACEHOLDER.matcher(template);
+        while (matcher.find()) {
+            if (variableName.equals(matcher.group(1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     String renderRelativePath(MediaTask task, WatchRule rule, String extOverride) {
         String template = resolveTemplate(rule, task.getMediaType());
         boolean isDebug = Boolean.parseBoolean(settingsService.get("debug", "false"));
@@ -128,6 +147,10 @@ public class RenameService {
                     rule.getName(), task.getMediaType(), template);
         }
         return templateRenderer.render(template, buildVariables(task, extOverride));
+    }
+
+    Path resolveSafeTargetPath(String targetDir, String renderedRelativePath) {
+        return templatePathSafetyService.resolveSafeTargetPath(targetDir, renderedRelativePath);
     }
 
     /**
@@ -152,13 +175,15 @@ public class RenameService {
                 .ext(ext)
                 .titleInitial(resolveTitleInitial(task.getConfirmedTitle()))
                 .resolution(task.getParsedResolution())
-                // 以下字段为预留，v1 不填充
-                .originalTitle(null)
-                .episodeTitle(null)
-                .genre1(null).genre2(null).genre3(null).genre4(null)
-                .country(null)
-                .codec(null)
-                .releaseGroup(null)
+                .originalTitle(task.getConfirmedOriginalTitle())
+                .episodeTitle(task.getConfirmedEpisodeTitle())
+                .genre1(task.getConfirmedGenre1())
+                .genre2(task.getConfirmedGenre2())
+                .genre3(task.getConfirmedGenre3())
+                .genre4(task.getConfirmedGenre4())
+                .country(task.getConfirmedCountry())
+                .codec(task.getParsedCodec())
+                .releaseGroup(task.getParsedReleaseGroup())
                 .build();
     }
 

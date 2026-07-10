@@ -17,7 +17,7 @@ export type TaskStatus =
 export type MediaType = 'MOVIE' | 'TV_SHOW'
 export type MediaAssetType = 'VIDEO_FILE' | 'ISO_IMAGE' | 'BLURAY_DIRECTORY'
 export type ConfirmationSource = 'AUTO_MATCH' | 'MANUAL_SINGLE' | 'MANUAL_BATCH'
-export type TaskErrorCode = 'TARGET_CONFLICT' | 'SOURCE_MISSING' | 'PIPELINE_FAILED'
+export type TaskErrorCode = 'TARGET_CONFLICT' | 'UNSAFE_TARGET_PATH' | 'SOURCE_MISSING' | 'PIPELINE_FAILED'
 export type DiscoveryMode = 'WATCH_EVENT' | 'PERIODIC_SCAN' | 'HYBRID'
 
 export interface MediaTask {
@@ -33,9 +33,18 @@ export interface MediaTask {
   parsedEpisode: number | null
   parsedEpisodeEnd: number | null
   parsedResolution: string | null
+  parsedCodec: string | null
+  parsedReleaseGroup: string | null
   tmdbId: number | null
   confirmedTitle: string | null
+  confirmedOriginalTitle: string | null
   confirmedYear: number | null
+  confirmedGenre1: string | null
+  confirmedGenre2: string | null
+  confirmedGenre3: string | null
+  confirmedGenre4: string | null
+  confirmedCountry: string | null
+  confirmedEpisodeTitle: string | null
   confirmationSource: ConfirmationSource | null
   matchConfidence: number | null
   errorCode: TaskErrorCode | null
@@ -57,6 +66,13 @@ export interface AppSetting {
   sensitive: boolean
 }
 
+export interface EffectiveSetting {
+  key: string
+  value: string
+  source: string
+  overriddenByDatabase: boolean
+}
+
 // ─── 待确认队列候选项 ─────────────────────────────────────────────
 export interface TaskCandidate {
   id: number
@@ -69,6 +85,12 @@ export interface TaskCandidate {
   confidence: number | null
   posterUrl: string | null
   overview: string | null
+  genre1: string | null
+  genre2: string | null
+  genre3: string | null
+  genre4: string | null
+  country: string | null
+  episodeTitle: string | null
   rank: number
   selected: boolean
   createdAt: string
@@ -83,6 +105,9 @@ export interface MatchResult {
   mediaType: MediaType
   overview: string | null
   posterUrl: string | null
+  genres: string[] | null
+  country: string | null
+  episodeTitle: string | null
   confidence: number | null
 }
 
@@ -134,6 +159,23 @@ export interface TemplateVariableGroup {
   category: string
   categoryName: string
   variables: TemplateVariableItem[]
+}
+
+export interface TemplatePreviewRequest {
+  template: string
+  mediaType: MediaType
+  targetDir?: string | null
+  context?: Record<string, unknown>
+}
+
+export interface TemplatePreviewResponse {
+  output: string
+  warnings: string[]
+  errors: string[]
+  usedVariables: string[]
+  unknownVariables: string[]
+  reservedVariables: string[]
+  unsafePath: boolean
 }
 
 // ─── 发布说明 ────────────────────────────────────────────────────

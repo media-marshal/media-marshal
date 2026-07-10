@@ -46,10 +46,20 @@ TODO:
 
 ## 6. TMDB API Key 配置
 
-TODO:
-- 在哪里获取 TMDB API Key
-- 在系统设置中填写
-- 常见错误
+首次启动后，在 Web UI 的初始化页面填写 TMDB API Key。后续可在“设置 → 系统设置”中修改 API Key、TMDB 返回语言和 TMDB HTTP 代理。
+
+如果部署环境无法直连 TMDB API，可以配置 HTTP 代理：
+
+```env
+MEDIA_MARSHAL_TMDB_PROXY_ENABLED=true
+MEDIA_MARSHAL_TMDB_PROXY_HTTP_URL=http://127.0.0.1:7890
+```
+
+说明：
+- 第一版仅代理 TMDB API 请求，不代理海报图片、Parser、邮件或其它外部请求。
+- 仅支持不带认证信息的 HTTP 代理，不支持 SOCKS、HTTPS 代理和需要用户名密码的代理。
+- Web UI 中保存的代理配置优先于环境变量和 `application.yml`，关闭代理并保存后会强制直连。
+- 修改代理配置后无需重启服务，新的 TMDB 搜索和详情请求会使用最新配置。
 
 ## 7. 升级与备份
 

@@ -132,13 +132,18 @@ public class QueueController {
             parseResult.setType("movie");
         }
 
-        List<MatchResult> keywordResults = metadataMatcher.search(parseResult);
-        if (!keyword.matches("\\d+")) {
-            return ApiResponse.ok(keywordResults);
-        }
+        try {
+            List<MatchResult> keywordResults = metadataMatcher.search(parseResult);
+            if (!keyword.matches("\\d+")) {
+                return ApiResponse.ok(keywordResults);
+            }
 
-        List<MatchResult> idResults = searchByTmdbId(keyword, task.getMediaType());
-        return ApiResponse.ok(mergeResults(idResults, keywordResults));
+            List<MatchResult> idResults = searchByTmdbId(keyword, task.getMediaType());
+            return ApiResponse.ok(mergeResults(idResults, keywordResults));
+        } catch (Exception e) {
+            log.warn("Manual TMDB search failed: taskId={}, keyword={}, error={}", id, keyword, e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
     }
 
     private List<MatchResult> searchByTmdbId(String tmdbId, MediaTask.MediaType taskMediaType) {

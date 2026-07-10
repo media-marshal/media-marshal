@@ -7,6 +7,7 @@ import com.mediamarshal.service.settings.SettingsService;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,11 +17,13 @@ import static org.mockito.Mockito.when;
 class RenameServiceTest {
 
     private final SettingsService settingsService = mock(SettingsService.class);
+    private final WatchRuleRepository watchRuleRepository = mock(WatchRuleRepository.class);
     private final RenameService renameService = new RenameService(
             Map.of(),
-            mock(WatchRuleRepository.class),
+            watchRuleRepository,
             settingsService,
-            mock(TemplateRenderer.class)
+            mock(TemplateRenderer.class),
+            new TemplatePathSafetyService()
     );
 
     @Test
@@ -74,6 +77,51 @@ class RenameServiceTest {
         assertThatThrownBy(() -> renameService.resolveTemplate(rule, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Media type is required");
+    }
+
+    @Test
+    void buildVariablesIncludesEnabledTemplateFields() {
+        MediaTask task = new MediaTask();
+        task.setSourcePath("D:/incoming/Movie.mkv");
+        task.setConfirmedTitle("Movie");
+        task.setConfirmedOriginalTitle("Original Movie");
+        task.setConfirmedGenre1("Action");
+        task.setConfirmedGenre2("Crime");
+        task.setConfirmedGenre3("Drama");
+        task.setConfirmedGenre4("Mystery");
+        task.setConfirmedCountry("US");
+        task.setConfirmedEpisodeTitle("One Minute");
+        task.setParsedCodec("H.265");
+        task.setParsedReleaseGroup("TEAM");
+
+        TemplateVariables variables = renameService.buildVariables(task, null);
+
+        assertThat(variables.getOriginalTitle()).isEqualTo("Original Movie");
+        assertThat(variables.getGenre1()).isEqualTo("Action");
+        assertThat(variables.getGenre2()).isEqualTo("Crime");
+        assertThat(variables.getGenre3()).isEqualTo("Drama");
+        assertThat(variables.getGenre4()).isEqualTo("Mystery");
+        assertThat(variables.getCountry()).isEqualTo("US");
+        assertThat(variables.getEpisodeTitle()).isEqualTo("One Minute");
+        assertThat(variables.getCodec()).isEqualTo("H.265");
+        assertThat(variables.getReleaseGroup()).isEqualTo("TEAM");
+        assertThat(variables.getExt()).isEqualTo(".mkv");
+    }
+
+    @Test
+    void templateUsesVariableDetectsFormattedAndParameterizedPlaceholders() {
+        WatchRule rule = new WatchRule();
+        rule.setId(9L);
+        rule.setTvPathTemplate("{title}/S{season:02d}/{title} - {episode:02d;prefix=E}[[ - {episode_title}]]{ext}");
+        when(watchRuleRepository.findById(9L)).thenReturn(Optional.of(rule));
+
+        MediaTask task = new MediaTask();
+        task.setRuleId(9L);
+        task.setMediaType(MediaTask.MediaType.TV_SHOW);
+
+        assertThat(renameService.templateUsesVariable(task, "episode_title")).isTrue();
+        assertThat(renameService.templateUsesVariable(task, "episode")).isTrue();
+        assertThat(renameService.templateUsesVariable(task, "country")).isFalse();
     }
 
     @Test

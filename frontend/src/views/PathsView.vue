@@ -5,9 +5,17 @@
         <h2>{{ t('watchRule.title') }}</h2>
         <p class="page-desc">{{ t('watchRule.description') }}</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openDialog()">
-        {{ t('watchRule.addRule') }}
-      </el-button>
+      <div class="page-actions">
+        <el-button :icon="Download" @click="handleExportRules">
+          {{ t('watchRule.importExport.export') }}
+        </el-button>
+        <el-button :icon="Upload" @click="openImportDialog">
+          {{ t('watchRule.importExport.import') }}
+        </el-button>
+        <el-button type="primary" :icon="Plus" @click="openDialog()">
+          {{ t('watchRule.addRule') }}
+        </el-button>
+      </div>
     </div>
 
     <!-- 空状态 -->
@@ -178,7 +186,7 @@
               <template #label>
                 <span class="template-label">
                   <span>{{ t('watchRule.moviePathTemplate') }}</span>
-                  <a href="#" @click.prevent="toggleVariableDrawer">
+                  <a href="#" @click.prevent="toggleVariableDrawer('movie')">
                     {{ t('watchRule.templateVariablesLink') }}
                   </a>
                 </span>
@@ -234,8 +242,16 @@
 
             <el-form-item
               v-if="showTvTemplate"
-              :label="t('watchRule.tvPathTemplate')"
             >
+              <template #label>
+                <span class="template-label">
+                  <span>{{ t('watchRule.tvPathTemplate') }}</span>
+                  <a href="#" @click.prevent="toggleVariableDrawer('tv')">
+                    {{ t('watchRule.templateVariablesLink') }}
+                  </a>
+                </span>
+              </template>
+
               <div v-if="!templateStates.tv.customMode" class="template-input-row">
                 <el-select
                   v-model="templateStates.tv.selected"
@@ -398,6 +414,177 @@
       </template>
     </el-dialog>
 
+    <!-- 导入监控规则弹窗 -->
+    <el-dialog
+      v-model="importDialogVisible"
+      :title="t('watchRule.importExport.importTitle')"
+      width="980px"
+      align-center
+      :close-on-click-modal="false"
+      @closed="resetImportDialog"
+    >
+      <el-steps :active="importStep" simple class="import-steps">
+        <el-step :title="t('watchRule.importExport.stepUpload')" />
+        <el-step :title="t('watchRule.importExport.stepPreview')" />
+        <el-step :title="t('watchRule.importExport.stepDone')" />
+      </el-steps>
+
+      <el-alert
+        class="import-scope-alert"
+        type="info"
+        :closable="false"
+        show-icon
+      >
+        <template #title>
+          <div class="import-scope-lines">
+            <span>{{ t('watchRule.importExport.scopeLine1') }}</span>
+            <span>{{ t('watchRule.importExport.scopeLine2') }}</span>
+            <span>{{ t('watchRule.importExport.scopeLine3') }}</span>
+          </div>
+        </template>
+      </el-alert>
+
+      <section v-if="importStep === 0" class="import-upload-step">
+        <el-upload
+          drag
+          accept=".json,application/json"
+          :auto-upload="false"
+          :limit="1"
+          :show-file-list="false"
+          :on-change="handleImportFileChange"
+        >
+          <el-icon class="el-icon--upload"><Upload /></el-icon>
+          <div class="el-upload__text">{{ t('watchRule.importExport.uploadHint') }}</div>
+        </el-upload>
+        <div v-if="importFileName" class="import-file-name">
+          {{ importFileName }}
+        </div>
+      </section>
+
+      <section v-else-if="importStep === 1" class="import-preview-step" v-loading="importLoading">
+        <el-alert
+          v-if="importPreview && !importPreview.fileValid"
+          type="error"
+          show-icon
+          :closable="false"
+          :title="importPreview.fileMessage || t('watchRule.importExport.invalidFile')"
+        />
+
+        <template v-if="importPreview">
+          <div class="import-preview-toolbar">
+            <el-descriptions :column="4" size="small" border class="import-package-info">
+              <el-descriptions-item :label="t('watchRule.importExport.kind')">
+                {{ importPreview.kind || '-' }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="t('watchRule.importExport.schemaVersion')">
+                {{ importPreview.schemaVersion ?? '-' }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="t('watchRule.importExport.appVersion')">
+                {{ importPreview.appVersion || '-' }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="t('watchRule.importExport.exportedAt')">
+                {{ importPreview.exportedAt || '-' }}
+              </el-descriptions-item>
+            </el-descriptions>
+
+            <div class="import-option-row">
+              <div>
+                <div class="import-option-title">{{ t('watchRule.importExport.importOptions') }}</div>
+                <p class="import-option-desc">{{ t('watchRule.importExport.disabledByDefault') }}</p>
+              </div>
+              <el-switch
+                v-model="importPreserveEnabledState"
+                :loading="importLoading"
+                :active-text="t('watchRule.importExport.preserveEnabledState')"
+                @change="refreshImportPreview"
+              />
+            </div>
+
+            <el-alert
+              v-if="importPreserveEnabledState"
+              type="warning"
+              show-icon
+              :closable="false"
+              :title="t('watchRule.importExport.preserveEnabledStateWarning')"
+            />
+
+            <div class="import-summary">
+              <el-tag type="success">{{ t('watchRule.importExport.summaryReady', { count: importPreview.summary.importable }) }}</el-tag>
+              <el-tag type="info">{{ t('watchRule.importExport.summarySkipped', { count: importPreview.summary.skipped }) }}</el-tag>
+              <el-tag type="danger">{{ t('watchRule.importExport.summaryConflicts', { count: importPreview.summary.conflicts }) }}</el-tag>
+              <el-tag type="warning">{{ t('watchRule.importExport.summaryWarnings', { count: importPreview.summary.warnings }) }}</el-tag>
+              <el-tag type="danger">{{ t('watchRule.importExport.summaryInvalid', { count: importPreview.summary.invalid }) }}</el-tag>
+            </div>
+          </div>
+
+          <el-table :data="importPreview.items" size="small" class="import-preview-table" max-height="360">
+            <el-table-column :label="t('watchRule.importExport.status')" width="150">
+              <template #default="{ row }">
+                <el-tag size="small" :type="importStatusTagType(row.status)">
+                  {{ t(`watchRule.importExport.statusOptions.${row.status}`) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('watchRule.name')" min-width="140">
+              <template #default="{ row }">{{ row.rule?.name || '-' }}</template>
+            </el-table-column>
+            <el-table-column :label="t('watchRule.sourceDir')" min-width="210">
+              <template #default="{ row }">
+                <span class="import-path-cell" :title="row.rule?.sourceDir">{{ row.rule?.sourceDir || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('watchRule.targetDir')" min-width="210">
+              <template #default="{ row }">
+                <span class="import-path-cell" :title="row.rule?.targetDir">{{ row.rule?.targetDir || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('watchRule.mediaType')" width="110">
+              <template #default="{ row }">{{ importMediaTypeLabel(row.rule?.mediaType) }}</template>
+            </el-table-column>
+            <el-table-column :label="t('watchRule.operation')" width="110">
+              <template #default="{ row }">{{ importOperationLabel(row.rule?.operation) }}</template>
+            </el-table-column>
+            <el-table-column :label="t('watchRule.importExport.message')" min-width="260">
+              <template #default="{ row }">
+                <div class="import-message-cell">
+                  <span>{{ row.message }}</span>
+                  <span v-for="warning in row.warnings" :key="warning" class="import-warning-line">
+                    {{ warning }}
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+      </section>
+
+      <section v-else class="import-result-step">
+        <el-result
+          icon="success"
+          :title="t('watchRule.importExport.importDoneTitle')"
+          :sub-title="importResultMessage"
+        />
+      </section>
+
+      <template #footer>
+        <el-button @click="importDialogVisible = false">
+          {{ importStep === 2 ? t('common.done') : t('common.cancel') }}
+        </el-button>
+        <el-button v-if="importStep === 1" @click="backToImportUpload">
+          {{ t('watchRule.importExport.reselectFile') }}
+        </el-button>
+        <el-button
+          v-if="importStep === 1"
+          type="primary"
+          :loading="importSubmitting"
+          :disabled="importConfirmDisabled"
+          @click="confirmImportRules"
+        >
+          {{ t('watchRule.importExport.confirmImport') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <transition name="variable-panel-slide">
       <aside v-if="variableDrawerVisible" class="template-variable-panel">
         <div class="variable-panel-header">
@@ -411,6 +598,8 @@
             <div class="optional-segment-title">{{ t('templateVariables.optionalSegmentTitle') }}</div>
             <p>{{ t('templateVariables.optionalSegmentDescription') }}</p>
             <code>{title} ({year})[[ - {resolution}]]{ext}</code>
+            <code>[[{country}/]][[{genre_1}/]]{title} ({year})/{title} ({year}){ext}</code>
+            <code>{title} ({year})/S{season:02d}/{title} - S{season:02d}E{episode:02d}[[ - {episode_title}]]{ext}</code>
           </div>
 
           <div class="optional-segment-help">
@@ -497,11 +686,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search, View } from '@element-plus/icons-vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { watchRuleApi, type DiscoveryMode, type FileOperationType, type WatchRule, type WatchRuleRequest } from '@/api/watchRule'
+import { Plus, Edit, Delete, FolderOpened, EditPen, ArrowRight, ArrowLeft, Document, Search, View, Download, Upload } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules, UploadFile } from 'element-plus'
+import { watchRuleApi, type DiscoveryMode, type FileOperationType, type WatchRule, type WatchRuleImportPackage, type WatchRuleImportPreview, type WatchRuleImportPreviewStatus, type WatchRuleImportResult, type WatchRuleRequest } from '@/api/watchRule'
 import { templateVariablesApi } from '@/api/templateVariables'
-import type { TemplateVariableGroup, TemplateVariableStatus } from '@/types'
+import type { MediaType, TemplatePreviewResponse, TemplateVariableGroup, TemplateVariableStatus } from '@/types'
 import DirBrowserDialog from '@/components/DirBrowserDialog.vue'
 
 const { t } = useI18n()
@@ -512,6 +701,17 @@ const loading = ref(false)
 const togglingId = ref<number | null>(null)
 const scanningId = ref<number | null>(null)
 
+// ─── 导入导出 ────────────────────────────────────────────────────
+const importDialogVisible = ref(false)
+const importStep = ref(0)
+const importFileName = ref('')
+const importPackage = ref<WatchRuleImportPackage | null>(null)
+const importPreview = ref<WatchRuleImportPreview | null>(null)
+const importResult = ref<WatchRuleImportResult | null>(null)
+const importPreserveEnabledState = ref(false)
+const importLoading = ref(false)
+const importSubmitting = ref(false)
+
 // ─── 对话框 ──────────────────────────────────────────────────────
 const dialogVisible = ref(false)
 const editingRule = ref<WatchRule | null>(null)
@@ -519,7 +719,11 @@ const saving = ref(false)
 const formRef = ref<FormInstance>()
 const ignoredPatternsEditing = ref(false)
 const ignoredPatternInput = ref('')
+// ─── 预设模板 ────────────────────────────────────────────────────
+type TemplateKind = 'movie' | 'tv'
+
 const variableDrawerVisible = ref(false)
+const variableDrawerKind = ref<TemplateKind>('movie')
 const templateVariablesLoading = ref(false)
 const templateVariableGroups = ref<TemplateVariableGroup[]>([])
 const templatePreviewResults = reactive<Record<TemplateKind, string>>({
@@ -530,10 +734,6 @@ const templatePreviewResults = reactive<Record<TemplateKind, string>>({
 // ─── 目录浏览器 ──────────────────────────────────────────────────
 const dirBrowserVisible = ref(false)
 const dirBrowserTarget = ref<'source' | 'target'>('source')
-
-// ─── 预设模板 ────────────────────────────────────────────────────
-// TODO ADR-007：后续从后端接口 GET /api/template-variables 获取，当前硬编码
-type TemplateKind = 'movie' | 'tv'
 
 const PRESET_TEMPLATES = [
   {
@@ -561,6 +761,12 @@ const PRESET_TEMPLATES = [
     hint: 'MOVIE/T/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
   },
   {
+    kind: 'movie',
+    labelKey: 'watchRule.presetTemplates.movieByCountryGenre',
+    value: '[[{country}/]][[{genre_1}/]]{title} ({year})/{title} ({year})[[ - {resolution}]]{ext}',
+    hint: 'US/Action/The Dark Knight (2008)/The Dark Knight (2008) - 1080p.mkv',
+  },
+  {
     kind: 'tv',
     labelKey: 'watchRule.presetTemplates.tvDefault',
     value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
@@ -584,6 +790,12 @@ const PRESET_TEMPLATES = [
     value: '{media_type}/{title_initial}/{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {resolution}]]{ext}',
     hint: 'TV_SHOW/B/Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - 1080p.mkv',
   },
+  {
+    kind: 'tv',
+    labelKey: 'watchRule.presetTemplates.tvWithEpisodeTitle',
+    value: '{title} ({year})/S{season:02d}/{title} ({year}) - S{season:02d}E{episode:02d}[[ - {episode_title}]][[ - {resolution}]]{ext}',
+    hint: 'Breaking Bad (2008)/S03/Breaking Bad (2008) - S03E07 - One Minute - 1080p.mkv',
+  },
 ] satisfies Array<{ kind: TemplateKind, labelKey: string, value: string, hint: string }>
 
 // ─── 模板选择状态 ─────────────────────────────────────────────────
@@ -599,14 +811,37 @@ const templateStates = reactive<Record<TemplateKind, {
 const showMovieTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'MOVIE')
 const showTvTemplate = computed(() => form.mediaType === 'AUTO' || form.mediaType === 'TV_SHOW')
 const showScanInterval = computed(() => form.discoveryMode === 'PERIODIC_SCAN' || form.discoveryMode === 'HYBRID')
+const variableDrawerMediaType = computed<MediaType>(() =>
+  variableDrawerKind.value === 'tv' ? 'TV_SHOW' : 'MOVIE',
+)
 const visibleTemplateVariableGroups = computed(() =>
   templateVariableGroups.value
     .map(group => ({
       ...group,
-      variables: group.variables.filter(variable => variable.status === 'AVAILABLE' || variable.status === 'DEPRECATED'),
+      variables: group.variables.filter(variable =>
+        (variable.status === 'AVAILABLE' || variable.status === 'DEPRECATED')
+        && variable.mediaTypes.includes(variableDrawerMediaType.value),
+      ),
     }))
     .filter(group => group.variables.length > 0),
 )
+const importConfirmDisabled = computed(() =>
+  !importPreview.value
+  || importPreview.value.hasBlockingIssues
+  || importPreview.value.summary.importable === 0,
+)
+const importResultMessage = computed(() => {
+  if (!importResult.value) return ''
+  return importResult.value.preserveEnabledState
+    ? t('watchRule.importExport.importResultPreserved', {
+      created: importResult.value.createdCount,
+      skipped: importResult.value.skippedCount,
+    })
+    : t('watchRule.importExport.importResultDisabled', {
+      created: importResult.value.createdCount,
+      skipped: importResult.value.skippedCount,
+    })
+})
 
 function templateOptions(kind: TemplateKind) {
   return PRESET_TEMPLATES.filter(tpl => tpl.kind === kind)
@@ -727,6 +962,116 @@ async function fetchRules() {
   }
 }
 
+async function handleExportRules() {
+  const res = await watchRuleApi.exportRules()
+  const payload = res.data.data
+  const content = JSON.stringify(payload, null, 2)
+  const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `media-marshal-watch-rules-${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  ElMessage.success(t('watchRule.importExport.exportSuccess'))
+}
+
+function openImportDialog() {
+  resetImportDialog()
+  importDialogVisible.value = true
+}
+
+function resetImportDialog() {
+  importStep.value = 0
+  importFileName.value = ''
+  importPackage.value = null
+  importPreview.value = null
+  importResult.value = null
+  importPreserveEnabledState.value = false
+  importLoading.value = false
+  importSubmitting.value = false
+}
+
+async function handleImportFileChange(uploadFile: UploadFile) {
+  const raw = uploadFile.raw
+  if (!raw) return
+
+  try {
+    const text = await raw.text()
+    const parsed = JSON.parse(text) as unknown
+    if (!isRecord(parsed)) {
+      ElMessage.error(t('watchRule.importExport.invalidJson'))
+      return
+    }
+    importFileName.value = raw.name
+    importPackage.value = parsed as WatchRuleImportPackage
+    importStep.value = 1
+    await refreshImportPreview()
+  } catch {
+    ElMessage.error(t('watchRule.importExport.invalidJson'))
+  }
+}
+
+async function refreshImportPreview() {
+  if (!importPackage.value) return
+
+  importLoading.value = true
+  try {
+    const res = await watchRuleApi.previewImport({
+      package: importPackage.value,
+      preserveEnabledState: importPreserveEnabledState.value,
+    })
+    importPreview.value = res.data.data
+  } finally {
+    importLoading.value = false
+  }
+}
+
+function backToImportUpload() {
+  importStep.value = 0
+  importFileName.value = ''
+  importPackage.value = null
+  importPreview.value = null
+  importResult.value = null
+}
+
+async function confirmImportRules() {
+  if (!importPackage.value || !importPreview.value || importConfirmDisabled.value) return
+
+  await ElMessageBox.confirm(
+    t('watchRule.importExport.confirmSummary', {
+      created: importPreview.value.summary.importable,
+      skipped: importPreview.value.summary.skipped,
+      conflicts: importPreview.value.summary.conflicts,
+      mode: importPreserveEnabledState.value
+        ? t('watchRule.importExport.modePreserve')
+        : t('watchRule.importExport.modeDisabled'),
+    }),
+    t('watchRule.importExport.confirmImport'),
+    { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' },
+  )
+
+  importSubmitting.value = true
+  try {
+    const res = await watchRuleApi.importRules({
+      package: importPackage.value,
+      preserveEnabledState: importPreserveEnabledState.value,
+    })
+    importResult.value = res.data.data
+    importStep.value = 2
+    ElMessage.success(t('watchRule.importExport.importSuccess'))
+    await fetchRules()
+  } finally {
+    importSubmitting.value = false
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 async function fetchTemplateVariables() {
   if (templateVariableGroups.value.length > 0) return
 
@@ -739,8 +1084,14 @@ async function fetchTemplateVariables() {
   }
 }
 
-async function toggleVariableDrawer() {
-  variableDrawerVisible.value = !variableDrawerVisible.value
+async function toggleVariableDrawer(kind: TemplateKind) {
+  if (variableDrawerVisible.value && variableDrawerKind.value === kind) {
+    variableDrawerVisible.value = false
+    return
+  }
+
+  variableDrawerKind.value = kind
+  variableDrawerVisible.value = true
   if (variableDrawerVisible.value) {
     await fetchTemplateVariables()
   }
@@ -753,150 +1104,66 @@ async function previewTemplate(kind: TemplateKind) {
     return
   }
 
-  await fetchTemplateVariables()
-
-  const mediaType = kind === 'movie' ? 'MOVIE' : 'TV_SHOW'
-  const exampleMap = new Map<string, string>()
-  for (const group of visibleTemplateVariableGroups.value) {
-    for (const variable of group.variables) {
-      if (variable.mediaTypes.includes(mediaType)) {
-        exampleMap.set(variable.placeholder, variable.example)
-      }
-    }
-  }
-
-  const preview = renderTemplatePreview(template, exampleMap)
-  templatePreviewResults[kind] = preview.output
-
-  if (preview.hasUnavailableVariable) {
-    ElMessage.warning(t('watchRule.previewUnavailableVariables'))
+  try {
+    const preview = await requestTemplatePreview(kind, template)
+    templatePreviewResults[kind] = preview.output
+    showTemplatePreviewMessages(preview)
+  } catch {
+    ElMessage.error(t('watchRule.previewFailed'))
   }
 }
 
-function renderTemplatePreview(template: string, exampleMap: Map<string, string>) {
-  const placeholderPattern = /\{[^}]+}/g
-  let hasUnavailableVariable = false
-
-  const canRenderPlaceholder = (placeholder: string) => {
-    return resolvePlaceholderPreview(placeholder, exampleMap) != null
-  }
-
-  const renderPlaceholder = (placeholder: string) => {
-    const example = resolvePlaceholderPreview(placeholder, exampleMap)
-    if (example == null) {
-      hasUnavailableVariable = true
-      return placeholder
-    }
-    return example
-  }
-
-  const withOptionalSegments = template.replace(/\[\[(.*?)\]\]/g, (_match, segment: string) => {
-    const placeholders = segment.match(placeholderPattern) ?? []
-    const canRenderSegment = placeholders.every(canRenderPlaceholder)
-    if (!canRenderSegment) {
-      return ''
-    }
-    return segment.replace(placeholderPattern, renderPlaceholder)
+async function requestTemplatePreview(kind: TemplateKind, template: string) {
+  const mediaType: MediaType = kind === 'movie' ? 'MOVIE' : 'TV_SHOW'
+  const response = await templateVariablesApi.previewTemplate({
+    template,
+    mediaType,
+    targetDir: form.targetDir,
   })
-
-  const output = withOptionalSegments.replace(placeholderPattern, renderPlaceholder)
-
-  return { output, hasUnavailableVariable }
+  return response.data.data
 }
 
-function resolvePlaceholderPreview(placeholder: string, exampleMap: Map<string, string>) {
-  const exactExample = exampleMap.get(placeholder)
-  if (exactExample != null) return exactExample
-
-  const parsed = parseTemplatePlaceholder(placeholder)
-  if (!parsed) return null
-
-  const formattedPlaceholder = parsed.format ? `{${parsed.name}:${parsed.format}}` : `{${parsed.name}}`
-  const rawPlaceholder = `{${parsed.name}}`
-  const baseExample = exampleMap.get(formattedPlaceholder) ?? exampleMap.get(rawPlaceholder)
-  if (baseExample == null) return null
-
-  const formattedExample = exampleMap.has(formattedPlaceholder)
-    ? baseExample
-    : applyPreviewFormat(baseExample, parsed.format)
-  return applyPreviewParameters(formattedExample, parsed.params)
-}
-
-function parseTemplatePlaceholder(placeholder: string) {
-  const match = /^\{([a-z_]+)(?::([^;}]+))?(?:;([^}]+))?}$/.exec(placeholder)
-  if (!match) return null
-
-  const params = parseTemplateParams(match[3])
-  if (!params) return null
-
-  return {
-    name: match[1],
-    format: match[2],
-    params,
+function showTemplatePreviewMessages(preview: TemplatePreviewResponse) {
+  if (preview.errors.length > 0) {
+    ElMessage.warning(preview.errors.join('；'))
+    return
+  }
+  if (preview.warnings.length > 0) {
+    ElMessage.warning(preview.warnings.join('；'))
   }
 }
 
-function parseTemplateParams(rawParams?: string) {
-  const defaults = {
-    prefix: '',
-    suffix: '',
-    separator: '-',
-    repeatPrefix: true,
-    repeatSuffix: true,
-  }
-  if (!rawParams) return defaults
+async function validateCustomTemplatesBeforeSave() {
+  const previews: TemplatePreviewResponse[] = []
 
-  const supportedKeys = new Set(['prefix', 'suffix', 'separator', 'repeatPrefix', 'repeatSuffix'])
-  const params = { ...defaults }
-  for (const token of rawParams.split(';')) {
-    const equalsIndex = token.indexOf('=')
-    if (equalsIndex <= 0) return null
-
-    const key = token.slice(0, equalsIndex).trim()
-    const value = token.slice(equalsIndex + 1)
-    if (!supportedKeys.has(key)) return null
-
-    if (key === 'repeatPrefix' || key === 'repeatSuffix') {
-      if (value !== 'true' && value !== 'false') return null
-      params[key] = value === 'true'
-    } else {
-      params[key] = value
+  if (showMovieTemplate.value && templateStates.movie.customMode) {
+    const template = effectiveTemplate('movie')
+    if (template) {
+      previews.push(await requestTemplatePreview('movie', template))
     }
   }
-  return params
-}
 
-function applyPreviewFormat(value: string, format?: string) {
-  if (!format) return value
-
-  const number = Number.parseInt(value, 10)
-  if (Number.isNaN(number)) return value
-
-  const zeroPad = /^0(\d+)d$/.exec(format)
-  if (zeroPad) {
-    return String(number).padStart(Number.parseInt(zeroPad[1], 10), '0')
-  }
-  return format === 'd' ? String(number) : value
-}
-
-function applyPreviewParameters(
-  value: string,
-  params: {
-    prefix: string
-    suffix: string
-    separator: string
-    repeatPrefix: boolean
-    repeatSuffix: boolean
-  },
-) {
-  const range = /^(\d+)-(\d+)$/.exec(value)
-  if (!range) {
-    return `${params.prefix}${value}${params.suffix}`
+  if (showTvTemplate.value && templateStates.tv.customMode) {
+    const template = effectiveTemplate('tv')
+    if (template) {
+      previews.push(await requestTemplatePreview('tv', template))
+    }
   }
 
-  const startToken = `${params.prefix}${range[1]}${params.repeatSuffix ? params.suffix : ''}`
-  const endToken = `${params.repeatPrefix ? params.prefix : ''}${range[2]}${params.suffix}`
-  return `${startToken}${params.separator}${endToken}`
+  const errors = previews.flatMap(preview => preview.errors)
+  const warnings = previews.flatMap(preview => preview.warnings)
+  if (errors.length > 0) {
+    await ElMessageBox.alert(
+      Array.from(new Set(errors)).join('\n'),
+      t('watchRule.validation.templateFailedTitle'),
+      { confirmButtonText: t('common.confirm'), type: 'error' },
+    )
+    return false
+  }
+  if (warnings.length > 0) {
+    ElMessage.warning(Array.from(new Set(warnings)).join('；'))
+  }
+  return true
 }
 
 async function copyTemplateVariable(placeholder: string) {
@@ -945,6 +1212,9 @@ async function handleSave() {
       moviePathTemplate: showMovieTemplate.value ? effectiveTemplate('movie') : undefined,
       tvPathTemplate: showTvTemplate.value ? effectiveTemplate('tv') : undefined,
     }
+
+    const templateValid = await validateCustomTemplatesBeforeSave()
+    if (!templateValid) return
 
     const validation = (await watchRuleApi.validateRule(payload)).data.data
     if (!validation.valid) {
@@ -1054,6 +1324,31 @@ function mediaTypeTagType(type: string): 'primary' | 'success' | 'warning' | 'in
   return type === 'AUTO' ? 'info' : type === 'MOVIE' ? 'primary' : 'success'
 }
 
+function importStatusTagType(status: WatchRuleImportPreviewStatus): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined {
+  const map: Record<WatchRuleImportPreviewStatus, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
+    READY: 'success',
+    SKIPPED_DUPLICATE: 'info',
+    CONFLICT: 'danger',
+    INVALID: 'danger',
+    WARNING: 'warning',
+  }
+  return map[status]
+}
+
+function importMediaTypeLabel(value?: string) {
+  if (value === 'AUTO' || value === 'MOVIE' || value === 'TV_SHOW') {
+    return t(`watchRule.mediaTypeOptions.${value}`)
+  }
+  return value || '-'
+}
+
+function importOperationLabel(value?: string) {
+  if (value === 'MOVE' || value === 'COPY' || value === 'HARD_LINK' || value === 'SYMBOLIC_LINK') {
+    return t(`watchRule.operationOptions.${value}`)
+  }
+  return value || '-'
+}
+
 function effectiveDiscoveryMode(rule: WatchRule): DiscoveryMode {
   return rule.discoveryMode || 'HYBRID'
 }
@@ -1093,6 +1388,107 @@ h2 {
   margin: 0;
   font-size: 13px;
   color: #86909c;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.import-steps {
+  margin-bottom: 18px;
+}
+
+.import-scope-alert {
+  margin-bottom: 18px;
+}
+
+.import-scope-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.import-upload-step {
+  min-height: 220px;
+}
+
+.import-file-name {
+  margin-top: 12px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.import-preview-step,
+.import-result-step {
+  min-height: 320px;
+}
+
+.import-preview-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.import-package-info {
+  width: 100%;
+}
+
+.import-option-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e5e8ef;
+  background: #fafbfc;
+  border-radius: 8px;
+}
+
+.import-option-title {
+  font-weight: 600;
+  color: #1d2129;
+  margin-bottom: 4px;
+}
+
+.import-option-desc {
+  margin: 0;
+  color: #86909c;
+  font-size: 13px;
+}
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-preview-table {
+  margin-top: 14px;
+}
+
+.import-path-cell {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.import-message-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.45;
+}
+
+.import-warning-line {
+  color: #b88230;
 }
 
 /* ─── 卡片网格 ─────────────────────── */
@@ -1551,13 +1947,17 @@ h2 {
 }
 
 .optional-segment-help code {
-  display: inline-block;
+  display: block;
   padding: 4px 7px;
   border-radius: 6px;
   background: #eef6ff;
   color: #165dff;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
+}
+
+.optional-segment-help code + code {
+  margin-top: 6px;
 }
 
 .parameter-example-list {

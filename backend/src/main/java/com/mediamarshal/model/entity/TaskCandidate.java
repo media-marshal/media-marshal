@@ -50,6 +50,24 @@ public class TaskCandidate {
     @Column(columnDefinition = "TEXT")
     private String overview;
 
+    @Column(length = 100)
+    private String genre1;
+
+    @Column(length = 100)
+    private String genre2;
+
+    @Column(length = 100)
+    private String genre3;
+
+    @Column(length = 100)
+    private String genre4;
+
+    @Column(length = 10)
+    private String country;
+
+    @Column(length = 500)
+    private String episodeTitle;
+
     /** 候选排序，1 表示系统最高推荐 */
     private Integer rank;
 
