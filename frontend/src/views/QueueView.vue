@@ -115,6 +115,20 @@
           </el-button>
           <el-button
             size="small"
+            type="success"
+            plain
+            :disabled="!canOpenBatchRecognition"
+            @click="openBatchRecognitionEditor"
+          >
+            {{ t('queue.batchRecognition.open', { count: currentPageSelectedTaskIds.length }) }}
+            <el-tooltip :content="t('queue.batchRecognition.openHelp')" placement="top">
+              <el-icon class="button-help-icon" @click.stop.prevent>
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
+          </el-button>
+          <el-button
+            size="small"
             type="primary"
             :loading="batchConfirming"
             :disabled="currentPageBatchItems.length === 0"
@@ -396,6 +410,295 @@
         </div>
       </template>
     </el-drawer>
+
+    <el-dialog
+      v-model="batchRecognitionDialogVisible"
+      :title="t('queue.batchRecognition.title')"
+      width="min(96vw, 1180px)"
+      class="batch-recognition-dialog"
+      align-center
+      destroy-on-close
+    >
+      <div class="batch-recognition-layout">
+        <section class="batch-recognition-section batch-recognition-summary">
+          <div class="batch-section-header">
+            <div>
+              <h3>{{ t('queue.batchRecognition.summaryTitle') }}</h3>
+              <p>{{ t('queue.batchRecognition.summaryHint') }}</p>
+            </div>
+            <el-tag type="primary">
+              {{ t('queue.batchRecognition.selectedCount', { count: currentPageSelectedTaskIds.length }) }}
+            </el-tag>
+          </div>
+
+          <el-descriptions :column="4" size="small" border>
+            <el-descriptions-item :label="t('queue.batchRecognition.sourceSummary')" :span="2">
+              <span class="mono-text">{{ batchSourceSummary }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('queue.batchRecognition.sourceDirCount')">
+              {{ batchSourceDirCount }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('queue.batchRecognition.watchRuleCount')">
+              {{ batchWatchRuleCount }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <div class="batch-recognition-main">
+          <section class="batch-recognition-section">
+            <div class="batch-section-header">
+              <div>
+                <h3>{{ t('queue.batchRecognition.fieldsTitle') }}</h3>
+                <p>{{ t('queue.batchRecognition.fieldsHint') }}</p>
+              </div>
+            </div>
+
+            <div class="batch-field-grid">
+              <div class="batch-field" :class="{ 'is-disabled': !batchRecognitionFields.MEDIA_TYPE }">
+                <el-checkbox v-model="batchRecognitionFields.MEDIA_TYPE">
+                  {{ t('queue.mediaType') }}
+                </el-checkbox>
+                <el-select
+                  v-model="batchRecognitionForm.mediaType"
+                  :disabled="!batchRecognitionFields.MEDIA_TYPE"
+                  class="batch-field-control"
+                >
+                  <el-option :label="t('task.mediaType.MOVIE')" value="MOVIE" />
+                  <el-option :label="t('task.mediaType.TV_SHOW')" value="TV_SHOW" />
+                </el-select>
+              </div>
+
+              <div class="batch-field" :class="{ 'is-disabled': !batchRecognitionFields.PARSED_TITLE }">
+                <el-checkbox v-model="batchRecognitionFields.PARSED_TITLE">
+                  {{ t('queue.parsedTitle') }}
+                </el-checkbox>
+                <el-input
+                  v-model="batchRecognitionForm.parsedTitle"
+                  :disabled="!batchRecognitionFields.PARSED_TITLE"
+                  :placeholder="t('queue.parsedTitlePlaceholder')"
+                  class="batch-field-control"
+                />
+              </div>
+
+              <div class="batch-field" :class="{ 'is-disabled': !batchRecognitionFields.PARSED_YEAR }">
+                <el-checkbox v-model="batchRecognitionFields.PARSED_YEAR">
+                  {{ t('queue.parsedYear') }}
+                </el-checkbox>
+                <el-input-number
+                  v-model="batchRecognitionForm.parsedYear"
+                  :disabled="!batchRecognitionFields.PARSED_YEAR"
+                  :min="0"
+                  :max="9999"
+                  controls-position="right"
+                  class="batch-field-control"
+                />
+              </div>
+
+              <div class="batch-field" :class="{ 'is-disabled': !batchRecognitionFields.PARSED_SEASON }">
+                <el-checkbox v-model="batchRecognitionFields.PARSED_SEASON">
+                  {{ t('queue.parsedSeason') }}
+                </el-checkbox>
+                <el-input-number
+                  v-model="batchRecognitionForm.parsedSeason"
+                  :disabled="!batchRecognitionFields.PARSED_SEASON"
+                  :min="0"
+                  :max="999"
+                  controls-position="right"
+                  class="batch-field-control"
+                />
+              </div>
+            </div>
+
+            <div v-if="showBatchSequentialControls" class="sequence-panel">
+              <div class="sequence-switch-row">
+                <div>
+                  <strong>{{ t('queue.batchRecognition.sequenceTitle') }}</strong>
+                  <p>{{ t('queue.batchRecognition.sequenceHint') }}</p>
+                </div>
+                <el-switch
+                  v-model="batchRecognitionForm.episodeAssignmentMode"
+                  active-value="SEQUENTIAL"
+                  inactive-value="PRESERVE"
+                />
+              </div>
+
+              <div v-if="batchRecognitionForm.episodeAssignmentMode === 'SEQUENTIAL'" class="sequence-controls">
+                <el-form-item :label="t('queue.batchRecognition.episodeStart')">
+                  <el-input-number
+                    v-model="batchRecognitionForm.episodeStart"
+                    :min="0"
+                    :max="9999"
+                    controls-position="right"
+                  />
+                </el-form-item>
+                <el-form-item :label="t('queue.batchRecognition.sortDirection')">
+                  <el-segmented
+                    v-model="batchRecognitionForm.episodeSortDirection"
+                    :options="[
+                      { label: t('queue.batchRecognition.sortAsc'), value: 'ASC' },
+                      { label: t('queue.batchRecognition.sortDesc'), value: 'DESC' },
+                    ]"
+                  />
+                </el-form-item>
+              </div>
+            </div>
+          </section>
+
+          <section
+            v-loading="batchRecognitionPreviewLoading"
+            class="batch-recognition-section batch-preview-section"
+          >
+            <div class="batch-section-header">
+              <div>
+                <h3>{{ t('queue.batchRecognition.previewTitle') }}</h3>
+                <p>{{ t('queue.batchRecognition.previewHint') }}</p>
+              </div>
+              <div v-if="batchRecognitionPreview" class="preview-tags">
+                <el-tag type="success">{{ t('queue.batchRecognition.editableCount', { count: batchRecognitionPreview.editableCount }) }}</el-tag>
+                <el-tag type="danger">{{ t('queue.batchRecognition.blockerCount', { count: batchRecognitionPreview.blockerCount }) }}</el-tag>
+                <el-tag type="warning">{{ t('queue.batchRecognition.warningCount', { count: batchRecognitionPreview.warningCount }) }}</el-tag>
+              </div>
+            </div>
+
+            <el-alert
+              v-if="!hasBatchRecognitionAction && !batchRecognitionPreview && !batchRecognitionPreviewLoading"
+              type="info"
+              :closable="false"
+              :title="t('queue.batchRecognition.noActionHint')"
+              class="batch-alert"
+            />
+            <el-alert
+              v-for="blocker in batchRecognitionPreview?.blockers || []"
+              :key="`blocker-${blocker}`"
+              type="error"
+              :closable="false"
+              :title="blocker"
+              class="batch-alert"
+            />
+            <el-alert
+              v-for="warning in batchRecognitionPreview?.warnings || []"
+              :key="`warning-${warning}`"
+              type="warning"
+              :closable="false"
+              :title="warning"
+              class="batch-alert"
+            />
+
+            <el-table
+              :data="batchRecognitionPreview?.items || []"
+              height="100%"
+              size="small"
+              class="batch-preview-table"
+            >
+              <el-table-column type="index" :label="t('queue.batchRecognition.index')" width="70" />
+              <el-table-column prop="sourcePath" :label="t('queue.sourcePath')" min-width="260" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span class="mono-text">{{ row.sourcePath }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('queue.batchRecognition.mediaTypeChange')" width="150">
+                <template #default="{ row }">
+                  {{ formatPreviewMediaType(row.currentMediaType) }}
+                  <template v-if="hasPreviewValueChanged(row.currentMediaType, row.effectiveMediaType)">
+                    <span class="change-arrow">-&gt;</span>
+                    {{ formatPreviewMediaType(row.effectiveMediaType) }}
+                  </template>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('queue.batchRecognition.titleChange')" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ formatNullable(row.currentTitle) }}
+                  <template v-if="hasPreviewValueChanged(row.currentTitle, row.effectiveTitle)">
+                    <span class="change-arrow">-&gt;</span>
+                    {{ formatNullable(row.effectiveTitle) }}
+                  </template>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('queue.batchRecognition.yearChange')" width="120">
+                <template #default="{ row }">
+                  {{ formatNullable(row.currentYear) }}
+                  <template v-if="hasPreviewValueChanged(row.currentYear, row.effectiveYear)">
+                    <span class="change-arrow">-&gt;</span>
+                    {{ formatNullable(row.effectiveYear) }}
+                  </template>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('queue.batchRecognition.seasonChange')" width="120">
+                <template #default="{ row }">
+                  {{ formatNullable(row.currentSeason) }}
+                  <template v-if="hasPreviewValueChanged(row.currentSeason, row.effectiveSeason)">
+                    <span class="change-arrow">-&gt;</span>
+                    {{ formatNullable(row.effectiveSeason) }}
+                  </template>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('queue.batchRecognition.episodeChange')" width="140">
+                <template #default="{ row }">
+                  {{ formatPreviewEpisode(row, 'current') }}
+                  <template v-if="hasPreviewEpisodeChanged(row)">
+                    <span class="change-arrow">-&gt;</span>
+                    {{ formatPreviewEpisode(row, 'effective') }}
+                  </template>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('queue.batchRecognition.messages')" min-width="210">
+                <template #default="{ row }">
+                  <div class="preview-message-tags">
+                    <el-tag
+                      v-for="blocker in row.blockers"
+                      :key="`b-${row.taskId}-${blocker}`"
+                      type="danger"
+                      size="small"
+                    >
+                      {{ blocker }}
+                    </el-tag>
+                    <el-tag
+                      v-for="warning in row.warnings"
+                      :key="`w-${row.taskId}-${warning}`"
+                      type="warning"
+                      size="small"
+                    >
+                      {{ warning }}
+                    </el-tag>
+                    <el-tag
+                      v-if="row.blockers.length === 0 && row.warnings.length === 0 && !hasPreviewRowChanged(row)"
+                      type="info"
+                      size="small"
+                    >
+                      {{ t('queue.batchRecognition.noChange') }}
+                    </el-tag>
+                    <span v-else-if="row.blockers.length === 0 && row.warnings.length === 0">-</span>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-actions">
+          <el-button @click="batchRecognitionDialogVisible = false">
+            {{ t('common.cancel') }}
+          </el-button>
+          <el-button
+            :loading="batchRecognitionActionLoading === 'save'"
+            :disabled="!batchRecognitionCanApply || batchRecognitionPreviewLoading"
+            @click="handleSaveBatchRecognition"
+          >
+            {{ t('queue.batchRecognition.saveOnly') }}
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="batchRecognitionActionLoading === 'rematch'"
+            :disabled="!batchRecognitionCanApply || batchRecognitionPreviewLoading"
+            @click="handleSaveBatchRecognitionAndRematch"
+          >
+            {{ t('queue.batchRecognition.saveAndRematch') }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -406,7 +709,22 @@ import { useMediaStore } from '@/stores/mediaStore'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mediaApi } from '@/api/media'
-import type { BatchConfirmItem, MatchResult, MediaAssetType, MediaTask, MediaType, QueueRecognitionRequest, QueueRecognitionResponse, TaskCandidate } from '@/types'
+import type {
+  BatchConfirmItem,
+  BatchRecognitionField,
+  EpisodeAssignmentMode,
+  EpisodeSortDirection,
+  MatchResult,
+  MediaAssetType,
+  MediaTask,
+  MediaType,
+  QueueBatchRecognitionPreview,
+  QueueBatchRecognitionPreviewItem,
+  QueueBatchRecognitionRequest,
+  QueueRecognitionRequest,
+  QueueRecognitionResponse,
+  TaskCandidate,
+} from '@/types'
 
 const { t } = useI18n()
 const mediaStore = useMediaStore()
@@ -459,6 +777,35 @@ const recognitionForm = reactive<QueueRecognitionRequest>({
   parsedEpisode: null,
   parsedEpisodeEnd: null,
 })
+const batchRecognitionDialogVisible = ref(false)
+const batchRecognitionPreviewLoading = ref(false)
+const batchRecognitionPreview = ref<QueueBatchRecognitionPreview | null>(null)
+const batchRecognitionActionLoading = ref<'save' | 'rematch' | null>(null)
+let batchRecognitionPreviewTimer: ReturnType<typeof window.setTimeout> | null = null
+let batchRecognitionPreviewRequestId = 0
+const batchRecognitionFields = reactive<Record<BatchRecognitionField, boolean>>({
+  MEDIA_TYPE: false,
+  PARSED_TITLE: false,
+  PARSED_YEAR: false,
+  PARSED_SEASON: false,
+})
+const batchRecognitionForm = reactive<{
+  mediaType: MediaType
+  parsedTitle: string
+  parsedYear: number | null
+  parsedSeason: number | null
+  episodeAssignmentMode: EpisodeAssignmentMode
+  episodeStart: number | null
+  episodeSortDirection: EpisodeSortDirection
+}>({
+  mediaType: 'TV_SHOW',
+  parsedTitle: '',
+  parsedYear: null,
+  parsedSeason: null,
+  episodeAssignmentMode: 'PRESERVE',
+  episodeStart: 1,
+  episodeSortDirection: 'ASC',
+})
 
 const sortedQueueTasks = computed(() => {
   return [...queueTasks.value].sort((a, b) => taskTime(b) - taskTime(a))
@@ -487,8 +834,53 @@ const currentPageSelectedTaskIds = computed(() => {
     .map((task) => task.id)
 })
 
+const currentPageSelectedTasks = computed(() => {
+  return displayedTasks.value.filter((task) => selectedTaskIds.has(task.id))
+})
+
 const canApplyCurrentCandidate = computed(() => {
   return Boolean(currentCandidate.value) && displayedTasks.value.some((task) => selectedTaskIds.has(task.id))
+})
+
+const canOpenBatchRecognition = computed(() => currentPageSelectedTaskIds.value.length > 0)
+
+const showBatchSequentialControls = computed(() => {
+  if (batchRecognitionFields.MEDIA_TYPE) {
+    return batchRecognitionForm.mediaType === 'TV_SHOW'
+  }
+  return currentPageSelectedTasks.value.length > 0
+    && currentPageSelectedTasks.value.every((task) => task.mediaType === 'TV_SHOW')
+})
+
+const hasBatchRecognitionAction = computed(() => {
+  return Object.values(batchRecognitionFields).some(Boolean)
+    || (showBatchSequentialControls.value && batchRecognitionForm.episodeAssignmentMode === 'SEQUENTIAL')
+})
+
+const batchRecognitionRequest = computed<QueueBatchRecognitionRequest>(() => buildBatchRecognitionRequest())
+
+const batchRecognitionCanApply = computed(() => {
+  return Boolean(batchRecognitionPreview.value?.canApply)
+    && hasBatchRecognitionAction.value
+    && currentPageSelectedTaskIds.value.length > 0
+})
+
+const batchSourceSummary = computed(() => {
+  const tasks = currentPageSelectedTasks.value
+  if (tasks.length === 0) return '-'
+  if (tasks.length === 1) return tasks[0].sourcePath
+  return t('queue.batchRecognition.sourceRangeSummary', {
+    first: sourceFileName(tasks[0].sourcePath),
+    last: sourceFileName(tasks[tasks.length - 1].sourcePath),
+  })
+})
+
+const batchSourceDirCount = computed(() => {
+  return new Set(currentPageSelectedTasks.value.map((task) => parentPath(task.sourcePath))).size
+})
+
+const batchWatchRuleCount = computed(() => {
+  return new Set(currentPageSelectedTasks.value.map((task) => task.ruleId ?? -1)).size
 })
 
 const candidateGroups = computed(() => {
@@ -580,6 +972,16 @@ watch(() => recognitionForm.mediaType, (mediaType) => {
     recognitionForm.parsedEpisodeEnd = null
   }
 })
+
+watch(showBatchSequentialControls, (visible) => {
+  if (!visible) {
+    batchRecognitionForm.episodeAssignmentMode = 'PRESERVE'
+  }
+})
+
+watch(batchRecognitionRequest, () => {
+  scheduleBatchRecognitionPreview()
+}, { deep: true })
 
 async function loadQueue() {
   await mediaStore.fetchQueue()
@@ -835,6 +1237,149 @@ async function handleBatchSkip() {
   }
 }
 
+function openBatchRecognitionEditor() {
+  if (currentPageSelectedTaskIds.value.length === 0) {
+    ElMessage.warning(t('queue.selectTasksFirst'))
+    return
+  }
+
+  resetBatchRecognitionForm()
+  batchRecognitionDialogVisible.value = true
+  scheduleBatchRecognitionPreview()
+}
+
+function resetBatchRecognitionForm() {
+  batchRecognitionFields.MEDIA_TYPE = false
+  batchRecognitionFields.PARSED_TITLE = false
+  batchRecognitionFields.PARSED_YEAR = false
+  batchRecognitionFields.PARSED_SEASON = false
+
+  const tasks = currentPageSelectedTasks.value
+  batchRecognitionForm.mediaType = commonValue(tasks.map((task) => task.mediaType)) ?? 'TV_SHOW'
+  batchRecognitionForm.parsedTitle = commonValue(tasks.map((task) => task.parsedTitle)) ?? ''
+  batchRecognitionForm.parsedYear = commonValue(tasks.map((task) => task.parsedYear))
+  batchRecognitionForm.parsedSeason = commonValue(tasks.map((task) => task.parsedSeason))
+  batchRecognitionForm.episodeAssignmentMode = 'PRESERVE'
+  batchRecognitionForm.episodeStart = 1
+  batchRecognitionForm.episodeSortDirection = 'ASC'
+  batchRecognitionPreview.value = null
+}
+
+function commonValue<T>(values: Array<T | null | undefined>) {
+  const [first] = values
+  if (values.length === 0) return null
+  return values.every((value) => value === first) ? (first ?? null) : null
+}
+
+function buildBatchRecognitionRequest(): QueueBatchRecognitionRequest {
+  const updateFields = (Object.entries(batchRecognitionFields) as Array<[BatchRecognitionField, boolean]>)
+    .filter(([, enabled]) => enabled)
+    .map(([field]) => field)
+  const sequentialEnabled = showBatchSequentialControls.value
+    && batchRecognitionForm.episodeAssignmentMode === 'SEQUENTIAL'
+  const request: QueueBatchRecognitionRequest = {
+    taskIds: currentPageSelectedTaskIds.value,
+    updateFields,
+    episodeAssignmentMode: sequentialEnabled ? 'SEQUENTIAL' : 'PRESERVE',
+    episodeStart: sequentialEnabled ? batchRecognitionForm.episodeStart : null,
+    episodeSortDirection: sequentialEnabled ? batchRecognitionForm.episodeSortDirection : 'ASC',
+  }
+  if (batchRecognitionFields.MEDIA_TYPE) {
+    request.mediaType = batchRecognitionForm.mediaType
+  }
+  if (batchRecognitionFields.PARSED_TITLE) {
+    request.parsedTitle = batchRecognitionForm.parsedTitle
+  }
+  if (batchRecognitionFields.PARSED_YEAR) {
+    request.parsedYear = batchRecognitionForm.parsedYear
+  }
+  if (batchRecognitionFields.PARSED_SEASON) {
+    request.parsedSeason = batchRecognitionForm.parsedSeason
+  }
+  return request
+}
+
+function scheduleBatchRecognitionPreview() {
+  if (!batchRecognitionDialogVisible.value) return
+  batchRecognitionPreviewLoading.value = true
+  if (batchRecognitionPreviewTimer) {
+    window.clearTimeout(batchRecognitionPreviewTimer)
+  }
+  batchRecognitionPreviewTimer = window.setTimeout(() => {
+    void loadBatchRecognitionPreview()
+  }, 250)
+}
+
+async function loadBatchRecognitionPreview() {
+  if (!batchRecognitionDialogVisible.value) return
+
+  const requestId = ++batchRecognitionPreviewRequestId
+  batchRecognitionPreviewLoading.value = true
+  try {
+    const res = await mediaApi.previewBatchRecognition(batchRecognitionRequest.value)
+    if (requestId === batchRecognitionPreviewRequestId) {
+      batchRecognitionPreview.value = res.data.data
+    }
+  } catch {
+    if (requestId === batchRecognitionPreviewRequestId) {
+      batchRecognitionPreview.value = null
+    }
+  } finally {
+    if (requestId === batchRecognitionPreviewRequestId) {
+      batchRecognitionPreviewLoading.value = false
+    }
+  }
+}
+
+async function handleSaveBatchRecognition() {
+  await submitBatchRecognition(false)
+}
+
+async function handleSaveBatchRecognitionAndRematch() {
+  await submitBatchRecognition(true)
+}
+
+async function submitBatchRecognition(rematch: boolean) {
+  if (!batchRecognitionCanApply.value) return
+
+  batchRecognitionActionLoading.value = rematch ? 'rematch' : 'save'
+  const taskIds = [...currentPageSelectedTaskIds.value]
+  try {
+    const request = batchRecognitionRequest.value
+    if (rematch) {
+      const res = await mediaApi.rematchBatchRecognition(request)
+      const result = res.data.data
+      clearBatchRecognitionSelections(taskIds)
+      ElMessage.success(t('queue.batchRecognition.rematchSuccess', {
+        updated: result.updatedCount,
+        matched: result.matchedCount,
+        empty: result.emptyCount,
+        failed: result.failedCount,
+      }))
+    } else {
+      const res = await mediaApi.updateBatchRecognition(request)
+      clearBatchRecognitionSelections(taskIds)
+      ElMessage.success(t('queue.batchRecognition.saveSuccess', { count: res.data.data.updatedCount }))
+    }
+    batchRecognitionDialogVisible.value = false
+    await loadQueue()
+  } catch {
+    ElMessage.error(rematch ? t('queue.batchRecognition.rematchFailed') : t('queue.batchRecognition.saveFailed'))
+  } finally {
+    batchRecognitionActionLoading.value = null
+  }
+}
+
+function clearBatchRecognitionSelections(taskIds: number[]) {
+  for (const taskId of taskIds) {
+    selectedOptionByTask[taskId] = ''
+    searchOptionsByTask[taskId] = []
+    manualSelectedTaskIds.delete(taskId)
+    delete batchErrorByTask[taskId]
+  }
+  currentCandidate.value = null
+}
+
 function openRecognitionEditor(task: MediaTask) {
   recognitionTask.value = task
   recognitionForm.mediaType = task.mediaType ?? 'MOVIE'
@@ -1014,6 +1559,50 @@ function formatSeasonEpisode(task: MediaTask) {
     parts.push(t('queue.episodeNumber', { episode }))
   }
   return parts.join(' / ')
+}
+
+function formatPreviewEpisode(item: QueueBatchRecognitionPreviewItem, prefix: 'current' | 'effective') {
+  const episode = prefix === 'current' ? item.currentEpisode : item.effectiveEpisode
+  const episodeEnd = prefix === 'current' ? item.currentEpisodeEnd : item.effectiveEpisodeEnd
+  if (episode == null) return '-'
+  return episodeEnd != null ? `${episode}-${episodeEnd}` : `${episode}`
+}
+
+function formatPreviewMediaType(mediaType: MediaType | null | undefined) {
+  return mediaType ? t(`task.mediaType.${mediaType}`) : '-'
+}
+
+function hasPreviewValueChanged<T>(current: T | null | undefined, effective: T | null | undefined) {
+  return (current ?? null) !== (effective ?? null)
+}
+
+function hasPreviewEpisodeChanged(item: QueueBatchRecognitionPreviewItem) {
+  return hasPreviewValueChanged(item.currentEpisode, item.effectiveEpisode)
+    || hasPreviewValueChanged(item.currentEpisodeEnd, item.effectiveEpisodeEnd)
+}
+
+function hasPreviewRowChanged(item: QueueBatchRecognitionPreviewItem) {
+  return hasPreviewValueChanged(item.currentMediaType, item.effectiveMediaType)
+    || hasPreviewValueChanged(item.currentTitle, item.effectiveTitle)
+    || hasPreviewValueChanged(item.currentYear, item.effectiveYear)
+    || hasPreviewValueChanged(item.currentSeason, item.effectiveSeason)
+    || hasPreviewEpisodeChanged(item)
+}
+
+function formatNullable(value: string | number | null | undefined) {
+  return value == null || value === '' ? '-' : value
+}
+
+function sourceFileName(sourcePath: string) {
+  const normalized = sourcePath.replace(/\\/g, '/')
+  const index = normalized.lastIndexOf('/')
+  return index >= 0 ? normalized.slice(index + 1) : normalized
+}
+
+function parentPath(sourcePath: string) {
+  const normalized = sourcePath.replace(/\\/g, '/')
+  const index = normalized.lastIndexOf('/')
+  return index >= 0 ? normalized.slice(0, index) : ''
 }
 
 function formatResolution(task: MediaTask) {
@@ -1384,6 +1973,173 @@ h2 {
   gap: 10px;
 }
 
+.batch-recognition-dialog :deep(.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-height: min(86vh, 760px);
+  height: min(86vh, 760px);
+  margin: 0;
+}
+
+.batch-recognition-dialog :deep(.el-dialog__body) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+
+.batch-recognition-dialog :deep(.el-dialog__footer) {
+  flex: 0 0 auto;
+}
+
+.batch-recognition-layout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+.batch-recognition-main {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.75fr) minmax(0, 1.25fr);
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.batch-recognition-section {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(31, 45, 61, 0.06);
+}
+
+.batch-recognition-summary {
+  background: #f8fbff;
+}
+
+.batch-recognition-main > .batch-recognition-section:first-child {
+  overflow: auto;
+}
+
+.batch-preview-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.batch-section-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.batch-section-header h3 {
+  margin: 0 0 4px;
+  color: #303133;
+  font-size: 16px;
+}
+
+.batch-section-header p,
+.sequence-switch-row p {
+  margin: 0;
+  color: #909399;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.batch-field-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.batch-field {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.batch-field.is-disabled {
+  background: #f5f7fa;
+  color: #909399;
+}
+
+.batch-field-control {
+  width: 100%;
+}
+
+.sequence-panel {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f7fbf6;
+  box-shadow: inset 0 0 0 1px #e1f3d8;
+}
+
+.sequence-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sequence-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.sequence-controls :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.preview-tags,
+.preview-message-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.batch-alert {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+
+.batch-preview-table {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.mono-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.change-arrow {
+  margin: 0 6px;
+  color: #a8abb2;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 760px) {
   .page-header,
   .card-header,
@@ -1395,6 +2151,15 @@ h2 {
 
   .global-search-row {
     display: flex;
+  }
+
+  .batch-recognition-main,
+  .sequence-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-field {
+    grid-template-columns: 1fr;
   }
 
   .media-type-select {

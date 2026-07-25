@@ -145,6 +145,83 @@ export interface QueueRecognitionResponse {
   candidates: TaskCandidate[]
 }
 
+export type BatchRecognitionField =
+  | 'MEDIA_TYPE'
+  | 'PARSED_TITLE'
+  | 'PARSED_YEAR'
+  | 'PARSED_SEASON'
+
+export type EpisodeAssignmentMode = 'PRESERVE' | 'SEQUENTIAL'
+export type EpisodeSortDirection = 'ASC' | 'DESC'
+
+export interface QueueBatchRecognitionRequest {
+  taskIds: number[]
+  updateFields: BatchRecognitionField[]
+  mediaType?: MediaType
+  parsedTitle?: string
+  parsedYear?: number | null
+  parsedSeason?: number | null
+  episodeAssignmentMode: EpisodeAssignmentMode
+  episodeStart?: number | null
+  episodeSortDirection?: EpisodeSortDirection
+}
+
+export interface QueueBatchRecognitionPreviewItem {
+  taskId: number
+  sourcePath: string
+  currentMediaType: MediaType | null
+  effectiveMediaType: MediaType | null
+  currentTitle: string | null
+  effectiveTitle: string | null
+  currentYear: number | null
+  effectiveYear: number | null
+  currentSeason: number | null
+  effectiveSeason: number | null
+  currentEpisode: number | null
+  currentEpisodeEnd: number | null
+  effectiveEpisode: number | null
+  effectiveEpisodeEnd: number | null
+  sequenceIndex: number | null
+  blockers: string[]
+  warnings: string[]
+}
+
+export interface QueueBatchRecognitionPreview {
+  totalCount: number
+  editableCount: number
+  sequentialCount: number
+  blockerCount: number
+  warningCount: number
+  canApply: boolean
+  blockers: string[]
+  warnings: string[]
+  items: QueueBatchRecognitionPreviewItem[]
+}
+
+export interface QueueBatchRecognitionSaveResponse {
+  updatedCount: number
+  tasks: MediaTask[]
+  preview: QueueBatchRecognitionPreview
+}
+
+export type QueueBatchRecognitionRematchStatus = 'MATCHED' | 'EMPTY' | 'FAILED'
+
+export interface QueueBatchRecognitionRematchResult {
+  taskId: number
+  status: QueueBatchRecognitionRematchStatus
+  message: string | null
+  candidates: TaskCandidate[]
+}
+
+export interface QueueBatchRecognitionRematchResponse {
+  updatedCount: number
+  matchedCount: number
+  emptyCount: number
+  failedCount: number
+  preview: QueueBatchRecognitionPreview
+  results: QueueBatchRecognitionRematchResult[]
+}
+
 export interface TaskCorrectionRequest {
   mediaType: MediaType
   parsedTitle: string

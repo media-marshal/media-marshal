@@ -6,6 +6,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: '2026-06-29',
     items: [
       { type: 'feature', key: 'releaseNotes.v0_2_10.items.completedTaskCorrection' },
+      { type: 'feature', key: 'releaseNotes.v0_2_10.items.queueBatchRecognition' },
       { type: 'optimization', key: 'releaseNotes.v0_2_10.items.sampleScanPruning' },
     ],
   },

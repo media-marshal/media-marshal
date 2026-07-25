@@ -3262,6 +3262,114 @@ alwaysApply: false
 
 ---
 
+## [Queue 批量编辑预览展示优化] 2026-07-25
+
+### 完成内容
+- 批量编辑未选择公共字段且未启用顺序集号时，仅保留后端阻断提示，避免同一句提示以灰色和红色重复展示。
+- 变更预览表首列由任务 ID 调整为序号，降低用户阅读负担。
+- 预览字段未变化时直接显示当前值，不再展示“当前值 -> 当前值”的重复变更；整行无字段变化且无阻断 / 提醒时，在详情列显示“无变化”标签。
+
+### 影响文件
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无。
+
+### 验证
+- `npm.cmd run type-check`
+
+### 遗留问题 / 需 PM 决策
+- 无。
+
+---
+
+## [Queue 批量编辑面板布局与重匹配超时优化] 2026-07-25
+
+### 完成内容
+- 批量编辑识别信息弹窗改为视口居中显示，不再依赖固定顶部距离。
+- 弹窗高度固定在可视区域内，左侧公共字段区与右侧变更预览区等高；任务较多时由预览表内部滚动，不再撑高弹窗。
+- 批量预览重新计算时，右侧预览区显示 loading 遮罩并保留上一版内容，避免字段修改时出现短暂空白。
+- 前端为 TMDB 搜索、单任务重新匹配、批量预览和批量重新匹配设置更合适的请求超时，避免批量重新匹配被 Axios 默认 10 秒超时提前中断。
+- ReleaseNote 仍合并在 ADR-029 批量识别条目中，避免拆成过细的实现说明。
+
+### 影响文件
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/api/media.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 无。
+
+### 验证
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题 / 需 PM 决策
+- 无。
+
+---
+
+## [ADR-029 Queue 公共识别信息批量编辑与顺序集号生成] 2026-07-25
+
+### 完成内容
+- Queue 页面新增当前页已选任务“批量编辑识别信息”入口，支持按字段勾选后批量修改媒体类型、解析标题、解析年份和季号。
+- 新增后端批量预览能力，统一返回可编辑数量、阻断项、提醒项和逐任务变更明细；保存前必须先通过预览校验。
+- 支持剧集任务按后端自然排序生成顺序集号，起始集号最小为 0，支持升序 / 降序，并会阻断多集范围、非普通视频和最终媒体类型不全为剧集的批次。
+- 新增“仅保存”和“保存并重新匹配”两种批量动作：
+  - 仅保存不访问 TMDB、不替换候选、不自动确认。
+  - 保存并重新匹配会先保存识别信息，再逐任务清空旧候选并重新匹配；单任务 TMDB 失败不回滚已保存识别信息。
+- 前端保存后清除已选任务的临时候选选择状态，重新匹配后不自动选中首位候选。
+- 同步更新 API 契约、用户手册、v0.2.10 ReleaseNote 和中英文文案。
+
+### 影响文件
+- `backend/src/main/java/com/mediamarshal/controller/QueueController.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/BatchRecognitionField.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/EpisodeAssignmentMode.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/EpisodeSortDirection.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionRequest.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionPreview.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionPreviewItem.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionSaveResponse.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionRematchResponse.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionRematchResult.java`
+- `backend/src/main/java/com/mediamarshal/model/dto/QueueBatchRecognitionRematchStatus.java`
+- `backend/src/main/java/com/mediamarshal/repository/TaskCandidateRepository.java`
+- `backend/src/main/java/com/mediamarshal/service/queue/QueueBatchRecognitionService.java`
+- `backend/src/test/java/com/mediamarshal/service/queue/QueueBatchRecognitionServiceTest.java`
+- `frontend/src/views/QueueView.vue`
+- `frontend/src/types/index.ts`
+- `frontend/src/api/media.ts`
+- `frontend/src/i18n/zh.ts`
+- `frontend/src/i18n/en.ts`
+- `frontend/src/meta/releaseNotes.ts`
+- `frontend/src/i18n/releaseNotes/zh.ts`
+- `frontend/src/i18n/releaseNotes/en.ts`
+- `docs/user-guide.md`
+- `.cursor/rules/api-contracts.mdc`
+- `.cursor/rules/implementation-log.mdc`
+
+### 接口变更
+- 新增 `POST /api/queue/recognition/batch/preview`
+- 新增 `PATCH /api/queue/recognition/batch`
+- 新增 `POST /api/queue/recognition/batch/rematch`
+- 补齐 `QueueRecognitionRequest.parsedEpisodeEnd` 契约说明。
+
+### 验证
+- `mvn -q -Dtest=QueueBatchRecognitionServiceTest test`
+- `mvn -q test`
+- `npm.cmd run type-check`
+- `npm.cmd run build`
+
+### 遗留问题 / 需 PM 决策
+- 无。
+
+---
+
 ## [ADR-028 修正面板视觉分区与候选自动预览] 2026-07-01
 
 ### 完成内容

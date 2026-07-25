@@ -2,6 +2,7 @@ export default {
   v0_2_10: {
     items: {
       completedTaskCorrection: '已完成任务支持修正匹配，并同步移动或重命名媒体库文件。',
+      queueBatchRecognition: '待确认剧集可批量修正识别信息，按文件顺序生成集号，并稳定等待重新匹配结果。',
       sampleScanPruning: '默认忽略 Sample 目录，减少无效识别和 TMDB 请求。',
     },
   },
