@@ -3,6 +3,10 @@ package com.mediamarshal.controller;
 import com.mediamarshal.model.dto.ApiResponse;
 import com.mediamarshal.model.dto.MatchResult;
 import com.mediamarshal.model.dto.ParseResult;
+import com.mediamarshal.model.dto.QueueBatchRecognitionPreview;
+import com.mediamarshal.model.dto.QueueBatchRecognitionRematchResponse;
+import com.mediamarshal.model.dto.QueueBatchRecognitionRequest;
+import com.mediamarshal.model.dto.QueueBatchRecognitionSaveResponse;
 import com.mediamarshal.model.dto.QueueRecognitionRequest;
 import com.mediamarshal.model.dto.QueueRecognitionResponse;
 import com.mediamarshal.model.entity.MediaTask;
@@ -11,6 +15,7 @@ import com.mediamarshal.repository.MediaTaskRepository;
 import com.mediamarshal.repository.TaskCandidateRepository;
 import com.mediamarshal.service.matcher.MetadataMatcher;
 import com.mediamarshal.service.pipeline.MediaProcessPipeline;
+import com.mediamarshal.service.queue.QueueBatchRecognitionService;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +45,7 @@ public class QueueController {
     private final TaskCandidateRepository candidateRepository;
     private final MetadataMatcher metadataMatcher;
     private final MediaProcessPipeline pipeline;
+    private final QueueBatchRecognitionService batchRecognitionService;
 
     @GetMapping
     public ApiResponse<List<MediaTask>> getPendingQueue() {
@@ -106,6 +112,37 @@ public class QueueController {
             return ApiResponse.ok(pipeline.updateRecognitionAndRematch(id, request));
         } catch (Exception e) {
             log.warn("Recognition rematch failed: taskId={}, error={}", id, e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
+    }
+
+    @PostMapping("/recognition/batch/preview")
+    public ApiResponse<QueueBatchRecognitionPreview> previewBatchRecognition(
+            @RequestBody QueueBatchRecognitionRequest request
+    ) {
+        return ApiResponse.ok(batchRecognitionService.preview(request));
+    }
+
+    @PatchMapping("/recognition/batch")
+    public ApiResponse<QueueBatchRecognitionSaveResponse> updateBatchRecognition(
+            @RequestBody QueueBatchRecognitionRequest request
+    ) {
+        try {
+            return ApiResponse.ok(batchRecognitionService.save(request));
+        } catch (Exception e) {
+            log.warn("Batch recognition update failed: error={}", e.getMessage());
+            return ApiResponse.fail(e.getMessage());
+        }
+    }
+
+    @PostMapping("/recognition/batch/rematch")
+    public ApiResponse<QueueBatchRecognitionRematchResponse> updateBatchRecognitionAndRematch(
+            @RequestBody QueueBatchRecognitionRequest request
+    ) {
+        try {
+            return ApiResponse.ok(batchRecognitionService.saveAndRematch(request));
+        } catch (Exception e) {
+            log.warn("Batch recognition rematch failed: error={}", e.getMessage());
             return ApiResponse.fail(e.getMessage());
         }
     }

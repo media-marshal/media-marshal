@@ -24,4 +24,6 @@ public interface TaskCandidateRepository extends JpaRepository<TaskCandidate, Lo
             Long tmdbId,
             MediaTask.MediaType mediaType
     );
+
+    void deleteByTask_Id(Long taskId);
 }

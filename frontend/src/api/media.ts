@@ -6,6 +6,10 @@ import type {
   MatchResult,
   MediaTask,
   MediaType,
+  QueueBatchRecognitionPreview,
+  QueueBatchRecognitionRematchResponse,
+  QueueBatchRecognitionRequest,
+  QueueBatchRecognitionSaveResponse,
   QueueRecognitionRequest,
   QueueRecognitionResponse,
   TaskCandidate,
@@ -15,6 +19,11 @@ import type {
   TaskCorrectionRequest,
   TaskStatus,
 } from '@/types'
+
+const TMDB_SEARCH_TIMEOUT_MS = 30000
+const TMDB_SINGLE_REMATCH_TIMEOUT_MS = 60000
+const QUEUE_BATCH_PREVIEW_TIMEOUT_MS = 30000
+const QUEUE_BATCH_REMATCH_TIMEOUT_MS = 180000
 
 export const mediaApi = {
   listTasks(status?: TaskStatus) {
@@ -43,6 +52,7 @@ export const mediaApi = {
   searchMetadata(keyword: string, mediaType: MediaType) {
     return http.get<ApiResponse<MatchResult[]>>('/api/metadata/search', {
       params: { q: keyword, mediaType },
+      timeout: TMDB_SEARCH_TIMEOUT_MS,
     })
   },
 
@@ -64,7 +74,25 @@ export const mediaApi = {
   },
 
   rematchTaskRecognition(id: number, request: QueueRecognitionRequest) {
-    return http.post<ApiResponse<QueueRecognitionResponse>>(`/api/queue/${id}/recognition/rematch`, request)
+    return http.post<ApiResponse<QueueRecognitionResponse>>(`/api/queue/${id}/recognition/rematch`, request, {
+      timeout: TMDB_SINGLE_REMATCH_TIMEOUT_MS,
+    })
+  },
+
+  previewBatchRecognition(request: QueueBatchRecognitionRequest) {
+    return http.post<ApiResponse<QueueBatchRecognitionPreview>>('/api/queue/recognition/batch/preview', request, {
+      timeout: QUEUE_BATCH_PREVIEW_TIMEOUT_MS,
+    })
+  },
+
+  updateBatchRecognition(request: QueueBatchRecognitionRequest) {
+    return http.patch<ApiResponse<QueueBatchRecognitionSaveResponse>>('/api/queue/recognition/batch', request)
+  },
+
+  rematchBatchRecognition(request: QueueBatchRecognitionRequest) {
+    return http.post<ApiResponse<QueueBatchRecognitionRematchResponse>>('/api/queue/recognition/batch/rematch', request, {
+      timeout: QUEUE_BATCH_REMATCH_TIMEOUT_MS,
+    })
   },
 
   skipTask(id: number) {

@@ -143,6 +143,9 @@ interface TaskCorrectionApplyResponse {
 | GET | `/api/queue/{id}/candidates` | 查询任务已保存候选列表 | — | `TaskCandidate[]` |
 | PUT | `/api/queue/{id}/recognition` | ADR-021：仅保存单个 Queue 任务的当前有效识别信息；不触发 TMDB 重新匹配，不清空候选 | `QueueRecognitionRequest` | `QueueRecognitionResponse` |
 | POST | `/api/queue/{id}/recognition/rematch` | ADR-021：保存识别信息并基于新字段重新 TMDB 匹配；替换旧候选，任务仍保持 AWAITING_CONFIRMATION，不自动确认 | `QueueRecognitionRequest` | `QueueRecognitionResponse` |
+| POST | `/api/queue/recognition/batch/preview` | ADR-029：预览当前页已选 Queue 任务的公共识别信息批量编辑和顺序集号生成结果；不落库、不访问 TMDB | `QueueBatchRecognitionRequest` | `QueueBatchRecognitionPreview` |
+| PATCH | `/api/queue/recognition/batch` | ADR-029：仅保存批量识别信息；不访问 TMDB、不替换候选、不自动确认 | `QueueBatchRecognitionRequest` | `QueueBatchRecognitionSaveResponse` |
+| POST | `/api/queue/recognition/batch/rematch` | ADR-029：先保存批量识别信息，再逐任务重新 TMDB 匹配；替换旧候选，任务仍保持 AWAITING_CONFIRMATION，不自动确认 | `QueueBatchRecognitionRequest` | `QueueBatchRecognitionRematchResponse` |
 | GET | `/api/queue/{id}/search?q={keyword}` | **Deprecated**：旧任务绑定搜索接口，前端新功能不再使用；保留兼容，结果不写入候选表 | — | `MatchResult[]` |
 | POST | `/api/queue/{id}/confirm` | 人工确认：指定 TMDB ID 后继续处理；源文件不存在时任务转为 FAILED 并返回失败信息 | `ConfirmRequest` | — |
 | POST | `/api/queue/batch-confirm` | 批量人工确认；逐条提交后台整理，源文件缺失或单条提交失败不回滚整个批次 | `BatchConfirmRequest` | `BatchConfirmResponse` |
@@ -186,6 +189,7 @@ interface QueueRecognitionRequest {
   parsedYear: number | null        // 可为空
   parsedSeason: number | null      // TV_SHOW 必填；MOVIE 保存时清空
   parsedEpisode: number | null     // TV_SHOW 必填；MOVIE 保存时清空
+  parsedEpisodeEnd: number | null  // 多集范围结束集号；MOVIE 保存时清空
 }
 ```
 
@@ -197,9 +201,90 @@ interface QueueRecognitionResponse {
 }
 ```
 
+### QueueBatchRecognitionRequest
+```typescript
+type BatchRecognitionField = 'MEDIA_TYPE' | 'PARSED_TITLE' | 'PARSED_YEAR' | 'PARSED_SEASON'
+type EpisodeAssignmentMode = 'PRESERVE' | 'SEQUENTIAL'
+type EpisodeSortDirection = 'ASC' | 'DESC'
+
+interface QueueBatchRecognitionRequest {
+  taskIds: number[]                // 当前页明确选中的 AWAITING_CONFIRMATION 任务；不跨页
+  updateFields: BatchRecognitionField[]
+  mediaType?: 'MOVIE' | 'TV_SHOW'  // updateFields 包含 MEDIA_TYPE 时生效
+  parsedTitle?: string             // updateFields 包含 PARSED_TITLE 时 trim 后不能为空
+  parsedYear?: number | null       // updateFields 包含 PARSED_YEAR 时生效；null 表示明确清空
+  parsedSeason?: number | null     // updateFields 包含 PARSED_SEASON 时生效
+  episodeAssignmentMode: EpisodeAssignmentMode
+  episodeStart?: number | null     // SEQUENTIAL 时必填，最小 0
+  episodeSortDirection?: EpisodeSortDirection // 默认 ASC
+}
+```
+
+### QueueBatchRecognitionPreview
+```typescript
+interface QueueBatchRecognitionPreview {
+  totalCount: number
+  editableCount: number
+  sequentialCount: number
+  blockerCount: number
+  warningCount: number
+  canApply: boolean
+  blockers: string[]
+  warnings: string[]
+  items: Array<{
+    taskId: number
+    sourcePath: string
+    currentMediaType: 'MOVIE' | 'TV_SHOW' | null
+    effectiveMediaType: 'MOVIE' | 'TV_SHOW' | null
+    currentTitle: string | null
+    effectiveTitle: string | null
+    currentYear: number | null
+    effectiveYear: number | null
+    currentSeason: number | null
+    effectiveSeason: number | null
+    currentEpisode: number | null
+    currentEpisodeEnd: number | null
+    effectiveEpisode: number | null
+    effectiveEpisodeEnd: number | null
+    sequenceIndex: number | null
+    blockers: string[]
+    warnings: string[]
+  }>
+}
+```
+
+### QueueBatchRecognitionSaveResponse
+```typescript
+interface QueueBatchRecognitionSaveResponse {
+  updatedCount: number
+  tasks: MediaTask[]
+  preview: QueueBatchRecognitionPreview
+}
+```
+
+### QueueBatchRecognitionRematchResponse
+```typescript
+type QueueBatchRecognitionRematchStatus = 'MATCHED' | 'EMPTY' | 'FAILED'
+
+interface QueueBatchRecognitionRematchResponse {
+  updatedCount: number
+  matchedCount: number
+  emptyCount: number
+  failedCount: number
+  preview: QueueBatchRecognitionPreview
+  results: Array<{
+    taskId: number
+    status: QueueBatchRecognitionRematchStatus
+    message: string | null
+    candidates: TaskCandidate[]
+  }>
+}
+```
+
 > ADR-021 识别信息编辑接口只允许 `AWAITING_CONFIRMATION` 任务调用；`PENDING` / `PROCESSING` / `DONE` / `FAILED` / `SKIPPED` / `CORRECTED` 均返回 `success=false`。
-> `PUT /api/queue/{id}/recognition` 只更新 `MediaTask.mediaType`、`parsedTitle`、`parsedYear`、`parsedSeason`、`parsedEpisode`，不会修改 `task_candidate`。
+> `PUT /api/queue/{id}/recognition` 只更新 `MediaTask.mediaType`、`parsedTitle`、`parsedYear`、`parsedSeason`、`parsedEpisode`、`parsedEpisodeEnd`，不会修改 `task_candidate`。
 > `POST /api/queue/{id}/recognition/rematch` 会先保存上述字段，再使用新的识别信息调用 TMDB 匹配并替换该任务旧候选；`matchConfidence` 更新为新首位候选置信度，若无候选则为 `null`。该接口不会触发高置信度自动确认。
+> ADR-029 批量接口沿用当前页选择语义，后端会重新按源文件名自然排序生成顺序集号。`PATCH /api/queue/recognition/batch` 不访问 TMDB，也不替换候选；前端应清除这些任务的临时候选选择。`POST /api/queue/recognition/batch/rematch` 会先原子保存识别信息，再逐任务清空旧候选并重新匹配；单个任务 TMDB 失败不会回滚已保存识别信息，也不会保留该任务旧候选。批量保存和批量重新匹配都不会自动确认候选。
 
 > 人工单条确认成功后任务最终状态仍为 `DONE`，`confirmationSource=MANUAL_SINGLE`；批量确认接口会快速返回提交结果，成功提交的任务先进入 `PROCESSING`，后台整理完成后最终状态仍为 `DONE`，`confirmationSource=MANUAL_BATCH`。系统高置信度自动采纳时 `confirmationSource=AUTO_MATCH`。
 > `POST /api/queue/batch-confirm` 支持来自全局手动搜索的候选：若 `tmdbId + mediaType` 不在该任务 `task_candidate` 中，后端确认时会新建候选记录并标记为 `selected=true`。

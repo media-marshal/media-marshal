@@ -2,6 +2,7 @@ export default {
   v0_2_10: {
     items: {
       completedTaskCorrection: 'Correct completed tasks and move or rename media library files from Dashboard.',
+      queueBatchRecognition: 'Review Queue TV episodes can be batch edited, numbered by file order, and rematched with a longer wait.',
       sampleScanPruning: 'Sample folders are ignored by default to reduce unnecessary recognition and TMDB requests.',
     },
   },
